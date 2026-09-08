@@ -385,7 +385,7 @@ export const FinancialProfileView: React.FC<FinancialProfileViewProps> = ({ city
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800/80 flex items-center gap-1 uppercase">
+              <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-indigo-950/90 text-indigo-300 border border-indigo-700/80 flex items-center gap-1 uppercase">
                 <Layers className="w-3.5 h-3.5 text-indigo-400" />
                 Multi-City Financial Benchmark
               </span>
@@ -407,10 +407,10 @@ export const FinancialProfileView: React.FC<FinancialProfileViewProps> = ({ city
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Add any city (e.g. Waterloo, Vaughan, Guelph)..."
-              className="w-full bg-slate-950 border border-slate-700/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              className="w-full bg-slate-950 border border-slate-700/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
             {searching && (
-              <span className="absolute right-3 top-2 text-[10px] text-slate-400 animate-pulse">Searching...</span>
+              <span className="absolute right-3 top-2 text-xs text-indigo-300 font-medium animate-pulse">Searching...</span>
             )}
 
             {/* Search Dropdown */}
@@ -425,9 +425,9 @@ export const FinancialProfileView: React.FC<FinancialProfileViewProps> = ({ city
                   >
                     <div>
                       <span className="font-semibold">{city.name}</span>
-                      <span className="text-[10px] text-slate-400 ml-1.5">({city.csd_type})</span>
+                      <span className="text-xs text-slate-400 ml-1.5">({city.csd_type})</span>
                     </div>
-                    <span className="text-[10px] text-indigo-400">+ Add</span>
+                    <span className="text-xs text-indigo-400 font-semibold">+ Add</span>
                   </button>
                 ))}
               </div>

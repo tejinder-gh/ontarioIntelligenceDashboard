@@ -268,16 +268,16 @@ export const CompetitionView: React.FC<CompetitionViewProps> = ({ cityId }) => {
                       {c.name}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold ${
                         c.is_chain 
-                          ? 'bg-purple-950 text-purple-300 border border-purple-800/60' 
-                          : 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
+                          ? 'bg-purple-950/90 text-purple-300 border border-purple-700/60' 
+                          : 'bg-emerald-950/90 text-emerald-300 border border-emerald-700/60'
                       }`}>
                         {c.is_chain ? `Chain: ${c.brand_name || 'Corporate'}` : 'Independent Operator'}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-slate-300">{c.address}</td>
-                    <td className="py-3 px-4 text-right font-mono text-[11px] text-slate-400">
+                    <td className="py-3 px-4 text-right font-mono text-xs text-slate-400">
                       {Number(c.latitude).toFixed(4)}, {Number(c.longitude).toFixed(4)}
                     </td>
                     <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">

@@ -130,6 +130,17 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
     }
   }, [activeDetail]);
 
+  // Keyboard accessibility: dismiss modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && activeDetail) {
+        setActiveDetail(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeDetail]);
+
   const handleCardClick = (rec: any) => {
     const oppScore = rec.opportunityScore || 85;
     const revMedian = rec.revenueBenchmarkRange?.median || rec.estimatedAnnualRevenueCAD?.median || 750000;
@@ -549,7 +560,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                           <td className="py-3 px-4 font-semibold text-white">{r.cityName}</td>
                           <td className="py-3 px-4 text-right">
                             <span className="font-extrabold text-emerald-400 text-sm">{r.opportunityScore}</span>
-                            <span className="text-slate-500 text-[10px]">/100</span>
+                            <span className="text-slate-400 text-xs font-normal">/100</span>
                           </td>
                           <td className="py-3 px-4 text-right font-medium text-white">{dScore}</td>
                           <td className="py-3 px-4 text-right">
@@ -599,25 +610,35 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
       {/* CATEGORY DEEP DIVE MODAL / DRAWER                                         */}
       {/* ========================================================================= */}
       {activeDetail && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setActiveDetail(null)}
+        >
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-detail-title"
+            className="liquid-glass-modal rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
+            <div className="p-6 border-b border-white/10 flex items-center justify-between sticky top-0 bg-slate-900/90 backdrop-blur-md z-10">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800/60">
+                  <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-indigo-950/90 text-indigo-300 border border-indigo-700/80">
                     Category Opportunity Intelligence
                   </span>
                   <ResolutionBadge resolution="CSD" />
                 </div>
-                <h3 className="text-xl font-bold text-white">
+                <h3 id="category-detail-title" className="text-xl font-bold text-white tracking-tight">
                   {BUSINESS_CATEGORIES.find(c => c.id === activeDetail.categoryId)?.name || activeDetail.categoryId} in {activeDetail.cityName || activeDetail.cityId.replace('CSD_', '')}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveDetail(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="p-2 min-h-[36px] min-w-[36px] rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center"
+                aria-label="Close category opportunity modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -697,25 +718,25 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                     {detailData.commercialRealEstate ? (
                       <div className="grid grid-cols-3 gap-3 text-xs">
                         <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                          <span className="text-slate-400 block mb-1">Net Base Rent</span>
+                          <span className="text-slate-300 block mb-1 font-medium">Net Base Rent</span>
                           <span className="text-base font-bold text-white">
                             ${Number(detailData.commercialRealEstate.avg_retail_rent_sqft_net).toFixed(2)}
                           </span>
-                          <span className="text-[10px] text-slate-500 block mt-0.5">CAD / sq. ft / year (NNN)</span>
+                          <span className="text-xs text-slate-400 block mt-0.5">CAD / sq. ft / year (NNN)</span>
                         </div>
                         <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                          <span className="text-slate-400 block mb-1">Additional TMI (Taxes/Maint)</span>
+                          <span className="text-slate-300 block mb-1 font-medium">Additional TMI (Taxes/Maint)</span>
                           <span className="text-base font-bold text-white">
                             ${Number(detailData.commercialRealEstate.avg_tmi_sqft).toFixed(2)}
                           </span>
-                          <span className="text-[10px] text-slate-500 block mt-0.5">CAD / sq. ft / year</span>
+                          <span className="text-xs text-slate-400 block mt-0.5">CAD / sq. ft / year</span>
                         </div>
                         <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                          <span className="text-slate-400 block mb-1">Commercial Vacancy</span>
+                          <span className="text-slate-300 block mb-1 font-medium">Commercial Vacancy</span>
                           <span className="text-base font-bold text-indigo-300">
                             {detailData.commercialRealEstate.retail_vacancy_rate_pct}%
                           </span>
-                          <span className="text-[10px] text-slate-500 block mt-0.5">Local retail availability</span>
+                          <span className="text-xs text-slate-400 block mt-0.5">Local retail availability</span>
                         </div>
                       </div>
                     ) : (
@@ -730,7 +751,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                         <h4 className="text-sm font-bold text-white">
                           OSM-Listed Competitor Locations ({detailData.competitorLocations?.length || 0})
                         </h4>
-                        <span className="text-[11px] text-amber-400/90 font-medium">
+                        <span className="text-xs text-amber-300 font-medium">
                           Notice: OSM-listed locations reflect open geographic survey and may not represent a complete census.
                         </span>
                       </div>
@@ -738,7 +759,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
 
                     <div className="overflow-y-auto max-h-48 border border-slate-800 rounded-lg">
                       <table className="w-full text-xs text-left">
-                        <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                        <thead className="bg-slate-900 text-slate-300 uppercase tracking-wider border-b border-slate-800">
                           <tr>
                             <th className="py-2.5 px-3">Establishment</th>
                             <th className="py-2.5 px-3">Type</th>
@@ -751,14 +772,14 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                             <tr key={comp.id}>
                               <td className="py-2 px-3 font-semibold text-white">{comp.name}</td>
                               <td className="py-2 px-3">
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                  comp.is_chain ? 'bg-purple-950 text-purple-300 border border-purple-800/60' : 'bg-slate-800 text-slate-300'
+                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                                  comp.is_chain ? 'bg-purple-950/90 text-purple-300 border border-purple-700/60' : 'bg-slate-800 text-slate-200'
                                 }`}>
                                   {comp.is_chain ? 'Franchise / Chain' : 'Independent'}
                                 </span>
                               </td>
-                              <td className="py-2 px-3 text-slate-400 truncate max-w-[180px]">{comp.address}</td>
-                              <td className="py-2 px-3 text-right font-mono text-[11px] text-slate-500">
+                              <td className="py-2 px-3 text-slate-300 truncate max-w-[180px]">{comp.address}</td>
+                              <td className="py-2 px-3 text-right font-mono text-xs text-slate-400">
                                 {Number(comp.latitude).toFixed(4)}, {Number(comp.longitude).toFixed(4)}
                               </td>
                             </tr>

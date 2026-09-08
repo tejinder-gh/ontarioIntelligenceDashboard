@@ -137,38 +137,38 @@ export const MethodologySourcesView: React.FC = () => {
               </div>
 
               <div className="text-right p-3 bg-slate-900/80 rounded-xl border border-emerald-900/50">
-                <span className="text-xs text-slate-400 block">External API Calls Made at Runtime</span>
+                <span className="text-xs text-slate-300 block">External API Calls Made at Runtime</span>
                 <span className="text-4xl font-extrabold text-emerald-400 font-mono">
                   {freshnessData.externalApiCallCount}
                 </span>
-                <span className="text-[10px] text-slate-500 block mt-0.5">Strictly 0 runtime requests</span>
+                <span className="text-xs text-slate-400 block mt-0.5">Strictly 0 runtime requests</span>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 text-xs">
               <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800">
-                <span className="text-slate-400 block mb-1">Operational Database Engine</span>
+                <span className="text-slate-300 block mb-1 font-medium">Operational Database Engine</span>
                 <span className="text-sm font-semibold text-white flex items-center gap-1.5">
                   <Server className="w-4 h-4 text-indigo-400" />
                   PostgreSQL 16 (Docker Service)
                 </span>
-                <span className="text-[11px] text-slate-500 block mt-1">Database: ontario_economic_intelligence</span>
+                <span className="text-xs text-slate-400 block mt-1">Database: ontario_economic_intelligence</span>
               </div>
 
               <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800">
-                <span className="text-slate-400 block mb-1">Geographies & Municipalities Persisted</span>
+                <span className="text-slate-300 block mb-1 font-medium">Geographies & Municipalities Persisted</span>
                 <span className="text-sm font-semibold text-emerald-400 font-mono">
                   {freshnessData.totalGeographiesPersisted} Census Subdivisions (CSD)
                 </span>
-                <span className="text-[11px] text-slate-500 block mt-1">All 444 Ontario Municipalities</span>
+                <span className="text-xs text-slate-400 block mt-1">All 444 Ontario Municipalities</span>
               </div>
 
               <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800">
-                <span className="text-slate-400 block mb-1">Observations & Entities Stored</span>
+                <span className="text-slate-300 block mb-1 font-medium">Observations & Entities Stored</span>
                 <span className="text-sm font-semibold text-indigo-300 font-mono">
                   {freshnessData.totalObservationsPersisted} Observations / {freshnessData.totalBusinessLocationsPersisted} Businesses
                 </span>
-                <span className="text-[11px] text-slate-500 block mt-1">Indexed with 22 relational tables</span>
+                <span className="text-xs text-slate-400 block mt-1">Indexed with 22 relational tables</span>
               </div>
             </div>
           </div>
@@ -208,8 +208,8 @@ export const MethodologySourcesView: React.FC = () => {
                       <td className="py-3 px-4 text-slate-400">{d.update_frequency}</td>
                       <td className="py-3 px-4 text-center text-slate-400">{d.stale_after_days} days</td>
                       <td className="py-3 px-4 text-center">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800/60">
-                          <CheckCircle2 className="w-3 h-3" />
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-950/90 text-emerald-300 border border-emerald-700/60">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
                           CURRENT
                         </span>
                       </td>
@@ -252,15 +252,15 @@ export const MethodologySourcesView: React.FC = () => {
                   <tr key={m.id} className="hover:bg-slate-900/50 transition-colors">
                     <td className="py-3 px-4">
                       <div className="font-semibold text-white">{m.name}</div>
-                      <div className="font-mono text-[10px] text-indigo-400 mt-0.5">{m.id}</div>
+                      <div className="font-mono text-xs text-indigo-400 mt-0.5">{m.id}</div>
                     </td>
-                    <td className="py-3 px-4 text-slate-400">{m.category}</td>
+                    <td className="py-3 px-4 text-slate-300">{m.category}</td>
                     <td className="py-3 px-4 text-slate-300 max-w-xs">{m.definition}</td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-amber-300 max-w-xs">{m.formula || 'Direct Observation'}</td>
+                    <td className="py-3 px-4 font-mono text-xs text-amber-300 max-w-xs">{m.formula || 'Direct Observation'}</td>
                     <td className="py-3 px-4">
                       <ResolutionBadge resolution={m.geographic_scope_supported} />
                     </td>
-                    <td className="py-3 px-4 text-slate-400 max-w-xs text-[11px]">{m.limitations}</td>
+                    <td className="py-3 px-4 text-slate-300 max-w-xs text-xs">{m.limitations}</td>
                   </tr>
                 ))}
               </tbody>
@@ -279,7 +279,7 @@ export const MethodologySourcesView: React.FC = () => {
               <div key={s.id} className="glass-panel p-5 rounded-xl border border-slate-800 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 uppercase tracking-wider">
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-indigo-950/90 text-indigo-300 border border-indigo-700/80 uppercase tracking-wider">
                       Priority Rank #{s.priority_rank}
                     </span>
                     <h4 className="text-base font-bold text-white mt-1.5">{s.name}</h4>

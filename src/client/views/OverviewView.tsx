@@ -100,10 +100,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
       {/* Core KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
         {/* KPI 1: Population */}
-        <div className="glass-panel p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span className="flex items-center gap-1 font-medium">
-              <Users className="w-3.5 h-3.5 text-indigo-400" />
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10 hover:border-indigo-500/40 transition-all shadow-sm">
+          <div className="flex items-center justify-between text-slate-300 text-xs mb-1.5">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Users className="w-4 h-4 text-indigo-400" />
               Population (2021)
             </span>
             <MetricTooltip 
@@ -114,17 +114,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
               period="2021"
             />
           </div>
-          <div className="text-xl font-bold text-white">{pop.toLocaleString()}</div>
-          <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-            <span className="text-indigo-400 font-semibold">{share}%</span> of Ontario
+          <div className="text-2xl font-extrabold text-white tracking-tight">{pop.toLocaleString()}</div>
+          <div className="text-xs text-slate-300 mt-1 flex items-center gap-1 font-medium">
+            <span className="text-indigo-400 font-semibold">{share}%</span> of Ontario total
           </div>
         </div>
 
         {/* KPI 2: Population Growth */}
-        <div className="glass-panel p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span className="flex items-center gap-1 font-medium">
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10 hover:border-indigo-500/40 transition-all shadow-sm">
+          <div className="flex items-center justify-between text-slate-300 text-xs mb-1.5">
+            <span className="flex items-center gap-1.5 font-medium">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
               5-Yr Pop Growth
             </span>
             <MetricTooltip 
@@ -134,19 +134,19 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
               source="Statistics Canada 2021 Census Profile"
             />
           </div>
-          <div className="text-xl font-bold text-white">
+          <div className="text-2xl font-extrabold text-white tracking-tight">
             {growth > 0 ? `+${growth}%` : `${growth}%`}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">
+          <div className="text-xs text-slate-300 mt-1 font-medium">
             {growth >= 5.8 ? 'Above Ontario avg (+5.8%)' : 'Below Ontario avg (+5.8%)'}
           </div>
         </div>
 
         {/* KPI 3: Household Income */}
-        <div className="glass-panel p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span className="flex items-center gap-1 font-medium">
-              <DollarSign className="w-3.5 h-3.5 text-amber-400" />
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10 hover:border-indigo-500/40 transition-all shadow-sm">
+          <div className="flex items-center justify-between text-slate-300 text-xs mb-1.5">
+            <span className="flex items-center gap-1.5 font-medium">
+              <DollarSign className="w-4 h-4 text-amber-400" />
               Median HH Income
             </span>
             <MetricTooltip 
@@ -157,17 +157,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
               period="2020"
             />
           </div>
-          <div className="text-xl font-bold text-white">${medianIncome.toLocaleString()}</div>
-          <div className="text-[11px] text-emerald-400 font-medium mt-1">
+          <div className="text-2xl font-extrabold text-white tracking-tight">${medianIncome.toLocaleString()}</div>
+          <div className="text-xs text-emerald-400 font-semibold mt-1">
             High purchasing power
           </div>
         </div>
 
         {/* KPI 4: Employer Businesses */}
-        <div className="glass-panel p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span className="flex items-center gap-1 font-medium">
-              <Store className="w-3.5 h-3.5 text-sky-400" />
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10 hover:border-indigo-500/40 transition-all shadow-sm">
+          <div className="flex items-center justify-between text-slate-300 text-xs mb-1.5">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Store className="w-4 h-4 text-sky-400" />
               Active Businesses
             </span>
             <MetricTooltip 
@@ -178,17 +178,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
               period="Dec 2025"
             />
           </div>
-          <div className="text-xl font-bold text-white">{totalBiz.toLocaleString()}</div>
-          <div className="text-[11px] text-slate-400 mt-1">
+          <div className="text-2xl font-extrabold text-white tracking-tight">{totalBiz.toLocaleString()}</div>
+          <div className="text-xs text-slate-300 mt-1 font-medium">
             {bizDensity} biz / 1k pop
           </div>
         </div>
 
         {/* KPI 5: Commercial Retail Rent */}
-        <div className="glass-panel p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span className="flex items-center gap-1 font-medium">
-              <Building className="w-3.5 h-3.5 text-purple-400" />
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10 hover:border-indigo-500/40 transition-all shadow-sm">
+          <div className="flex items-center justify-between text-slate-300 text-xs mb-1.5">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Building className="w-4 h-4 text-purple-400" />
               Retail Asking Rent
             </span>
             <MetricTooltip 
@@ -199,17 +199,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
               period="2024-Q4"
             />
           </div>
-          <div className="text-xl font-bold text-white">${retailRent.toFixed(2)}</div>
-          <div className="text-[11px] text-slate-400 mt-1">
+          <div className="text-2xl font-extrabold text-white tracking-tight">${retailRent.toFixed(2)}</div>
+          <div className="text-xs text-slate-300 mt-1 font-medium">
             CAD/sq ft/yr net
           </div>
         </div>
 
         {/* KPI 6: Unemployment Rate */}
-        <div className="glass-panel p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span className="flex items-center gap-1 font-medium">
-              <Briefcase className="w-3.5 h-3.5 text-rose-400" />
+        <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10 hover:border-indigo-500/40 transition-all shadow-sm">
+          <div className="flex items-center justify-between text-slate-300 text-xs mb-1.5">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Briefcase className="w-4 h-4 text-rose-400" />
               Unemployment Rate
             </span>
             <MetricTooltip 
@@ -219,9 +219,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
               source="Statistics Canada 2021 Census Profile"
             />
           </div>
-          <div className="text-xl font-bold text-white">{unemp}%</div>
-          <div className="text-[11px] text-slate-400 mt-1">
-            Labor participation: 66.8%
+          <div className="text-2xl font-extrabold text-white tracking-tight">{unemp}%</div>
+          <div className="text-xs text-slate-300 mt-1 font-medium">
+            Participation: 66.8%
           </div>
         </div>
       </div>

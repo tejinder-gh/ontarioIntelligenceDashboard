@@ -187,22 +187,22 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
                     >
                       <td className="py-3 px-4 font-semibold text-white group-hover:text-indigo-300 transition-colors">
                         <div>{l.title}</div>
-                        <div className="text-[11px] text-slate-400 font-normal mt-0.5">{l.address}</div>
+                        <div className="text-xs text-slate-400 font-normal mt-0.5">{l.address}</div>
                         {hasPriceDrop && (
-                          <div className="text-[10px] text-rose-400 flex items-center gap-1 mt-0.5">
-                            <TrendingDown className="w-3 h-3" />
+                          <div className="text-xs text-rose-400 flex items-center gap-1 mt-0.5 font-medium">
+                            <TrendingDown className="w-3.5 h-3.5" />
                             Reduced by ${priceDropAmt.toLocaleString()} (was ${Number(l.previous_asking_price).toLocaleString()})
                           </div>
                         )}
                       </td>
                       <td className="py-3 px-4 text-slate-300">{l.city_name}</td>
-                      <td className="py-3 px-4 text-slate-400">{l.category_name}</td>
+                      <td className="py-3 px-4 text-slate-300">{l.category_name}</td>
                       <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                          l.listing_status === 'ACTIVE' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
-                          l.listing_status === 'RELISTED' ? 'bg-amber-950 text-amber-300 border border-amber-800' :
-                          l.listing_status === 'CONFIRMED_SOLD' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
-                          'bg-slate-800 text-slate-400'
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold ${
+                          l.listing_status === 'ACTIVE' ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-700/80' :
+                          l.listing_status === 'RELISTED' ? 'bg-amber-950/90 text-amber-300 border border-amber-700/80' :
+                          l.listing_status === 'CONFIRMED_SOLD' ? 'bg-blue-950/90 text-blue-300 border border-blue-700/80' :
+                          'bg-slate-800 text-slate-300'
                         }`}>
                           {l.listing_status}
                         </span>
@@ -216,24 +216,24 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
                             ${Number(l.confirmed_sale_price).toLocaleString()}
                           </span>
                         ) : (
-                          <span className="text-slate-500 italic">
+                          <span className="text-slate-400 italic">
                             Unconfirmed / Active
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-right text-slate-400">
+                      <td className="py-3 px-4 text-right text-slate-300">
                         {l.days_on_market ? `${l.days_on_market}d` : '—'}
                       </td>
                       <td className="py-3 px-4 text-center">
                         {l.repeated_listing_confidence ? (
                           <span 
                             title={`Repeated listing algorithm match: ${(l.repeated_listing_confidence * 100).toFixed(0)}% confidence`}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-950 text-purple-300 border border-purple-800/60"
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-semibold bg-purple-950/90 text-purple-300 border border-purple-700/60"
                           >
                             {(l.repeated_listing_confidence * 100).toFixed(0)}% Match
                           </span>
                         ) : (
-                          <span className="text-slate-600">—</span>
+                          <span className="text-slate-500">—</span>
                         )}
                       </td>
                     </tr>

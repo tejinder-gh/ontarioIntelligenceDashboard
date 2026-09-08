@@ -154,7 +154,7 @@ export const DemographicsView: React.FC<DemographicsViewProps> = ({ cityId }) =>
                           <div className="text-indigo-400 font-mono mt-1">
                             Count: {item.count_total.toLocaleString()} people ({item.percentage_share}%)
                           </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">Source: Statistics Canada Census 2021</div>
+                          <div className="text-xs text-slate-400 mt-1">Source: Statistics Canada Census 2021</div>
                         </div>
                       );
                     }}
@@ -205,7 +205,7 @@ export const DemographicsView: React.FC<DemographicsViewProps> = ({ cityId }) =>
                       <td className="px-4 py-2.5 font-medium text-white">{item.category_label}</td>
                       <td className="px-4 py-2.5 text-right font-semibold text-emerald-400">{item.count_total.toLocaleString()}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-slate-300">{item.percentage_share}%</td>
-                      <td className="px-4 py-2.5 text-slate-400 font-mono text-[10px]">StatCan 98-400-X</td>
+                      <td className="px-4 py-2.5 text-slate-400 font-mono text-xs">StatCan 98-400-X</td>
                     </tr>
                   ))}
                 </tbody>

@@ -250,13 +250,13 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
                         {isOutlier ? (
                           <span 
                             title={r.outlier_reason}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-950 text-rose-300 border border-rose-800/60"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-rose-950/90 text-rose-300 border border-rose-700/60"
                           >
                             <AlertTriangle className="w-3 h-3 text-rose-400" />
                             Outlier
                           </span>
                         ) : (
-                          <span className="text-slate-600">—</span>
+                          <span className="text-slate-500">—</span>
                         )}
                       </td>
                       <td className="py-3 px-4 text-right">

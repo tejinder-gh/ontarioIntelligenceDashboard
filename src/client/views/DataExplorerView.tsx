@@ -250,11 +250,11 @@ export const DataExplorerView: React.FC<DataExplorerViewProps> = ({ cityId }) =>
                         benchmarkLabel={o.is_benchmark ? o.benchmark_label : undefined} 
                       />
                     </td>
-                    <td className="py-2.5 px-4 text-[11px] text-slate-400" title={o.source_url}>
+                    <td className="py-2.5 px-4 text-xs text-slate-300" title={o.source_url}>
                       {o.dataset_code} ({o.source_name})
                     </td>
                     <td className="py-2.5 px-4 text-center">
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800/60">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-950/90 text-emerald-300 border border-emerald-700/60">
                         {o.confidence}
                       </span>
                     </td>
