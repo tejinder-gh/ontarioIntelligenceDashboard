@@ -273,21 +273,36 @@ apiRouter.get('/geographies/compare', async (req, res) => {
 
     const ids = idsParam.split(',').map(s => s.trim());
     const cities = await sql`
-      SELECT g.id, g.name, g.csd_type, g.population_2021, g.population_growth_pct, g.ontario_pop_share_pct,
-             o_inc.value_numeric as median_income,
-             o_rent.value_numeric as median_rent,
-             o_biz.value_numeric as total_businesses,
-             o_dens.value_numeric as biz_density,
-             o_unemp.value_numeric as unemp_rate,
-             o_budg.value_numeric as operating_budget
+      SELECT 
+        g.id, 
+        g.name, 
+        g.csd_type, 
+        g.population_2021, 
+        g.population_growth_pct, 
+        g.ontario_pop_share_pct,
+        MAX(CASE WHEN o.metric_id = 'income_median_hh' THEN o.value_numeric END) as median_income,
+        MAX(CASE WHEN o.metric_id = 'shelter_cost_median_rent' THEN o.value_numeric END) as median_rent,
+        MAX(CASE WHEN o.metric_id = 'businesses_total_counts' THEN o.value_numeric END) as total_businesses,
+        MAX(CASE WHEN o.metric_id = 'businesses_per_1000_pop' THEN o.value_numeric END) as biz_density,
+        MAX(CASE WHEN o.metric_id = 'labor_unemployment_rate' THEN o.value_numeric END) as unemp_rate,
+        MAX(CASE WHEN o.metric_id = 'municipal_operating_budget' THEN o.value_numeric END) as operating_budget
       FROM geographies g
-      LEFT JOIN observations o_inc ON o_inc.geography_id = g.id AND o_inc.metric_id = 'income_median_hh'
-      LEFT JOIN observations o_rent ON o_rent.geography_id = g.id AND o_rent.metric_id = 'shelter_cost_median_rent'
-      LEFT JOIN observations o_biz ON o_biz.geography_id = g.id AND o_biz.metric_id = 'businesses_total_counts'
-      LEFT JOIN observations o_dens ON o_dens.geography_id = g.id AND o_dens.metric_id = 'businesses_per_1000_pop'
-      LEFT JOIN observations o_unemp ON o_unemp.geography_id = g.id AND o_unemp.metric_id = 'labor_unemployment_rate'
-      LEFT JOIN observations o_budg ON o_budg.geography_id = g.id AND o_budg.metric_id = 'municipal_operating_budget'
-      WHERE g.id = ANY(${ids});
+      LEFT JOIN (
+        SELECT DISTINCT ON (geography_id, metric_id) geography_id, metric_id, value_numeric
+        FROM observations
+        WHERE metric_id IN (
+          'income_median_hh', 
+          'shelter_cost_median_rent', 
+          'businesses_total_counts', 
+          'businesses_per_1000_pop', 
+          'labor_unemployment_rate', 
+          'municipal_operating_budget'
+        )
+        ORDER BY geography_id, metric_id, reference_year DESC, id DESC
+      ) o ON o.geography_id = g.id
+      WHERE g.id = ANY(${ids})
+      GROUP BY g.id, g.name, g.csd_type, g.population_2021, g.population_growth_pct, g.ontario_pop_share_pct
+      ORDER BY array_position(${ids}, g.id);
     `;
 
     res.json({ comparison: cities });
@@ -302,17 +317,25 @@ apiRouter.get('/geographies/:id/similar', async (req, res) => {
     const { id } = req.params;
 
     const allCities = await sql`
-      SELECT g.id as geography_id, g.name, g.population_2021 as population, g.population_growth_pct as growth_pct,
-             COALESCE(o_inc.value_numeric, 90000) as median_income,
-             41.0 as median_age,
-             2.6 as avg_household_size,
-             COALESCE(o_part.value_numeric, 66.0) as labor_participation,
-             COALESCE(o_dens.value_numeric, 30.0) as business_density
+      SELECT 
+        g.id as geography_id, 
+        g.name, 
+        g.population_2021 as population, 
+        g.population_growth_pct as growth_pct,
+        COALESCE(MAX(CASE WHEN o.metric_id = 'income_median_hh' THEN o.value_numeric END), 90000) as median_income,
+        41.0 as median_age,
+        2.6 as avg_household_size,
+        COALESCE(MAX(CASE WHEN o.metric_id = 'labor_participation_rate' THEN o.value_numeric END), 66.0) as labor_participation,
+        COALESCE(MAX(CASE WHEN o.metric_id = 'businesses_per_1000_pop' THEN o.value_numeric END), 30.0) as business_density
       FROM geographies g
-      LEFT JOIN observations o_inc ON o_inc.geography_id = g.id AND o_inc.metric_id = 'income_median_hh'
-      LEFT JOIN observations o_part ON o_part.geography_id = g.id AND o_part.metric_id = 'labor_participation_rate'
-      LEFT JOIN observations o_dens ON o_dens.geography_id = g.id AND o_dens.metric_id = 'businesses_per_1000_pop'
-      WHERE g.geo_type = 'CSD' AND g.population_2021 IS NOT NULL;
+      LEFT JOIN (
+        SELECT DISTINCT ON (geography_id, metric_id) geography_id, metric_id, value_numeric
+        FROM observations
+        WHERE metric_id IN ('income_median_hh', 'labor_participation_rate', 'businesses_per_1000_pop')
+        ORDER BY geography_id, metric_id, reference_year DESC, id DESC
+      ) o ON o.geography_id = g.id
+      WHERE g.geo_type = 'CSD' AND g.population_2021 IS NOT NULL
+      GROUP BY g.id, g.name, g.population_2021, g.population_growth_pct;
     `;
 
     const target = allCities.find(c => c.geography_id === id);
@@ -352,17 +375,20 @@ apiRouter.get('/geographies/:id/similar', async (req, res) => {
 // 10. City Rankings Table
 apiRouter.get('/rankings', async (req, res) => {
   try {
-    const metricId = req.query.metric as string || 'income_median_hh';
+    const metricId = (req.query.metric as string) || 'income_median_hh';
 
     const rankings = await sql`
-      SELECT d.geography_id, g.name as city_name, g.csd_type, g.population_2021, 
-             d.metric_id, m.name as metric_name, d.mean_value, d.median_value, 
+      SELECT d.geography_id, g.name as city_name, d.metric_id, m.name as metric_name,
              o.value_numeric, m.unit, d.ontario_rank, d.percentile_rank, d.z_score, 
              d.is_outlier, d.outlier_reason
       FROM derived_analytics d
       JOIN geographies g ON g.id = d.geography_id
       JOIN metrics_definitions m ON m.id = d.metric_id
-      LEFT JOIN observations o ON o.geography_id = d.geography_id AND o.metric_id = d.metric_id
+      LEFT JOIN (
+        SELECT DISTINCT ON (geography_id, metric_id) geography_id, metric_id, value_numeric
+        FROM observations
+        ORDER BY geography_id, metric_id, reference_year DESC, id DESC
+      ) o ON o.geography_id = d.geography_id AND o.metric_id = d.metric_id
       WHERE d.metric_id = ${metricId}
       ORDER BY d.ontario_rank ASC NULLS LAST;
     `;
@@ -382,7 +408,11 @@ apiRouter.get('/analytics/outliers', async (req, res) => {
       FROM derived_analytics d
       JOIN geographies g ON g.id = d.geography_id
       JOIN metrics_definitions m ON m.id = d.metric_id
-      JOIN observations o ON o.geography_id = d.geography_id AND o.metric_id = d.metric_id
+      JOIN (
+        SELECT DISTINCT ON (geography_id, metric_id) geography_id, metric_id, value_numeric
+        FROM observations
+        ORDER BY geography_id, metric_id, reference_year DESC, id DESC
+      ) o ON o.geography_id = d.geography_id AND o.metric_id = d.metric_id
       WHERE d.is_outlier = true
       ORDER BY ABS(d.z_score) DESC;
     `;

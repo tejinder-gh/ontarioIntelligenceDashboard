@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS observations (
     methodology_notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(geography_id, metric_id, reference_year, is_benchmark, benchmark_label)
+    UNIQUE NULLS NOT DISTINCT (geography_id, metric_id, reference_year, is_benchmark, benchmark_label)
 );
 
 CREATE INDEX IF NOT EXISTS idx_obs_geo_metric ON observations(geography_id, metric_id);

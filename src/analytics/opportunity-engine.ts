@@ -62,13 +62,22 @@ export async function runWorkflowA(
   categoryId: string,
   userWeights: OpportunityWeights = {}
 ): Promise<WorkflowAResult[]> {
-  const w = {
+  const rawWeights = {
     demand: userWeights.demandWeight ?? 0.20,
     competition: userWeights.competitionWeight ?? 0.25,
     purchasingPower: userWeights.purchasingPowerWeight ?? 0.20,
     growth: userWeights.growthWeight ?? 0.15,
     operatingCost: userWeights.operatingCostWeight ?? 0.10,
     labor: userWeights.laborWeight ?? 0.10,
+  };
+  const weightSum = (rawWeights.demand + rawWeights.competition + rawWeights.purchasingPower + rawWeights.growth + rawWeights.operatingCost + rawWeights.labor) || 1.0;
+  const w = {
+    demand: rawWeights.demand / weightSum,
+    competition: rawWeights.competition / weightSum,
+    purchasingPower: rawWeights.purchasingPower / weightSum,
+    growth: rawWeights.growth / weightSum,
+    operatingCost: rawWeights.operatingCost / weightSum,
+    labor: rawWeights.labor / weightSum,
   };
 
   // Query core municipal profiles, competitor counts, and real estate rents
@@ -135,14 +144,14 @@ export async function runWorkflowA(
     const laborScore = Math.min(100, Math.round(Number(r.part_rate)));
 
     // Weighted Overall Opportunity Score
-    const totalScore = Math.round(
+    const totalScore = Math.min(100, Math.max(0, Math.round(
       w.demand * demandScore +
       w.competition * competitionScore +
       w.purchasingPower * purchasingPowerScore +
       w.growth * growthScore +
       w.operatingCost * operatingCostScore +
       w.labor * laborScore
-    );
+    )));
 
     // Dynamic Strengths & Risks (Section 24 & 25)
     const strengths: string[] = [];
