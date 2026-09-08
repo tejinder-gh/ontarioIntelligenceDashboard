@@ -11,6 +11,8 @@ import {
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 interface CityRankingsViewProps {
   onSelectCity: (cityId: string) => void;
@@ -31,6 +33,7 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
   const [minPop, setMinPop] = useState<number>(0);
   const [rankings, setRankings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -47,6 +50,52 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
   }, [selectedMetric]);
 
   const activeMetricObj = METRIC_OPTIONS.find(m => m.id === selectedMetric) || METRIC_OPTIONS[0];
+
+  const handleSelectRankingRow = (r: any) => {
+    const valFormatted = activeMetricObj.unit === '$' 
+      ? `$${Number(r.value_numeric).toLocaleString()}`
+      : `${Number(r.value_numeric).toLocaleString()} ${activeMetricObj.unit}`;
+
+    setContributingData({
+      title: `${r.city_name} — Rank #${r.ontario_rank || 'N/A'} in Ontario`,
+      category: 'Cross-Municipal League Table',
+      metricName: activeMetricObj.label,
+      metricValue: valFormatted,
+      unit: activeMetricObj.unit,
+      provenance: {
+        sourceName: 'Statistics Canada / Ontario MMAH FIR Audits',
+        datasetCode: 'LEAGUE_RANKING_2021',
+        referencePeriod: '2021 Census / 2023 FIR',
+        resolution: 'CSD',
+        confidence: 'OFFICIAL_CENSUS',
+        sourceUrl: 'https://www12.statcan.gc.ca/'
+      },
+      contributingDrivers: [
+        {
+          label: 'Provincial Percentile Rank',
+          value: `Top ${(100 - Number(r.percentile_rank || 0)).toFixed(1)}% (Percentile: ${r.percentile_rank}%)`,
+          description: `Ranks higher than ${r.percentile_rank}% of evaluated Ontario Census Subdivisions.`
+        },
+        {
+          label: 'Gaussian Z-Score Divergence',
+          value: `z = ${r.z_score !== null ? (r.z_score > 0 ? `+${r.z_score}` : r.z_score) : '0.00'}`,
+          description: 'Standard deviations away from the population-weighted provincial benchmark mean.'
+        },
+        {
+          label: 'Outlier Anomaly Status',
+          value: r.is_outlier ? 'Statistical Outlier (|z| ≥ 2.0 or Tukey IQR)' : 'Within Standard Bounds',
+          description: r.outlier_reason || 'Metric falls within normal provincial distribution bounds.'
+        },
+        {
+          label: 'CSD Population Base',
+          value: `${Number(r.population_2021 || 0).toLocaleString()} residents`,
+          description: `Official 2021 Census of Population count for ${r.city_name}.`
+        }
+      ],
+      methodologyNote: 'Rankings are computed dynamically using standard rank algorithms with tie-breaking and percentile rank formulas. Outliers are validated against Tukey IQR 1.5x interquartile ranges.',
+      onClose: () => setContributingData(null)
+    });
+  };
 
   const filteredRankings = rankings.filter(r => {
     const pop = Number(r.population_2021 || 0);
@@ -90,6 +139,11 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
           <ExportButton data={exportData} filename={`ontario_rankings_${selectedMetric}`} label="Export League Table" />
         </div>
       </div>
+
+      {/* Contributing Data Inspector */}
+      {contributingData && (
+        <ContributingDataInspector {...contributingData} />
+      )}
 
       {/* Control Filters Bar */}
       <div className="glass-panel p-4 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
@@ -144,7 +198,7 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
               <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
                 <tr>
                   <th className="py-3 px-4 w-16">Rank</th>
-                  <th className="py-3 px-4">Municipality</th>
+                  <th className="py-3 px-4">Municipality (Click to Inspect)</th>
                   <th className="py-3 px-4">Type</th>
                   <th className="py-3 px-4 text-right">Population (2021)</th>
                   <th className="py-3 px-4 text-right">{activeMetricObj.label}</th>
@@ -161,7 +215,11 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
                   const isOutlier = r.is_outlier;
 
                   return (
-                    <tr key={r.geography_id} className="hover:bg-slate-900/50 transition-colors">
+                    <tr 
+                      key={r.geography_id} 
+                      onClick={() => handleSelectRankingRow(r)}
+                      className="hover:bg-slate-800/60 transition-colors cursor-pointer group"
+                    >
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
                           rank === 1 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
@@ -172,7 +230,7 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
                           {rank}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-semibold text-white flex items-center gap-1.5">
+                      <td className="py-3 px-4 font-semibold text-white group-hover:text-indigo-300 transition-colors flex items-center gap-1.5">
                         {r.city_name}
                       </td>
                       <td className="py-3 px-4 text-slate-400">{r.csd_type || 'City'}</td>
@@ -204,7 +262,10 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
                       <td className="py-3 px-4 text-right">
                         <button
                           type="button"
-                          onClick={() => onSelectCity(r.geography_id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectCity(r.geography_id);
+                          }}
                           className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
                         >
                           View Profile
@@ -219,6 +280,12 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
           </div>
         )}
       </div>
+
+      {/* Feature Outliers Section */}
+      <FeatureOutliersSection 
+        category="all" 
+        onSelectCity={onSelectCity} 
+      />
     </div>
   );
 };

@@ -13,6 +13,8 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 interface WorkforceViewProps {
   cityId: string;
@@ -23,6 +25,7 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState<'occupations' | 'industries'>('occupations');
   const [searchQuery, setSearchQuery] = useState('');
+  const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -152,6 +155,11 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
         </div>
       </div>
 
+      {/* Contributing Data Inspector */}
+      {contributingData && (
+        <ContributingDataInspector {...contributingData} />
+      )}
+
       {/* Top Occupations Chart */}
       <div className="glass-panel p-6 rounded-xl border border-slate-800">
         <div className="flex items-center justify-between mb-4">
@@ -161,15 +169,42 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
               Leading Occupational Employment Categories
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Statistics Canada NOC (National Occupational Classification) 2021
+              Statistics Canada NOC 2021. Click any bar to inspect contributing workforce data.
             </p>
           </div>
           <ResolutionBadge resolution="CSD" />
         </div>
 
-        <div className="h-72">
+        <div className="h-72 cursor-pointer">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={topOccChartData} layout="vertical" margin={{ top: 5, right: 30, left: 180, bottom: 5 }}>
+            <BarChart 
+              data={topOccChartData} 
+              layout="vertical" 
+              margin={{ top: 5, right: 30, left: 180, bottom: 5 }}
+              onClick={(e: any) => {
+                if (e && e.activePayload && e.activePayload.length > 0) {
+                  const item = e.activePayload[0].payload;
+                  setContributingData({
+                    title: `${item.name} Employment Distribution`,
+                    metricLabel: 'Employed Residents in Occupation',
+                    value: item.count,
+                    unit: 'workers',
+                    percentageOfTotal: item.share,
+                    benchmarkValue: '66.8% Participation Rate',
+                    benchmarkLabel: 'Labor Participation Baseline',
+                    deltaPct: Math.round(((partRate - 65) / 65) * 100),
+                    sourceLineage: 'Statistics Canada 2021 Census NOC Occupational Profiles',
+                    referenceYear: '2021 Census',
+                    contextDrivers: [
+                      `Represents ${item.share}% of all employed residents in this municipality.`,
+                      `Municipal labor force participation rate: ${partRate}%.`,
+                      `Local unemployment rate stands at ${unempRate}%.`
+                    ],
+                    onClose: () => setContributingData(null)
+                  });
+                }
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
               <XAxis type="number" stroke="#94a3b8" tickFormatter={(v) => v.toLocaleString()} />
               <YAxis dataKey="name" type="category" stroke="#94a3b8" width={175} tick={{ fontSize: 11 }} />
@@ -279,6 +314,14 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
           </div>
         )}
       </div>
+
+      {/* Feature-Wide Outliers Section */}
+      <FeatureOutliersSection
+        category="workforce"
+        cityId={cityId}
+        title="Labor Force & Occupational Outliers"
+        subtitle="Empirical statistical divergences in unemployment rate, labor participation, and occupational concentration across Ontario."
+      />
     </div>
   );
 };

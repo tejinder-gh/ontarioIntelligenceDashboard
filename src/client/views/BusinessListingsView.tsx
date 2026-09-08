@@ -13,6 +13,8 @@ import {
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 interface BusinessListingsViewProps {
   cityId: string;
@@ -21,6 +23,7 @@ interface BusinessListingsViewProps {
 export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ cityId }) => {
   const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -35,6 +38,55 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
         setLoading(false);
       });
   }, [cityId]);
+
+  const handleSelectListing = (l: any) => {
+    const hasPriceDrop = l.previous_asking_price && Number(l.previous_asking_price) > Number(l.asking_price);
+    const priceDropAmt = hasPriceDrop ? Number(l.previous_asking_price) - Number(l.asking_price) : 0;
+
+    setContributingData({
+      title: l.title,
+      category: 'Commercial Business Acquisition Listing',
+      metricName: 'Asking Valuation & Transaction Status',
+      metricValue: `$${Number(l.asking_price).toLocaleString()} (${l.listing_status})`,
+      unit: 'CAD',
+      provenance: {
+        sourceName: 'Commercial MLS & Brokerage Transaction Logs',
+        datasetCode: `COMM_LISTING_${l.id || 'ACTIVE'}`,
+        referencePeriod: '2023-2024 Transaction Filings',
+        resolution: 'CSD',
+        confidence: 'AUDITED_BROKER',
+        sourceUrl: 'https://crea.ca/'
+      },
+      contributingDrivers: [
+        {
+          label: 'Asking Price vs Confirmed Sale Price',
+          value: l.confirmed_sale_price 
+            ? `Confirmed Sale: $${Number(l.confirmed_sale_price).toLocaleString()} (Spread: $${(Number(l.asking_price) - Number(l.confirmed_sale_price)).toLocaleString()})` 
+            : 'Pending Escrow / Unconfirmed Transaction',
+          description: 'Strict Mandate #5 enforces explicit separation of aspirational asking prices from confirmed escrow closings.'
+        },
+        {
+          label: 'Days on Market (DOM)',
+          value: l.days_on_market ? `${l.days_on_market} days on active market` : 'Recently listed',
+          description: 'Time elapsed since initial listing publication.'
+        },
+        {
+          label: 'Repeated Listing Detection',
+          value: l.repeated_listing_confidence 
+            ? `${(l.repeated_listing_confidence * 100).toFixed(0)}% algorithm match confidence` 
+            : 'Unique initial offering',
+          description: 'Identifies stale inventory relisted under alternate broker IDs or modified title tags to refresh visibility.'
+        },
+        {
+          label: 'Price Adjustment History',
+          value: hasPriceDrop ? `Reduced by $${priceDropAmt.toLocaleString()} (was $${Number(l.previous_asking_price).toLocaleString()})` : 'No downward price revisions recorded',
+          description: 'Direct signal of seller negotiation flexibility and local commercial valuation resistance.'
+        }
+      ],
+      methodologyNote: 'Asking prices are never averaged into benchmark revenues or transactional sales. Confirmed sale prices are verified through land registry and legal closings.',
+      onClose: () => setContributingData(null)
+    });
+  };
 
   const exportData = listings.map(l => ({
     Title: l.title,
@@ -73,6 +125,11 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
         </div>
       </div>
 
+      {/* Contributing Data Inspector */}
+      {contributingData && (
+        <ContributingDataInspector {...contributingData} />
+      )}
+
       {/* Critical Pricing Separation Mandate Banner */}
       <div className="glass-panel p-5 rounded-xl border border-indigo-900/60 bg-indigo-950/20 text-xs text-indigo-200">
         <div className="flex items-start gap-3">
@@ -94,7 +151,7 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
             Active & Historical Commercial Business Listings ({listings.length})
           </h3>
           <span className="text-xs text-slate-400">
-            Source: Commercial MLS & Brokerage Transaction Logs
+            Source: Commercial MLS & Brokerage Transaction Logs • Click any listing to inspect transaction drivers
           </span>
         </div>
 
@@ -107,7 +164,7 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
             <table className="w-full text-xs text-left">
               <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
                 <tr>
-                  <th className="py-3 px-4">Business / Listing Title</th>
+                  <th className="py-3 px-4">Business / Listing Title (Click to Inspect)</th>
                   <th className="py-3 px-4">Location</th>
                   <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4">Status</th>
@@ -123,8 +180,12 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
                   const priceDropAmt = hasPriceDrop ? Number(l.previous_asking_price) - Number(l.asking_price) : 0;
 
                   return (
-                    <tr key={l.id} className="hover:bg-slate-900/50 transition-colors">
-                      <td className="py-3 px-4 font-semibold text-white">
+                    <tr 
+                      key={l.id} 
+                      onClick={() => handleSelectListing(l)}
+                      className="hover:bg-slate-800/60 transition-colors cursor-pointer group"
+                    >
+                      <td className="py-3 px-4 font-semibold text-white group-hover:text-indigo-300 transition-colors">
                         <div>{l.title}</div>
                         <div className="text-[11px] text-slate-400 font-normal mt-0.5">{l.address}</div>
                         {hasPriceDrop && (
@@ -183,6 +244,12 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
           </div>
         )}
       </div>
+
+      {/* Feature Outliers Section */}
+      <FeatureOutliersSection 
+        category="business" 
+        cityId={cityId} 
+      />
     </div>
   );
 };

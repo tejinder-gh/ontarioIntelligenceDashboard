@@ -1,10 +1,35 @@
 @import "tailwindcss";
 
+:root {
+  /* Apple HIG Semantic Tokens */
+  --surface-canvas: #030712;
+  --surface-glass-sidebar: rgba(8, 12, 22, 0.78);
+  --surface-glass-header: rgba(8, 12, 22, 0.75);
+  --surface-glass-modal: rgba(15, 23, 42, 0.90);
+  --surface-card: rgba(15, 23, 42, 0.85);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-specular: rgba(255, 255, 255, 0.14);
+  --label-primary: #f8fafc;
+  --label-secondary: #94a3b8; /* > 5.2:1 contrast against dark surfaces */
+  --label-tertiary: #64748b;
+  --accent-primary: #6366f1;
+}
+
 @layer base {
   body {
-    background-color: #030712;
-    color: #f3f4f6;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--surface-canvas);
+    color: var(--label-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, sans-serif;
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Accessible focus indicators */
+  :focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+    border-radius: 6px;
   }
 }
 
@@ -24,9 +49,36 @@
   background: #374151;
 }
 
-/* Glass card styling */
-.glass-panel {
-  background: rgba(17, 24, 39, 0.75);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* Apple HIG Functional Material: Liquid Glass (Sidebar) */
+.liquid-glass-sidebar {
+  background: var(--surface-glass-sidebar);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border-right: 1px solid var(--border-subtle);
 }
+
+/* Apple HIG Functional Material: Liquid Glass (Header Bar) */
+.liquid-glass-header {
+  background: var(--surface-glass-header);
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Apple HIG Functional Material: Liquid Glass (Modal / Overlay) */
+.liquid-glass-modal {
+  background: var(--surface-glass-modal);
+  backdrop-filter: blur(32px) saturate(160%);
+  -webkit-backdrop-filter: blur(32px) saturate(160%);
+  border: 1px solid var(--border-specular);
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* Glass card styling for elevated content */
+.glass-panel {
+  background: var(--surface-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+}
+

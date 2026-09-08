@@ -45,18 +45,18 @@ export const MetricTooltip: React.FC<MetricTooltipProps> = ({
           </div>
           <p className="text-slate-300 mb-2">{content || definition}</p>
           {formula && (
-            <div className="mb-1 text-[11px] text-slate-400">
-              <span className="text-slate-500 font-medium">Formula: </span>
-              <code className="bg-slate-800 px-1 py-0.5 rounded text-indigo-300">{formula}</code>
+            <div className="mb-1 text-xs text-slate-300">
+              <span className="text-slate-400 font-medium">Formula: </span>
+              <code className="bg-slate-800 px-1 py-0.5 rounded text-indigo-300 font-mono">{formula}</code>
             </div>
           )}
-          <div className="text-[11px] text-slate-400">
-            <span className="text-slate-500 font-medium">Source: </span>
+          <div className="text-xs text-slate-300">
+            <span className="text-slate-400 font-medium">Source: </span>
             <span>{source} {period ? `(${period})` : ''}</span>
           </div>
           {limitations && (
-            <div className="mt-1.5 pt-1 border-t border-slate-800/80 text-[10px] text-amber-400/90 leading-tight">
-              <span className="font-semibold">Limitations: </span>
+            <div className="mt-1.5 pt-1.5 border-t border-slate-800 text-xs text-amber-300 leading-snug">
+              <span className="font-semibold text-amber-400">Limitations: </span>
               {limitations}
             </div>
           )}

@@ -13,6 +13,8 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 interface BusinessLandscapeViewProps {
   cityId: string;
@@ -21,6 +23,7 @@ interface BusinessLandscapeViewProps {
 export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ cityId }) => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -156,6 +159,11 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
         </div>
       </div>
 
+      {/* Contributing Data Inspector */}
+      {contributingData && (
+        <ContributingDataInspector {...contributingData} />
+      )}
+
       {/* Employee Size Bands Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="glass-panel p-6 rounded-xl border border-slate-800">
@@ -166,15 +174,42 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
                 Distribution by Employee Size Band
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                StatCan Table 33-10-1097-01 (Dec 2025 reference)
+                StatCan Table 33-10-1097-01 (Dec 2025 reference). Click bar to inspect.
               </p>
             </div>
             <ResolutionBadge resolution="CSD" />
           </div>
 
-          <div className="h-64">
+          <div className="h-64 cursor-pointer">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sizeBands} layout="vertical" margin={{ top: 5, right: 30, left: 120, bottom: 5 }}>
+              <BarChart 
+                data={sizeBands} 
+                layout="vertical" 
+                margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
+                onClick={(e: any) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    const item = e.activePayload[0].payload;
+                    setContributingData({
+                      title: `${item.band} Employee Size Band`,
+                      metricLabel: 'Employer Establishments',
+                      value: item.count,
+                      unit: 'businesses',
+                      percentageOfTotal: item.pct,
+                      benchmarkValue: '87.4% Micro-Business Share (<10 emp)',
+                      benchmarkLabel: 'Ontario Establishment Norm',
+                      deltaPct: 0,
+                      sourceLineage: 'Statistics Canada Canadian Business Counts (Table 33-10-1097-01)',
+                      referenceYear: 'Dec 2025 Release',
+                      contextDrivers: [
+                        `Represents ${item.pct}% of active commercial employer entities in ${geo.name}.`,
+                        `Total employer count in municipality: ${totalBiz.toLocaleString()}.`,
+                        `Crucial for commercial B2B sales targeting and space requirement sizing.`
+                      ],
+                      onClose: () => setContributingData(null)
+                    });
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
                 <XAxis type="number" unit="%" stroke="#94a3b8" />
                 <YAxis dataKey="band" type="category" stroke="#94a3b8" width={115} tick={{ fontSize: 11 }} />
@@ -193,7 +228,28 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-800 text-xs">
             {sizeBands.map(s => (
-              <div key={s.band} className="p-2 rounded bg-slate-900/60 border border-slate-800">
+              <div 
+                key={s.band} 
+                className="p-2 rounded bg-slate-900/60 border border-slate-800 cursor-pointer hover:border-indigo-500/40 transition-colors"
+                onClick={() => {
+                  setContributingData({
+                    title: `${s.band} Employee Band`,
+                    metricLabel: 'Employer Count',
+                    value: s.count,
+                    unit: 'businesses',
+                    percentageOfTotal: s.pct,
+                    benchmarkValue: 'Table 33-10-1097-01',
+                    benchmarkLabel: 'Lineage Source',
+                    deltaPct: 0,
+                    sourceLineage: 'Statistics Canada Business Counts with Employees',
+                    referenceYear: 'Dec 2025',
+                    contextDrivers: [
+                      `Represents ${s.pct}% of all employer businesses in ${geo.name}.`
+                    ],
+                    onClose: () => setContributingData(null)
+                  });
+                }}
+              >
                 <div className="text-slate-400 truncate">{s.band}</div>
                 <div className="text-sm font-semibold text-white mt-0.5">{s.count.toLocaleString()} <span className="text-xs text-slate-400 font-normal">({s.pct}%)</span></div>
               </div>
@@ -210,7 +266,7 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
                 Dominant Commercial Sectors
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Establishments by 2-digit NAICS industry sector
+                Establishments by 2-digit NAICS industry sector. Click to inspect.
               </p>
             </div>
             <ResolutionBadge resolution="CSD" />
@@ -218,7 +274,29 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
 
           <div className="space-y-2.5 overflow-y-auto max-h-72 pr-1">
             {industrySectors.map(s => (
-              <div key={s.name} className="p-2.5 rounded bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+              <div 
+                key={s.name} 
+                className="p-2.5 rounded bg-slate-900/60 border border-slate-800 flex items-center justify-between cursor-pointer hover:border-indigo-500/50 transition-colors"
+                onClick={() => {
+                  setContributingData({
+                    title: `${s.name} Sector Breakdown`,
+                    metricLabel: 'Active Establishments',
+                    value: s.count,
+                    unit: 'establishments',
+                    percentageOfTotal: s.pct,
+                    benchmarkValue: 'NAICS 2-Digit Classification',
+                    benchmarkLabel: 'Sector Standard',
+                    deltaPct: 0,
+                    sourceLineage: 'Statistics Canada Table 33-10-1097-01',
+                    referenceYear: 'Dec 2025',
+                    contextDrivers: [
+                      `Represents ${s.pct}% of all local employer businesses in ${geo.name}.`,
+                      `Total counted establishments in sector: ${s.count.toLocaleString()}.`
+                    ],
+                    onClose: () => setContributingData(null)
+                  });
+                }}
+              >
                 <div>
                   <span className="text-xs font-semibold text-white block">{s.name}</span>
                   <span className="text-[11px] text-slate-400">{s.count.toLocaleString()} establishments</span>
@@ -247,6 +325,14 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
           </div>
         </div>
       </div>
+
+      {/* Feature-Wide Outliers Section */}
+      <FeatureOutliersSection
+        category="business"
+        cityId={cityId}
+        title="Business Density & Commercial Outliers"
+        subtitle="Statistical divergences in employer density, small business concentration, and sectoral vacuums across Ontario."
+      />
     </div>
   );
 };

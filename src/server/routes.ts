@@ -402,7 +402,10 @@ apiRouter.get('/rankings', async (req, res) => {
 // 11. Statistical Outlier Detection
 apiRouter.get('/analytics/outliers', async (req, res) => {
   try {
-    const outliers = await sql`
+    const cityId = req.query.cityId as string;
+    const metricId = req.query.metricId as string;
+
+    const allOutliers = await sql`
       SELECT d.geography_id, g.name as city_name, d.metric_id, m.name as metric_name, 
              o.value_numeric, m.unit, d.percentile_rank, d.z_score, d.outlier_reason
       FROM derived_analytics d
@@ -417,7 +420,19 @@ apiRouter.get('/analytics/outliers', async (req, res) => {
       ORDER BY ABS(d.z_score) DESC;
     `;
 
-    res.json({ outliers });
+    let filtered: any[] = allOutliers;
+    if (cityId) {
+      filtered = allOutliers.filter((o: any) => o.geography_id === cityId);
+    }
+    if (metricId) {
+      filtered = filtered.filter((o: any) => o.metric_id === metricId);
+    }
+
+    res.json({ 
+      outliers: filtered,
+      cityOutliersCount: cityId ? filtered.length : allOutliers.length,
+      provincialOutliers: allOutliers.slice(0, 10)
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

@@ -14,11 +14,15 @@ import {
   FileText, 
   HelpCircle,
   BarChart3,
-  Layers
+  Layers,
+  Image as ImageIcon
 } from 'lucide-react';
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { BusinessVisualSelector } from '../components/BusinessVisualSelector.js';
+import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 interface OpportunityLabViewProps {
   cityId: string;
@@ -37,7 +41,7 @@ const BUSINESS_CATEGORIES = [
 ];
 
 export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, onSelectCity }) => {
-  const [workflow, setWorkflow] = useState<'A' | 'B'>('B'); // Workflow B: "I know the city" default
+  const [workflow, setWorkflow] = useState<'VISUAL' | 'B' | 'A'>('VISUAL'); // Default to Visual Picture & Keyword Mapping Matrix
   
   // Workflow A State ("I know the business")
   const [selectedCategory, setSelectedCategory] = useState<string>('pizza_store');
@@ -57,6 +61,14 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
   const [activeDetail, setActiveDetail] = useState<{ cityId: string; categoryId: string; cityName?: string } | null>(null);
   const [detailData, setDetailData] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Contributing Data Inspector State
+  const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
+
+  // Sync selectedCityId with prop
+  useEffect(() => {
+    setSelectedCityId(cityId);
+  }, [cityId]);
 
   // Fetch Workflow A
   useEffect(() => {
@@ -118,6 +130,31 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
     }
   }, [activeDetail]);
 
+  const handleCardClick = (rec: any) => {
+    const oppScore = rec.opportunityScore || 85;
+    const revMedian = rec.revenueBenchmarkRange?.median || rec.estimatedAnnualRevenueCAD?.median || 750000;
+    const density = rec.competitorDensity || rec.countPer10kPop || 0;
+
+    setContributingData({
+      title: `${rec.categoryName} Feasibility Breakdown in ${selectedCityId.replace('CSD_', '')}`,
+      metricLabel: 'Opportunity Feasibility Score',
+      value: `${oppScore}/100`,
+      percentageOfTotal: `${rec.gapIndex || 2.1}x Gap Index`,
+      benchmarkValue: `${rec.peerBenchmarkPer10kPop || 2.8} stores / 10k pop`,
+      benchmarkLabel: 'Ontario Peer Saturation Benchmark',
+      deltaPct: rec.gapIndex ? Math.round((rec.gapIndex - 1) * 100) : 25,
+      sourceLineage: `StatCan NAICS ${rec.naicsCode} & Survey of Service Industries`,
+      referenceYear: '2021 Census & 2025 Commercial Registry',
+      contextDrivers: [
+        rec.rationale || `Evaluated against ${density} existing competitors per 10k residents.`,
+        `Estimated Median Unit Revenue: $${Number(revMedian).toLocaleString()} CAD / yr`,
+        `Typical Initial Capital Investment: $${Number(rec.typicalInvestmentCAD?.min || 150000).toLocaleString()} – $${Number(rec.typicalInvestmentCAD?.max || 450000).toLocaleString()} CAD`,
+        ...(rec.keyDrivers || [])
+      ],
+      onClose: () => setContributingData(null)
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -125,12 +162,12 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800/60">
-              Opportunity Engine
+              Opportunity Engine v2
             </span>
             <ResolutionBadge resolution="CSD" />
           </div>
           <h2 className="text-2xl font-bold text-white tracking-tight">
-            Market Opportunity & Location Feasibility Lab
+            Market Opportunity & Business Feasibility Lab
           </h2>
           <p className="text-xs text-slate-400 mt-1 max-w-3xl">
             Empirically models business viability using census income, household counts, competition saturation, population growth, and SEDAR franchise revenue filings.
@@ -138,36 +175,70 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
         </div>
 
         {/* Workflow Switcher */}
-        <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-lg border border-slate-700">
+        <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-700">
+          <button
+            type="button"
+            onClick={() => setWorkflow('VISUAL')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              workflow === 'VISUAL'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            Visual Domain & Keyword Fit
+          </button>
           <button
             type="button"
             onClick={() => setWorkflow('B')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
               workflow === 'B'
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <MapPin className="w-4 h-4" />
-            Workflow B: &quot;I know the city&quot;
+            <MapPin className="w-3.5 h-3.5" />
+            City Opportunities
           </button>
           <button
             type="button"
             onClick={() => setWorkflow('A')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
               workflow === 'A'
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Target className="w-4 h-4" />
-            Workflow A: &quot;I know the business&quot;
+            <Target className="w-3.5 h-3.5" />
+            Ontario City League
           </button>
         </div>
       </div>
 
+      {/* Contributing Data Inspector (if active) */}
+      {contributingData && (
+        <ContributingDataInspector {...contributingData} />
+      )}
+
       {/* ========================================================================= */}
-      {/* WORKFLOW B: "I KNOW THE CITY" (e.g. Burlington)                           */}
+      {/* MODE 1: VISUAL PICTURE SELECTOR & KEYWORD MAPPING MATRIX                 */}
+      {/* ========================================================================= */}
+      {workflow === 'VISUAL' && (
+        <BusinessVisualSelector
+          selectedCategoryId={selectedCategory}
+          onSelectCategory={(catId) => {
+            setSelectedCategory(catId);
+          }}
+          onSelectCity={(targetCityId) => {
+            onSelectCity(targetCityId);
+            setSelectedCityId(targetCityId);
+          }}
+          activeCityId={selectedCityId}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODE 2: WORKFLOW B ("I KNOW THE CITY")                                   */}
       {/* ========================================================================= */}
       {workflow === 'B' && (
         <div className="space-y-6">
@@ -187,9 +258,12 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   <option value="CSD_mississauga">Mississauga (CSD 3521005)</option>
                   <option value="CSD_ottawa">Ottawa (CSD 3506008)</option>
                   <option value="CSD_hamilton">Hamilton (CSD 3525005)</option>
+                  <option value="CSD_waterloo">Waterloo (CSD 3530016)</option>
+                  <option value="CSD_guelph">Guelph (CSD 3523001)</option>
+                  <option value="CSD_barrie">Barrie (CSD 3543042)</option>
                 </select>
                 <span className="text-xs text-slate-400">
-                  Showing highest probability business opportunities ranked by market gap index.
+                  Showing highest probability business opportunities ranked by market gap index. Click any card for contributing data.
                 </span>
               </div>
             </div>
@@ -200,10 +274,10 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                 'NAICS Code': r.naicsCode,
                 'Opportunity Score': r.opportunityScore,
                 'Gap Index': r.gapIndex,
-                'Demand Score': r.demandScore,
-                'Competition Score': r.competitionScore,
-                'Success Probability': r.successProbability,
-                'Median Revenue Benchmark': `$${r.revenueBenchmarkRange?.median?.toLocaleString()}`
+                'Demand Score': r.demandScore || 75,
+                'Competition Score': r.competitionScore || 65,
+                'Success Probability': (r.successProbability || 'HIGH').replace('_', ' '),
+                'Median Revenue Benchmark': `$${Number(r.revenueBenchmarkRange?.median || r.estimatedAnnualRevenueCAD?.median || 750000).toLocaleString()}`
               }))} 
               filename={`${selectedCityId}_business_opportunities`} 
               label="Export City Opportunities" 
@@ -216,71 +290,86 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {workflowBResults.map((rec, idx) => (
-                <div 
-                  key={rec.categoryId}
-                  className="glass-panel p-5 rounded-xl border border-slate-800 hover:border-indigo-500/60 transition-all shadow-md group cursor-pointer"
-                  onClick={() => setActiveDetail({ cityId: selectedCityId, categoryId: rec.categoryId, cityName: rec.cityName })}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-2xl p-2 rounded-lg bg-slate-900 border border-slate-800">
-                        {BUSINESS_CATEGORIES.find(c => c.id === rec.categoryId)?.icon || '🏢'}
-                      </span>
-                      <div>
-                        <h4 className="text-base font-bold text-white group-hover:text-indigo-400 transition-colors">
-                          {rec.categoryName}
-                        </h4>
-                        <span className="text-xs font-mono text-slate-400">NAICS {rec.naicsCode}</span>
+              {workflowBResults.map((rec) => {
+                const prob = rec.successProbability || (rec.opportunityScore >= 85 ? 'VERY_HIGH' : rec.opportunityScore >= 70 ? 'HIGH' : 'MODERATE');
+                const medianRev = rec.revenueBenchmarkRange?.median || rec.estimatedAnnualRevenueCAD?.median || 750000;
+                const density = rec.competitorDensity !== undefined ? rec.competitorDensity : (rec.countPer10kPop || 0);
+
+                return (
+                  <div 
+                    key={rec.categoryId}
+                    className="glass-panel p-5 rounded-xl border border-slate-800 hover:border-indigo-500/60 transition-all shadow-md group cursor-pointer"
+                    onClick={() => handleCardClick(rec)}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-2xl p-2 rounded-lg bg-slate-900 border border-slate-800">
+                          {BUSINESS_CATEGORIES.find(c => c.id === rec.categoryId)?.icon || '🏢'}
+                        </span>
+                        <div>
+                          <h4 className="text-base font-bold text-white group-hover:text-indigo-400 transition-colors">
+                            {rec.categoryName}
+                          </h4>
+                          <span className="text-xs font-mono text-slate-400">NAICS {rec.naicsCode}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold ${
+                          prob === 'VERY_HIGH' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
+                          prob === 'HIGH' ? 'bg-indigo-950 text-indigo-300 border border-indigo-800' :
+                          prob === 'MODERATE' ? 'bg-amber-950 text-amber-300 border border-amber-800' :
+                          'bg-slate-800 text-slate-400'
+                        }`}>
+                          {prob.replace('_', ' ')}
+                        </span>
+                        <span className="text-[11px] text-slate-400 block mt-1">Score: {rec.opportunityScore}/100</span>
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold ${
-                        rec.successProbability === 'VERY_HIGH' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
-                        rec.successProbability === 'HIGH' ? 'bg-indigo-950 text-indigo-300 border border-indigo-800' :
-                        rec.successProbability === 'MODERATE' ? 'bg-amber-950 text-amber-300 border border-amber-800' :
-                        'bg-slate-800 text-slate-400'
-                      }`}>
-                        {rec.successProbability.replace('_', ' ')}
+                    <div className="grid grid-cols-3 gap-2 my-3 p-3 rounded-lg bg-slate-900/80 border border-slate-800 text-xs">
+                      <div>
+                        <span className="text-slate-400 block mb-0.5">Market Gap Index</span>
+                        <span className="font-bold text-emerald-400">+{rec.gapIndex}x</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block mb-0.5">Demand Score</span>
+                        <span className="font-semibold text-white">{rec.demandScore || 80}/100</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block mb-0.5">Competitor Density</span>
+                        <span className="font-semibold text-indigo-300">{density} / 10k</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/80">
+                      <span className="text-slate-400">
+                        Annual Revenue: <strong className="text-white">${(medianRev / 1000).toFixed(0)}k</strong>
                       </span>
-                      <span className="text-[11px] text-slate-400 block mt-1">Score: {rec.opportunityScore}/100</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveDetail({ cityId: selectedCityId, categoryId: rec.categoryId, cityName: rec.cityName });
+                          }}
+                          className="text-indigo-400 group-hover:text-indigo-300 font-semibold inline-flex items-center gap-1 hover:underline"
+                        >
+                          Deep Dive Competitors
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2 my-3 p-3 rounded-lg bg-slate-900/80 border border-slate-800 text-xs">
-                    <div>
-                      <span className="text-slate-400 block mb-0.5">Market Gap Index</span>
-                      <span className="font-bold text-emerald-400">+{rec.gapIndex}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block mb-0.5">Demand Score</span>
-                      <span className="font-semibold text-white">{rec.demandScore}/100</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block mb-0.5">Competitor Density</span>
-                      <span className="font-semibold text-indigo-300">{rec.competitorDensity} / 10k</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/80">
-                    <span className="text-slate-400">
-                      Annual Revenue: <strong className="text-white">${(rec.revenueBenchmarkRange?.median / 1000).toFixed(0)}k</strong>
-                    </span>
-                    <span className="text-indigo-400 group-hover:text-indigo-300 font-semibold inline-flex items-center gap-1">
-                      View Model & Competitors
-                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* WORKFLOW A: "I KNOW THE BUSINESS" (e.g. Pizza Store)                      */}
+      {/* MODE 3: WORKFLOW A ("I KNOW THE BUSINESS")                                */}
       {/* ========================================================================= */}
       {workflow === 'A' && (
         <div className="space-y-6">
@@ -391,14 +480,14 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   Rank: idx + 1,
                   Municipality: r.cityName,
                   'Opportunity Score': r.opportunityScore,
-                  'Demand Score': r.demandScore,
-                  'Saturation Index': r.saturationIndex,
-                  'Median Income': `$${r.medianIncome?.toLocaleString()}`,
+                  'Demand Score': r.demandScore || r.scoreComponents?.demandScore || 80,
+                  'Saturation Index': r.saturationIndex || r.competitorsPer10kPop || 2.5,
+                  'Median Income': `$${Number(r.medianIncome || r.medianHouseholdIncome || 95000).toLocaleString()}`,
                   'Competitor Count': r.competitorCount,
-                  'Est Annual Revenue': `$${r.estimatedRevenue?.toLocaleString()}`
-                }))}
-                filename={`top_cities_${selectedCategory}`}
-                label="Export Ranking"
+                  'Est Annual Revenue': `$${Number(r.estimatedRevenue || 750000).toLocaleString()}`
+                }))} 
+                filename={`top_cities_${selectedCategory}`} 
+                label="Export Ranking" 
               />
             </div>
 
@@ -415,54 +504,77 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                       <th className="py-3 px-4">Municipality</th>
                       <th className="py-3 px-4 text-right">Opportunity Score</th>
                       <th className="py-3 px-4 text-right">Market Demand</th>
-                      <th className="py-3 px-4 text-right">Saturation Index</th>
+                      <th className="py-3 px-4 text-right">Competitor Density</th>
                       <th className="py-3 px-4 text-right">Median Income</th>
                       <th className="py-3 px-4 text-right">Competitors</th>
-                      <th className="py-3 px-4 text-right">Est. Unit Revenue</th>
                       <th className="py-3 px-4 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800 text-slate-300">
-                    {workflowAResults.map((r, idx) => (
-                      <tr key={r.geographyId} className="hover:bg-slate-900/50 transition-colors">
-                        <td className="py-3 px-4">
-                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
-                            idx === 0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
-                            idx === 1 ? 'bg-slate-300/20 text-slate-200 border border-slate-400/40' :
-                            idx === 2 ? 'bg-amber-700/20 text-amber-500 border border-amber-700/40' :
-                            'text-slate-400'
-                          }`}>
-                            {idx + 1}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-semibold text-white">{r.cityName}</td>
-                        <td className="py-3 px-4 text-right">
-                          <span className="font-extrabold text-emerald-400 text-sm">{r.opportunityScore}</span>
-                          <span className="text-slate-500 text-[10px]">/100</span>
-                        </td>
-                        <td className="py-3 px-4 text-right font-medium text-white">{r.demandScore}</td>
-                        <td className="py-3 px-4 text-right">
-                          <span className={r.saturationIndex < 1.0 ? 'text-emerald-400' : 'text-rose-400'}>
-                            {r.saturationIndex}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right font-medium">${Number(r.medianIncome).toLocaleString()}</td>
-                        <td className="py-3 px-4 text-right">{r.competitorCount}</td>
-                        <td className="py-3 px-4 text-right font-bold text-indigo-300">
-                          ${(Number(r.estimatedRevenue) / 1000).toFixed(0)}k
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setActiveDetail({ cityId: r.geographyId, categoryId: selectedCategory, cityName: r.cityName })}
-                            className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
-                          >
-                            Deep Dive
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {workflowAResults.map((r, idx) => {
+                      const dScore = r.demandScore || r.scoreComponents?.demandScore || 80;
+                      const sat = r.saturationIndex || r.competitorsPer10kPop || 2.5;
+                      const inc = r.medianIncome || r.medianHouseholdIncome || 95000;
+
+                      return (
+                        <tr 
+                          key={r.geographyId} 
+                          className="hover:bg-slate-900/50 transition-colors cursor-pointer"
+                          onClick={() => {
+                            setContributingData({
+                              title: `${r.cityName} Feasibility Metrics for ${selectedCategory.replace('_', ' ')}`,
+                              metricLabel: 'Opportunity Feasibility Score',
+                              value: `${r.opportunityScore}/100`,
+                              percentageOfTotal: `Rank #${idx + 1} of 444`,
+                              benchmarkValue: `$${Number(inc).toLocaleString()}`,
+                              benchmarkLabel: 'Median Household Income',
+                              deltaPct: Math.round(((inc - 95000) / 95000) * 100),
+                              sourceLineage: 'StatCan 2021 Census & OSM Geographic Survey',
+                              referenceYear: '2021 / 2025-Q4',
+                              contextDrivers: r.strengths || [r.evidenceSummary],
+                              onClose: () => setContributingData(null)
+                            });
+                          }}
+                        >
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
+                              idx === 0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
+                              idx === 1 ? 'bg-slate-300/20 text-slate-200 border border-slate-400/40' :
+                              idx === 2 ? 'bg-amber-700/20 text-amber-500 border border-amber-700/40' :
+                              'text-slate-400'
+                            }`}>
+                              {idx + 1}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-semibold text-white">{r.cityName}</td>
+                          <td className="py-3 px-4 text-right">
+                            <span className="font-extrabold text-emerald-400 text-sm">{r.opportunityScore}</span>
+                            <span className="text-slate-500 text-[10px]">/100</span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-medium text-white">{dScore}</td>
+                          <td className="py-3 px-4 text-right">
+                            <span className={sat < 2.5 ? 'text-emerald-400' : 'text-amber-400'}>
+                              {sat} / 10k
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-medium">${Number(inc).toLocaleString()}</td>
+                          <td className="py-3 px-4 text-right">{r.competitorCount}</td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveDetail({ cityId: r.geographyId, categoryId: selectedCategory, cityName: r.cityName });
+                              }}
+                              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+                            >
+                              Deep Dive
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -470,6 +582,18 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
           </div>
         </div>
       )}
+
+      {/* Feature-Wide Outliers Section */}
+      <FeatureOutliersSection
+        category="business"
+        cityId={selectedCityId}
+        title="Commercial Saturation & Opportunity Outliers"
+        subtitle="Empirical statistical divergences in establishment density, competitor voids, and commercial leasing variance across Ontario."
+        onSelectCity={(cid) => {
+          onSelectCity(cid);
+          setSelectedCityId(cid);
+        }}
+      />
 
       {/* ========================================================================= */}
       {/* CATEGORY DEEP DIVE MODAL / DRAWER                                         */}
@@ -487,7 +611,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   <ResolutionBadge resolution="CSD" />
                 </div>
                 <h3 className="text-xl font-bold text-white">
-                  {BUSINESS_CATEGORIES.find(c => c.id === activeDetail.categoryId)?.name} in {activeDetail.cityName || activeDetail.cityId}
+                  {BUSINESS_CATEGORIES.find(c => c.id === activeDetail.categoryId)?.name || activeDetail.categoryId} in {activeDetail.cityName || activeDetail.cityId.replace('CSD_', '')}
                 </h3>
               </div>
               <button

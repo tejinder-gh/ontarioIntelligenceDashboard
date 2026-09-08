@@ -15,6 +15,8 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 interface CityIntelligenceViewProps {
   cityId: string;
@@ -23,6 +25,7 @@ interface CityIntelligenceViewProps {
 export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ cityId }) => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -183,9 +186,14 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
         </div>
       </div>
 
-      {/* Structural Dwellings & Household Sizes Grid */}
+      {/* Contributing Data Inspector */}
+      {contributingData && (
+        <ContributingDataInspector {...contributingData} />
+      )}
+
+      {/* Structural Dwellings & Household Density (Section 4 & 5) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Structural Type of Dwelling */}
+        {/* Dwelling Structure */}
         <div className="glass-panel p-6 rounded-xl border border-slate-800">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -194,15 +202,42 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
                 Structural Types of Dwellings
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Occupied private dwellings: {occupiedDwellings.toLocaleString()} ({((occupiedDwellings / totalDwellings) * 100).toFixed(1)}% occupancy)
+                Occupied private dwellings: {occupiedDwellings.toLocaleString()} ({((occupiedDwellings / totalDwellings) * 100).toFixed(1)}% occupancy). Click bar to inspect.
               </p>
             </div>
             <ResolutionBadge resolution="CSD" />
           </div>
 
-          <div className="h-64">
+          <div className="h-64 cursor-pointer">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dwellingTypes} layout="vertical" margin={{ top: 5, right: 30, left: 120, bottom: 5 }}>
+              <BarChart 
+                data={dwellingTypes} 
+                layout="vertical" 
+                margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
+                onClick={(e: any) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    const item = e.activePayload[0].payload;
+                    setContributingData({
+                      title: `${item.type} Housing Distribution in ${geo.name}`,
+                      metricLabel: 'Dwelling Share',
+                      value: `${item.pct}%`,
+                      unit: '',
+                      percentageOfTotal: item.pct,
+                      benchmarkValue: '54.2% Single-Detached Provincial Norm',
+                      benchmarkLabel: 'Ontario Housing Baseline',
+                      deltaPct: Math.round(item.pct - 50),
+                      sourceLineage: 'Statistics Canada 2021 Census Profile (Table 98-316-X2021001)',
+                      referenceYear: '2021 Census',
+                      contextDrivers: [
+                        `Total counted private dwelling units: ${item.count.toLocaleString()} units.`,
+                        `Total occupied dwellings: ${occupiedDwellings.toLocaleString()}.`,
+                        `Strong indicator of household density and suburban vs urban retail catchment.`
+                      ],
+                      onClose: () => setContributingData(null)
+                    });
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
                 <XAxis type="number" unit="%" stroke="#94a3b8" />
                 <YAxis dataKey="type" type="category" stroke="#94a3b8" width={115} tick={{ fontSize: 11 }} />
@@ -238,15 +273,40 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
                 Household Size Breakdown
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Distribution of households by number of persons residing in dwelling
+                Distribution of households by persons in dwelling. Click bar to inspect.
               </p>
             </div>
             <ResolutionBadge resolution="CSD" />
           </div>
 
-          <div className="h-64">
+          <div className="h-64 cursor-pointer">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={householdSizes} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
+              <BarChart 
+                data={householdSizes} 
+                margin={{ top: 10, right: 20, left: 10, bottom: 20 }}
+                onClick={(e: any) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    const item = e.activePayload[0].payload;
+                    setContributingData({
+                      title: `${item.size} Distribution in ${geo.name}`,
+                      metricLabel: 'Share of Households',
+                      value: `${item.pct}%`,
+                      unit: '',
+                      percentageOfTotal: item.pct,
+                      benchmarkValue: '2.5 Persons / Household',
+                      benchmarkLabel: 'Provincial Average Household Size',
+                      deltaPct: 0,
+                      sourceLineage: 'Statistics Canada 2021 Census Profile',
+                      referenceYear: '2021 Census',
+                      contextDrivers: [
+                        `Total counted households: ${item.count.toLocaleString()} private households.`,
+                        `Influences restaurant ticket size, daycare demand, and grocery shopping volume.`
+                      ],
+                      onClose: () => setContributingData(null)
+                    });
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                 <XAxis dataKey="size" stroke="#94a3b8" />
                 <YAxis unit="%" stroke="#94a3b8" />
@@ -264,6 +324,9 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
           </div>
         </div>
       </div>
+
+      {/* Feature Outliers Section */}
+      <FeatureOutliersSection cityId={cityId} />
 
       {/* Official Data Coverage & Lineage Report Card */}
       <div className="glass-panel p-6 rounded-xl border border-slate-800">

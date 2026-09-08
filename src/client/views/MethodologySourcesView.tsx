@@ -15,6 +15,7 @@ import {
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 export const MethodologySourcesView: React.FC = () => {
   const [dictData, setDictData] = useState<any>(null);
@@ -311,6 +312,9 @@ export const MethodologySourcesView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Cross-Domain Empirical Outliers & Statistical Integrity Verification */}
+      <FeatureOutliersSection category="all" />
     </div>
   );
 };

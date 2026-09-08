@@ -29,6 +29,10 @@ export interface WorkflowAResult {
     operatingCostScore: number;
     laborScore: number;
   };
+  demandScore?: number;
+  saturationIndex?: number;
+  medianIncome?: number;
+  estimatedRevenue?: number;
   evidenceSummary: string;
   strengths: string[];
   risks: string[];
@@ -44,14 +48,20 @@ export interface WorkflowAResult {
 export interface WorkflowBRecommendation {
   categoryId: string;
   categoryName: string;
+  cityName?: string;
   naicsCode: string;
   existingCount: number;
   countPer10kPop: number;
+  competitorDensity: number;
   peerBenchmarkPer10kPop: number;
   gapIndex: number; // > 1.0 means underserved relative to peers
   opportunityScore: number;
+  demandScore: number;
+  competitionScore: number;
+  successProbability: 'VERY_HIGH' | 'HIGH' | 'MODERATE' | 'SELECTIVE';
   typicalInvestmentCAD: { min: number; max: number };
   estimatedAnnualRevenueCAD: { low: number; median: number; high: number; sdeMedian: number };
+  revenueBenchmarkRange: { low: number; median: number; high: number; sdeMedian: number };
   rationale: string;
   keyDrivers: string[];
   potentialRisks: string[];
@@ -180,6 +190,10 @@ export async function runWorkflowA(
       populationPerCompetitor: popPerComp,
       retailAskingRentSqft: rent,
       opportunityScore: totalScore,
+      demandScore,
+      saturationIndex: compsPer10k,
+      medianIncome: income,
+      estimatedRevenue: 750000,
       scoreComponents: {
         demandScore,
         competitionScore,
@@ -298,20 +312,38 @@ export async function runWorkflowB(geographyId: string): Promise<WorkflowBRecomm
       risks.push(`Existing competitor density requires strong culinary or convenience differentiation`);
     }
 
+    const successProb: 'VERY_HIGH' | 'HIGH' | 'MODERATE' | 'SELECTIVE' =
+      oppScore >= 88 ? 'VERY_HIGH' :
+      oppScore >= 75 ? 'HIGH' :
+      oppScore >= 60 ? 'MODERATE' : 'SELECTIVE';
+    const demandScore = Math.min(100, Math.round(Math.min(1.2, pop / 100000) * 75 + 20));
+    const compScore = Math.max(10, Math.min(100, Math.round((2.5 / (gapIndex || 1)) * 40)));
+
     return {
       categoryId: c.id,
       categoryName: c.display_name,
+      cityName: city.name,
       naicsCode: c.naics_code,
       existingCount: count,
       countPer10kPop: countPer10k,
+      competitorDensity: countPer10k,
       peerBenchmarkPer10kPop: peerBench,
       gapIndex,
       opportunityScore: oppScore,
+      demandScore,
+      competitionScore: compScore,
+      successProbability: successProb,
       typicalInvestmentCAD: {
         min: Number(c.typical_capex_min),
         max: Number(c.typical_capex_max)
       },
       estimatedAnnualRevenueCAD: {
+        low: Number(c.low_rev),
+        median: medianRev,
+        high: Number(c.high_rev),
+        sdeMedian
+      },
+      revenueBenchmarkRange: {
         low: Number(c.low_rev),
         median: medianRev,
         high: Number(c.high_rev),

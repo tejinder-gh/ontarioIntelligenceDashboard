@@ -14,14 +14,18 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 interface MunicipalityFinancesViewProps {
   cityId: string;
+  onSelectCity?: (cityId: string) => void;
 }
 
-export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> = ({ cityId }) => {
+export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> = ({ cityId, onSelectCity }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -49,6 +53,54 @@ export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> =
   const capital = data.capitalBudget || 0;
   const propertyTax = data.propertyTaxRevenue || 0;
   const departments = data.departmentalBreakdown || [];
+
+  const handleSelectDepartment = (dept: any) => {
+    const raw = departments.find((d: any) => d.account_category === (dept.fullName || dept.account_category || dept.name)) || dept;
+    const amount = Number(raw.amount_dollars || dept.amount || 0);
+    const pct = raw.pct_of_total_budget || dept.pct || (operating > 0 ? ((amount / operating) * 100).toFixed(1) : '0');
+    const perCapita = raw.per_capita_dollars || dept.perCapita || '0';
+
+    setContributingData({
+      title: `${raw.account_category || dept.name} Spending`,
+      category: 'Municipal Finance (Ontario FIR)',
+      metricName: 'Annual Departmental Operating Expenditure',
+      metricValue: `$${amount.toLocaleString()}`,
+      unit: 'CAD',
+      provenance: {
+        sourceName: 'Ontario Ministry of Municipal Affairs and Housing (MMAH)',
+        datasetCode: 'FIR_SCHEDULE_40',
+        referencePeriod: '2022-2023 FIR Filings',
+        resolution: 'CSD',
+        confidence: 'OFFICIAL_AUDITED',
+        sourceUrl: 'https://efir.ontario.ca/'
+      },
+      contributingDrivers: [
+        {
+          label: 'Total Municipal Budget Share',
+          value: `${pct}% of total operating expenditures`,
+          description: 'Share of aggregate municipal operating budget dedicated to this service function.'
+        },
+        {
+          label: 'Per-Capita Allocation',
+          value: `$${Number(perCapita).toLocaleString()} / resident`,
+          description: 'Net local municipal expenditure per capita for residents within this census subdivision.'
+        },
+        {
+          label: 'Impact on Commercial Operators',
+          value: 'Municipal Service Capacity',
+          description: raw.account_category?.includes('Transportation') 
+            ? 'Dictates road snow-clearing, arterial transit flow, commercial parking enforcement, and logistics access.'
+            : raw.account_category?.includes('Protection')
+            ? 'Directly funds emergency response times, commercial fire code inspections, and storefront security.'
+            : raw.account_category?.includes('Planning')
+            ? 'Determines commercial zoning approvals, building permit issuance speed, and development charge structures.'
+            : 'Core municipal administration, legal, and operational infrastructure.'
+        }
+      ],
+      methodologyNote: 'Sourced from official Ontario Financial Information Return (FIR) Schedule 40 submissions. Data is reconciled against audited annual financial statements by municipal treasurers.',
+      onClose: () => setContributingData(null)
+    });
+  };
 
   const chartData = departments.map((d: any) => ({
     name: d.account_category.length > 25 ? d.account_category.substring(0, 23) + '...' : d.account_category,
@@ -91,6 +143,11 @@ export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> =
           <ExportButton data={exportData} filename={`${cityId}_municipal_finances`} label="Export FIR Data" />
         </div>
       </div>
+
+      {/* Contributing Data Inspector */}
+      {contributingData && (
+        <ContributingDataInspector {...contributingData} />
+      )}
 
       {/* Fiscal Overview KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -143,7 +200,7 @@ export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> =
               Operating Expenditures by Municipal Department
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Ontario Ministry of Municipal Affairs and Housing (Schedule 40)
+              Ontario Ministry of Municipal Affairs and Housing (Schedule 40) • Click any bar to inspect contributing breakdown
             </p>
           </div>
           <ResolutionBadge resolution="CSD" />
@@ -151,7 +208,17 @@ export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> =
 
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 170, bottom: 5 }}>
+            <BarChart 
+              data={chartData} 
+              layout="vertical" 
+              margin={{ top: 5, right: 30, left: 170, bottom: 5 }}
+              onClick={(e: any) => {
+                if (e && e.activePayload && e.activePayload.length) {
+                  handleSelectDepartment(e.activePayload[0].payload);
+                }
+              }}
+              className="cursor-pointer"
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
               <XAxis type="number" stroke="#94a3b8" tickFormatter={(v) => `$${(v / 1000000).toFixed(0)}M`} />
               <YAxis dataKey="name" type="category" stroke="#94a3b8" width={165} tick={{ fontSize: 11 }} />
@@ -187,8 +254,12 @@ export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> =
             </thead>
             <tbody className="divide-y divide-slate-800 text-slate-300">
               {departments.map((d: any) => (
-                <tr key={d.account_category} className="hover:bg-slate-900/50 transition-colors">
-                  <td className="py-3 px-4 font-medium text-white">{d.account_category}</td>
+                <tr 
+                  key={d.account_category} 
+                  onClick={() => handleSelectDepartment(d)}
+                  className="hover:bg-slate-800/60 transition-colors cursor-pointer group"
+                >
+                  <td className="py-3 px-4 font-medium text-white group-hover:text-indigo-300 transition-colors">{d.account_category}</td>
                   <td className="py-3 px-4 text-right font-semibold text-white">${Number(d.amount_dollars).toLocaleString()}</td>
                   <td className="py-3 px-4 text-right font-medium text-indigo-400">{d.pct_of_total_budget}%</td>
                   <td className="py-3 px-4 text-right font-medium text-emerald-400">${Number(d.per_capita_dollars).toLocaleString()} / resident</td>
@@ -206,6 +277,13 @@ export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> =
           </table>
         </div>
       </div>
+
+      {/* Feature Outliers Section */}
+      <FeatureOutliersSection 
+        category="municipal" 
+        cityId={cityId} 
+        onSelectCity={onSelectCity} 
+      />
     </div>
   );
 };

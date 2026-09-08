@@ -14,6 +14,8 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 interface ConsumerSpendingViewProps {
   cityId: string;
@@ -22,6 +24,7 @@ interface ConsumerSpendingViewProps {
 export const ConsumerSpendingView: React.FC<ConsumerSpendingViewProps> = ({ cityId }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -147,6 +150,11 @@ export const ConsumerSpendingView: React.FC<ConsumerSpendingViewProps> = ({ city
         </div>
       </div>
 
+      {/* Contributing Data Inspector */}
+      {contributingData && (
+        <ContributingDataInspector {...contributingData} />
+      )}
+
       {/* Main Bar Chart of All Categories */}
       <div className="glass-panel p-6 rounded-xl border border-slate-800">
         <div className="flex items-center justify-between mb-4">
@@ -156,15 +164,42 @@ export const ConsumerSpendingView: React.FC<ConsumerSpendingViewProps> = ({ city
               Average Annual Household Spending by Category (CAD)
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Statistics Canada Survey of Household Spending — Table 11-10-0222-01
+              Statistics Canada Survey of Household Spending — Table 11-10-0222-01. Click any bar to inspect contributing drivers.
             </p>
           </div>
           <ResolutionBadge resolution={primaryResolution} />
         </div>
 
-        <div className="h-80">
+        <div className="h-80 cursor-pointer">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 160, bottom: 5 }}>
+            <BarChart 
+              data={chartData} 
+              layout="vertical" 
+              margin={{ top: 5, right: 30, left: 160, bottom: 5 }}
+              onClick={(e: any) => {
+                if (e && e.activePayload && e.activePayload.length > 0) {
+                  const p = e.activePayload[0].payload;
+                  setContributingData({
+                    title: `${p.category} Spending Breakdown`,
+                    metricLabel: 'Average Household Annual Spend',
+                    value: p.amount,
+                    unit: 'CAD / yr',
+                    percentageOfTotal: p.percentage,
+                    benchmarkValue: '$92,000 Total Household Consumption',
+                    benchmarkLabel: 'CMA Aggregate Expenditure',
+                    deltaPct: Math.round((p.percentage - 5.0) * 10),
+                    sourceLineage: 'Statistics Canada Survey of Household Spending Table 11-10-0222-01',
+                    referenceYear: '2021 Reference Cycle',
+                    contextDrivers: [
+                      `Represents ${p.percentage}% of the average Ontario household budget.`,
+                      `Benchmark proxy based on ${benchmarkNote}.`,
+                      `Essential for calculating local retail basket size and commercial capture rates.`
+                    ],
+                    onClose: () => setContributingData(null)
+                  });
+                }
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
               <XAxis type="number" stroke="#94a3b8" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
               <YAxis dataKey="category" type="category" stroke="#94a3b8" width={155} tick={{ fontSize: 11 }} />
@@ -200,7 +235,29 @@ export const ConsumerSpendingView: React.FC<ConsumerSpendingViewProps> = ({ city
             </thead>
             <tbody className="divide-y divide-slate-800 text-slate-300">
               {categories.map((c: any) => (
-                <tr key={c.expenditure_category} className="hover:bg-slate-900/50 transition-colors">
+                <tr 
+                  key={c.expenditure_category} 
+                  className="hover:bg-slate-900/50 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setContributingData({
+                      title: `${c.expenditure_category} Consumption Detail`,
+                      metricLabel: 'Average Household Annual Spend',
+                      value: Number(c.average_spending_cad),
+                      unit: 'CAD / yr',
+                      percentageOfTotal: c.pct_of_total_expenditure,
+                      benchmarkValue: benchmarkNote,
+                      benchmarkLabel: 'Geographic Proxy',
+                      deltaPct: Math.round((Number(c.pct_of_total_expenditure) - 5.0) * 10),
+                      sourceLineage: 'Statistics Canada Survey of Household Spending',
+                      referenceYear: '2021 Reference Cycle',
+                      contextDrivers: [
+                        `Represents ${c.pct_of_total_expenditure}% of annual household expenditures.`,
+                        `Geographic resolution: ${c.geographic_resolution}.`
+                      ],
+                      onClose: () => setContributingData(null)
+                    });
+                  }}
+                >
                   <td className="py-3 px-4 font-medium text-white">{c.expenditure_category}</td>
                   <td className="py-3 px-4 text-right font-semibold text-emerald-400">${Number(c.average_spending_cad).toLocaleString()}</td>
                   <td className="py-3 px-4 text-right">{c.pct_of_total_expenditure}%</td>
@@ -222,6 +279,14 @@ export const ConsumerSpendingView: React.FC<ConsumerSpendingViewProps> = ({ city
           </table>
         </div>
       </div>
+
+      {/* Feature-Wide Outliers Section */}
+      <FeatureOutliersSection
+        category="spending"
+        cityId={cityId}
+        title="Consumer Expenditure & Basket Size Outliers"
+        subtitle="Statistical divergences in retail spending, dining expenditures, and discretionary consumption across Ontario."
+      />
     </div>
   );
 };

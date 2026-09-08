@@ -14,13 +14,15 @@ import {
 } from 'lucide-react';
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 interface OverviewViewProps {
   cityId: string;
   onNavigateTab: (tab: any) => void;
+  onSelectCity?: (cityId: string) => void;
 }
 
-export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTab }) => {
+export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTab, onSelectCity }) => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -350,6 +352,13 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
           </p>
         </button>
       </div>
+
+      {/* Cross-Domain Empirical Outliers for Selected Municipality */}
+      <FeatureOutliersSection 
+        category="all" 
+        cityId={cityId} 
+        onSelectCity={onSelectCity} 
+      />
     </div>
   );
 };

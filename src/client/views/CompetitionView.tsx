@@ -14,6 +14,8 @@ import {
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
+import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
+import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
 
 interface CompetitionViewProps {
   cityId: string;
@@ -36,6 +38,7 @@ export const CompetitionView: React.FC<CompetitionViewProps> = ({ cityId }) => {
   const [loading, setLoading] = useState(true);
   const [selectedCat, setSelectedCat] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -50,6 +53,50 @@ export const CompetitionView: React.FC<CompetitionViewProps> = ({ cityId }) => {
         setLoading(false);
       });
   }, [cityId]);
+
+  const handleSelectCompetitor = (c: any) => {
+    setContributingData({
+      title: c.name,
+      category: 'Commercial Competitor Micro-Data',
+      metricName: 'Verified Physical Commercial Establishment',
+      metricValue: c.is_chain ? `Chain: ${c.brand_name || 'Corporate'}` : 'Independent Operator',
+      unit: 'Establishment',
+      provenance: {
+        sourceName: 'OpenStreetMap Overpass API / Municipal Commercial Registry',
+        datasetCode: `${c.source_type}_${c.source_element_id || 'NODE'}`,
+        referencePeriod: '2023-2024 Verified Locations',
+        resolution: 'CSD',
+        confidence: 'HIGH_SPATIAL',
+        sourceUrl: 'https://www.openstreetmap.org/'
+      },
+      contributingDrivers: [
+        {
+          label: 'Physical Address',
+          value: c.address || 'Street address verified',
+          description: 'Verified spatial location within municipal CSD boundary.'
+        },
+        {
+          label: 'Geographic Coordinates',
+          value: `${Number(c.latitude).toFixed(5)}, ${Number(c.longitude).toFixed(5)}`,
+          description: 'High-precision latitude and longitude coordinates.'
+        },
+        {
+          label: 'OSM Element ID & Provenance',
+          value: `${c.source_type} #${c.source_element_id}`,
+          description: 'Direct OpenStreetMap feature identifier with timestamped lineage.'
+        },
+        {
+          label: 'Chain / Multi-Unit Affiliation',
+          value: c.is_chain ? `Corporate Banner: ${c.brand_name}` : 'Independent Single Storefront',
+          description: c.is_chain 
+            ? 'Part of a multi-unit corporate or franchise network.' 
+            : 'Independent local merchant without regional corporate backing.'
+        }
+      ],
+      methodologyNote: 'OSM records are matched against commercial directory entries. Star ratings and qualitative customer sentiment are excluded to maintain strict statistical neutrality.',
+      onClose: () => setContributingData(null)
+    });
+  };
 
   const filteredCompetitors = competitors.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -96,6 +143,11 @@ export const CompetitionView: React.FC<CompetitionViewProps> = ({ cityId }) => {
           <ExportButton data={exportData} filename={`${cityId}_competitor_footprint`} label="Export Competitors" />
         </div>
       </div>
+
+      {/* Contributing Data Inspector */}
+      {contributingData && (
+        <ContributingDataInspector {...contributingData} />
+      )}
 
       {/* Mandatory OSM Limitation & Ratings Disclosure Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -197,7 +249,7 @@ export const CompetitionView: React.FC<CompetitionViewProps> = ({ cityId }) => {
             <table className="w-full text-xs text-left">
               <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
                 <tr>
-                  <th className="py-3 px-4">Business Name</th>
+                  <th className="py-3 px-4">Business Name (Click to Inspect)</th>
                   <th className="py-3 px-4">Classification</th>
                   <th className="py-3 px-4">Physical Address</th>
                   <th className="py-3 px-4 text-right">Geographic Coordinates</th>
@@ -206,8 +258,12 @@ export const CompetitionView: React.FC<CompetitionViewProps> = ({ cityId }) => {
               </thead>
               <tbody className="divide-y divide-slate-800 text-slate-300">
                 {filteredCompetitors.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-900/50 transition-colors">
-                    <td className="py-3 px-4 font-semibold text-white flex items-center gap-2">
+                  <tr 
+                    key={c.id} 
+                    onClick={() => handleSelectCompetitor(c)}
+                    className="hover:bg-slate-800/60 transition-colors cursor-pointer group"
+                  >
+                    <td className="py-3 px-4 font-semibold text-white group-hover:text-indigo-300 transition-colors flex items-center gap-2">
                       <Store className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                       {c.name}
                     </td>
@@ -234,6 +290,12 @@ export const CompetitionView: React.FC<CompetitionViewProps> = ({ cityId }) => {
           </div>
         )}
       </div>
+
+      {/* Feature Outliers Section */}
+      <FeatureOutliersSection 
+        category="business" 
+        cityId={cityId} 
+      />
     </div>
   );
 };
