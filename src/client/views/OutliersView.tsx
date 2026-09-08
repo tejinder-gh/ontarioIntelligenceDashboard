@@ -54,7 +54,7 @@ export const OutliersView: React.FC<OutliersViewProps> = ({ onSelectCity }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="glass-panel p-6 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+      <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2 py-0.5 rounded text-xs font-semibold bg-rose-950 text-rose-300 border border-rose-800/60">
@@ -65,7 +65,7 @@ export const OutliersView: React.FC<OutliersViewProps> = ({ onSelectCity }) => {
           <h2 className="text-2xl font-bold text-white tracking-tight">
             Statistical Outliers & Extreme Market Divergences
           </h2>
-          <p className="text-xs text-slate-400 mt-1 max-w-3xl">
+          <p className="text-xs text-slate-300 mt-1 max-w-3xl">
             Identifies municipalities exhibiting statistical anomalies using both Tukey&apos;s Interquartile Range [Q1 − 1.5×IQR, Q3 + 1.5×IQR] and Gaussian Standard Score (|z| ≥ 2.0) criteria.
           </p>
         </div>
@@ -76,7 +76,7 @@ export const OutliersView: React.FC<OutliersViewProps> = ({ onSelectCity }) => {
       </div>
 
       {/* Methodology Explainer Banner */}
-      <div className="glass-panel p-5 rounded-xl border border-slate-800 bg-slate-900/40 text-xs">
+      <div className="glass-panel p-5 rounded-2xl border border-white/10 bg-slate-900/40 text-xs shadow-md">
         <div className="flex items-start gap-3">
           <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
           <div>
@@ -89,26 +89,27 @@ export const OutliersView: React.FC<OutliersViewProps> = ({ onSelectCity }) => {
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="glass-panel p-4 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+      <div className="glass-panel p-4 rounded-2xl border border-white/10 shadow-md flex flex-wrap items-center justify-between gap-4">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
           <input
             type="text"
+            aria-label="Search by municipality or metric"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by municipality or metric..."
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className="w-full bg-slate-900/90 border border-white/10 rounded-xl pl-10 pr-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all"
           />
         </div>
 
-        <div className="text-xs text-slate-400">
+        <div className="text-xs text-slate-300 font-medium">
           Detected <strong className="text-rose-400">{filteredOutliers.length}</strong> extreme statistical divergences across Ontario
         </div>
       </div>
 
       {/* Outlier Cards Grid */}
       {loading ? (
-        <div className="p-12 text-center text-slate-400 animate-pulse glass-panel rounded-xl">
+        <div className="p-12 text-center text-slate-300 animate-pulse glass-panel rounded-2xl border border-white/10">
           Executing Tukey IQR and Gaussian z-score calculations across all datasets...
         </div>
       ) : (
@@ -116,7 +117,7 @@ export const OutliersView: React.FC<OutliersViewProps> = ({ onSelectCity }) => {
           {filteredOutliers.map((o, idx) => (
             <div 
               key={`${o.geography_id}_${o.metric_id}_${idx}`}
-              className="glass-panel p-5 rounded-xl border border-rose-900/40 hover:border-rose-700/80 transition-all shadow-lg"
+              className="glass-panel p-5 rounded-2xl border border-rose-500/20 bg-slate-900/90 hover:border-rose-500/50 hover:shadow-lg transition-all"
             >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div>
@@ -127,13 +128,13 @@ export const OutliersView: React.FC<OutliersViewProps> = ({ onSelectCity }) => {
                     {o.metric_name}
                   </h4>
                 </div>
-                <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-rose-950 text-rose-300 border border-rose-800">
+                <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-rose-950/80 text-rose-300 border border-rose-800/80">
                   z = {o.z_score > 0 ? `+${o.z_score}` : o.z_score}
                 </span>
               </div>
 
-              <div className="flex items-baseline gap-2 my-2">
-                <span className="text-2xl font-extrabold text-white">
+              <div className="flex items-baseline gap-2 my-2.5">
+                <span className="text-2xl font-extrabold text-white font-mono">
                   {o.unit === 'CAD' || o.unit === '$' ? `$${Number(o.value_numeric).toLocaleString()}` : `${Number(o.value_numeric).toLocaleString()} ${o.unit}`}
                 </span>
                 <span className="text-xs text-emerald-400 font-semibold">
@@ -141,15 +142,15 @@ export const OutliersView: React.FC<OutliersViewProps> = ({ onSelectCity }) => {
                 </span>
               </div>
 
-              <p className="text-xs text-slate-300 mt-2 p-2.5 rounded bg-slate-900 border border-slate-800">
+              <p className="text-xs text-slate-200 mt-2 p-3 rounded-xl bg-slate-950/60 border border-white/5 leading-relaxed">
                 {o.outlier_reason}
               </p>
 
-              <div className="flex items-center justify-end mt-3 pt-3 border-t border-slate-800">
+              <div className="flex items-center justify-end mt-3 pt-3 border-t border-white/5">
                 <button
                   type="button"
                   onClick={() => onSelectCity(o.geography_id)}
-                  className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors py-1 px-2.5 rounded-lg hover:bg-white/5"
                 >
                   Inspect City Profile
                   <ChevronRight className="w-3.5 h-3.5" />

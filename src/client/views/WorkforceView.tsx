@@ -88,7 +88,7 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="glass-panel p-6 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+      <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800/60">
@@ -99,7 +99,7 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
           <h2 className="text-2xl font-bold text-white tracking-tight">
             Workforce Composition, Occupations & Industry Sectors
           </h2>
-          <p className="text-xs text-slate-400 mt-1 max-w-3xl">
+          <p className="text-xs text-slate-300 mt-1 max-w-3xl">
             Empirical labor market distributions from Statistics Canada 2021 Census of Population. Dynamically categorizes dominant employment pools, wage structures, and commercial talent availability.
           </p>
         </div>
@@ -115,41 +115,41 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
 
       {/* Labor Market Health KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+          <div className="flex items-center justify-between text-slate-300 mb-2">
             <span className="text-xs font-medium uppercase tracking-wider">Participation Rate</span>
             <Briefcase className="w-4 h-4 text-indigo-400" />
           </div>
           <div className="text-3xl font-extrabold text-white">
             {partRate}%
           </div>
-          <div className="mt-2 text-xs text-slate-400">
+          <div className="mt-2 text-xs text-slate-300">
             Share of working-age population actively working or seeking work
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+          <div className="flex items-center justify-between text-slate-300 mb-2">
             <span className="text-xs font-medium uppercase tracking-wider">Unemployment Rate</span>
             <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-3xl font-extrabold text-white">
             {unempRate}%
           </div>
-          <div className="mt-2 text-xs text-slate-400">
+          <div className="mt-2 text-xs text-slate-300">
             Census reference week unemployment rate
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+          <div className="flex items-center justify-between text-slate-300 mb-2">
             <span className="text-xs font-medium uppercase tracking-wider">Active Labor Pool</span>
             <Building className="w-4 h-4 text-blue-400" />
           </div>
           <div className="text-3xl font-extrabold text-white">
             {occupations.reduce((acc: number, o: any) => acc + Number(o.employed_count || 0), 0).toLocaleString()}
           </div>
-          <div className="mt-2 text-xs text-slate-400">
+          <div className="mt-2 text-xs text-slate-300">
             Employed residents captured in detailed occupational categories
           </div>
         </div>
@@ -161,26 +161,30 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
       )}
 
       {/* Top Occupations Chart */}
-      <div className="glass-panel p-6 rounded-xl border border-slate-800">
+      <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Briefcase className="w-5 h-5 text-indigo-400" />
               Leading Occupational Employment Categories
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-300 mt-0.5">
               Statistics Canada NOC 2021. Click any bar to inspect contributing workforce data.
             </p>
           </div>
           <ResolutionBadge resolution="CSD" />
         </div>
 
-        <div className="h-72 cursor-pointer">
+        <div 
+          role="region" 
+          aria-label="Leading Occupational Employment Categories Chart"
+          className="h-72 cursor-pointer"
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart 
               data={topOccChartData} 
               layout="vertical" 
-              margin={{ top: 5, right: 30, left: 180, bottom: 5 }}
+              margin={{ top: 5, right: 30, left: 185, bottom: 5 }}
               onClick={(e: any) => {
                 if (e && e.activePayload && e.activePayload.length > 0) {
                   const item = e.activePayload[0].payload;
@@ -206,13 +210,20 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-              <XAxis type="number" stroke="#94a3b8" tickFormatter={(v) => v.toLocaleString()} />
-              <YAxis dataKey="name" type="category" stroke="#94a3b8" width={175} tick={{ fontSize: 11 }} />
+              <XAxis type="number" stroke="#94a3b8" tick={{ fontSize: 12, fill: '#cbd5e1' }} tickFormatter={(v) => v.toLocaleString()} />
+              <YAxis dataKey="name" type="category" stroke="#94a3b8" width={180} tick={{ fontSize: 12, fill: '#cbd5e1' }} />
               <Tooltip 
                 formatter={(val: any, name: any, item: any) => [`${Number(val).toLocaleString()} employed (${item.payload.share}%)`, 'Workers']}
-                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }}
+                contentStyle={{ 
+                  backgroundColor: 'rgba(15, 23, 42, 0.95)', 
+                  backdropFilter: 'blur(12px)', 
+                  borderColor: 'rgba(255, 255, 255, 0.1)', 
+                  borderRadius: '12px', 
+                  color: '#f8fafc',
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+                }}
               />
-              <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]}>
+              <Bar dataKey="count" fill="#6366f1" radius={[0, 6, 6, 0]}>
                 {topOccChartData.map((_: any, index: number) => (
                   <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#6366f1' : '#818cf8'} />
                 ))}
@@ -223,16 +234,16 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
       </div>
 
       {/* Subtabs: NOC Occupations vs NAICS Industries */}
-      <div className="glass-panel p-6 rounded-xl border border-slate-800">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-800">
-          <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-lg border border-slate-700">
+      <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
+          <div className="flex items-center gap-1.5 bg-slate-900/90 p-1.5 rounded-xl border border-white/10">
             <button
               type="button"
               onClick={() => { setActiveSubTab('occupations'); setSearchQuery(''); }}
-              className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeSubTab === 'occupations'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
               }`}
             >
               Top 20 NOC Occupations ({occupations.length})
@@ -240,10 +251,10 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
             <button
               type="button"
               onClick={() => { setActiveSubTab('industries'); setSearchQuery(''); }}
-              className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeSubTab === 'industries'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
               }`}
             >
               Top 20 NAICS Industries ({industries.length})
@@ -254,10 +265,11 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
+              aria-label={`Filter ${activeSubTab}`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={`Filter ${activeSubTab}...`}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-900/90 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
             />
           </div>
         </div>
@@ -265,7 +277,7 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
         {activeSubTab === 'occupations' ? (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <thead className="bg-slate-900/90 text-slate-300 uppercase tracking-wider border-b border-white/10 font-semibold">
                 <tr>
                   <th className="py-3 px-4">NOC Code</th>
                   <th className="py-3 px-4">Occupation Title</th>
@@ -274,14 +286,14 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
                   <th className="py-3 px-4 text-right">Median Employment Income</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 text-slate-300">
+              <tbody className="divide-y divide-white/5 text-slate-200">
                 {filteredOccupations.map((o: any) => (
-                  <tr key={o.code} className="hover:bg-slate-900/50 transition-colors">
+                  <tr key={o.code} className="hover:bg-white/5 transition-colors">
                     <td className="py-3 px-4 font-mono text-indigo-400 font-semibold">{o.code}</td>
                     <td className="py-3 px-4 font-medium text-white">{o.label}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-white">{Number(o.employed_count).toLocaleString()}</td>
-                    <td className="py-3 px-4 text-right">{o.percentage_of_workforce}%</td>
-                    <td className="py-3 px-4 text-right font-medium text-emerald-400">
+                    <td className="py-3 px-4 text-right font-semibold text-white font-mono">{Number(o.employed_count).toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right font-medium">{o.percentage_of_workforce}%</td>
+                    <td className="py-3 px-4 text-right font-bold text-emerald-400 font-mono">
                       {o.median_employment_income ? `$${Number(o.median_employment_income).toLocaleString()}` : 'N/A'}
                     </td>
                   </tr>
@@ -292,7 +304,7 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <thead className="bg-slate-900/90 text-slate-300 uppercase tracking-wider border-b border-white/10 font-semibold">
                 <tr>
                   <th className="py-3 px-4">NAICS Code</th>
                   <th className="py-3 px-4">Industry Sector Title</th>
@@ -300,13 +312,13 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
                   <th className="py-3 px-4 text-right">% of Workforce</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 text-slate-300">
+              <tbody className="divide-y divide-white/5 text-slate-200">
                 {filteredIndustries.map((i: any) => (
-                  <tr key={i.code} className="hover:bg-slate-900/50 transition-colors">
+                  <tr key={i.code} className="hover:bg-white/5 transition-colors">
                     <td className="py-3 px-4 font-mono text-indigo-400 font-semibold">{i.code}</td>
                     <td className="py-3 px-4 font-medium text-white">{i.label}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-white">{Number(i.employed_count).toLocaleString()}</td>
-                    <td className="py-3 px-4 text-right">{i.percentage_of_workforce}%</td>
+                    <td className="py-3 px-4 text-right font-semibold text-white font-mono">{Number(i.employed_count).toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right font-medium">{i.percentage_of_workforce}%</td>
                   </tr>
                 ))}
               </tbody>

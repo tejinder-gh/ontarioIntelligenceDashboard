@@ -166,26 +166,30 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
 
       {/* Employee Size Bands Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass-panel p-6 rounded-xl border border-slate-800">
+        <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-indigo-400" />
                 Distribution by Employee Size Band
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-300 mt-0.5">
                 StatCan Table 33-10-1097-01 (Dec 2025 reference). Click bar to inspect.
               </p>
             </div>
             <ResolutionBadge resolution="CSD" />
           </div>
 
-          <div className="h-64 cursor-pointer">
+          <div 
+            role="region" 
+            aria-label="Distribution by Employee Size Band Chart"
+            className="h-64 cursor-pointer"
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
                 data={sizeBands} 
                 layout="vertical" 
-                margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
+                margin={{ top: 5, right: 30, left: 125, bottom: 5 }}
                 onClick={(e: any) => {
                   if (e && e.activePayload && e.activePayload.length > 0) {
                     const item = e.activePayload[0].payload;
@@ -211,13 +215,20 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
                 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-                <XAxis type="number" unit="%" stroke="#94a3b8" />
-                <YAxis dataKey="band" type="category" stroke="#94a3b8" width={115} tick={{ fontSize: 11 }} />
+                <XAxis type="number" unit="%" stroke="#94a3b8" tick={{ fontSize: 12, fill: '#cbd5e1' }} />
+                <YAxis dataKey="band" type="category" stroke="#94a3b8" width={120} tick={{ fontSize: 12, fill: '#cbd5e1' }} />
                 <Tooltip 
                   formatter={(val: any, name: any, item: any) => [`${val}% (${item.payload.count.toLocaleString()} businesses)`, 'Share']}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }}
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)', 
+                    backdropFilter: 'blur(12px)', 
+                    borderColor: 'rgba(255, 255, 255, 0.1)', 
+                    borderRadius: '12px', 
+                    color: '#f8fafc',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+                  }}
                 />
-                <Bar dataKey="pct" radius={[0, 4, 4, 0]}>
+                <Bar dataKey="pct" radius={[0, 6, 6, 0]}>
                   {sizeBands.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
@@ -226,7 +237,7 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
             </ResponsiveContainer>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-800 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 pt-4 border-t border-white/5 text-xs">
             {sizeBands.map(s => (
               <div 
                 key={s.band} 
@@ -258,14 +269,14 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
         </div>
 
         {/* Industry Sector Breakdown */}
-        <div className="glass-panel p-6 rounded-xl border border-slate-800">
+        <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Building className="w-5 h-5 text-indigo-400" />
                 Dominant Commercial Sectors
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-300 mt-0.5">
                 Establishments by 2-digit NAICS industry sector. Click to inspect.
               </p>
             </div>
@@ -276,7 +287,7 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
             {industrySectors.map(s => (
               <div 
                 key={s.name} 
-                className="p-2.5 rounded bg-slate-900/60 border border-slate-800 flex items-center justify-between cursor-pointer hover:border-indigo-500/50 transition-colors"
+                className="p-3 rounded-xl bg-slate-900/70 border border-white/5 flex items-center justify-between cursor-pointer hover:border-indigo-500/50 hover:bg-slate-900/90 transition-all"
                 onClick={() => {
                   setContributingData({
                     title: `${s.name} Sector Breakdown`,
@@ -299,11 +310,11 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
               >
                 <div>
                   <span className="text-xs font-semibold text-white block">{s.name}</span>
-                  <span className="text-[11px] text-slate-400">{s.count.toLocaleString()} establishments</span>
+                  <span className="text-xs text-slate-300">{s.count.toLocaleString()} establishments</span>
                 </div>
                 <div className="text-right">
                   <span className="text-xs font-bold text-indigo-300">{s.pct}%</span>
-                  <div className="w-16 h-1.5 bg-slate-800 rounded-full mt-1 overflow-hidden">
+                  <div className="w-16 h-1.5 bg-slate-800 rounded-full mt-1.5 overflow-hidden">
                     <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${s.pct * 4}%` }} />
                   </div>
                 </div>

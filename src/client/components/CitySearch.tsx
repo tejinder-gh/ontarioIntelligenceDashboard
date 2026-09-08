@@ -69,6 +69,17 @@ export const CitySearch: React.FC<CitySearchProps> = ({ selectedCityId, onSelect
     setIsOpen(false);
   };
 
+  // Escape key to close dropdown
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
   return (
     <div className="relative w-full max-w-md" ref={dropdownRef}>
       <div className="relative flex items-center">
@@ -76,7 +87,12 @@ export const CitySearch: React.FC<CitySearchProps> = ({ selectedCityId, onSelect
           <Search className="w-4 h-4" />
         </div>
         <input
+          id="city-search-input"
           type="text"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-autocomplete="list"
+          aria-label="Analyze a City Search"
           value={query}
           onChange={e => {
             setQuery(e.target.value);
@@ -84,11 +100,12 @@ export const CitySearch: React.FC<CitySearchProps> = ({ selectedCityId, onSelect
           }}
           onFocus={() => setIsOpen(true)}
           placeholder={`Analyze a City (current: ${currentCityName})...`}
-          className="w-full pl-10 pr-9 py-2 bg-slate-900/90 border border-slate-700/80 rounded-lg text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-inner"
+          className="w-full pl-10 pr-9 py-2 bg-slate-900/90 border border-white/10 rounded-xl text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all shadow-inner"
         />
         {query && (
           <button
             type="button"
+            aria-label="Clear city search query"
             onClick={() => { setQuery(''); setResults([]); }}
             className="absolute right-3 text-slate-400 hover:text-slate-200"
           >
@@ -98,13 +115,17 @@ export const CitySearch: React.FC<CitySearchProps> = ({ selectedCityId, onSelect
       </div>
 
       {isOpen && (query.trim() || results.length > 0) && (
-        <div className="absolute z-50 mt-1.5 w-full bg-slate-900 border border-slate-700/80 rounded-lg shadow-2xl overflow-hidden divide-y divide-slate-800 animate-in fade-in-50 duration-100 max-h-80 overflow-y-auto">
+        <div 
+          role="listbox" 
+          aria-label="City search suggestions"
+          className="absolute z-50 mt-2 w-full bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden divide-y divide-white/5 animate-in fade-in-50 duration-100 max-h-80 overflow-y-auto"
+        >
           {loading && (
-            <div className="p-3 text-center text-xs text-slate-400">Searching 444 Ontario municipalities...</div>
+            <div className="p-3.5 text-center text-xs text-slate-300">Searching 444 Ontario municipalities...</div>
           )}
 
           {!loading && results.length === 0 && query.trim() && (
-            <div className="p-3 text-center text-xs text-slate-400">
+            <div className="p-3.5 text-center text-xs text-slate-300">
               No municipality matching &ldquo;{query}&rdquo; found.
             </div>
           )}
@@ -113,19 +134,21 @@ export const CitySearch: React.FC<CitySearchProps> = ({ selectedCityId, onSelect
             <button
               key={city.id}
               type="button"
+              role="option"
+              aria-selected={city.id === selectedCityId}
               onClick={() => handleSelect(city)}
-              className="w-full px-3.5 py-2.5 text-left flex items-center justify-between hover:bg-slate-800/80 transition-colors group"
+              className="w-full px-3.5 py-2.5 text-left flex items-center justify-between hover:bg-white/5 transition-colors group"
             >
               <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded bg-slate-800 text-indigo-400 group-hover:bg-indigo-950/80 transition-colors">
+                <div className="p-1.5 rounded-lg bg-slate-800 text-indigo-400 group-hover:bg-indigo-950/80 transition-colors border border-white/5">
                   <Building2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-slate-200 group-hover:text-white flex items-center gap-1.5">
+                  <div className="text-sm font-semibold text-slate-100 group-hover:text-white flex items-center gap-1.5">
                     <span>{city.name}</span>
                     <span className="text-xs text-slate-400 font-normal">({city.csd_type})</span>
                   </div>
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs text-slate-300">
                     {city.census_division} {city.population_2021 ? `• Pop: ${city.population_2021.toLocaleString()}` : ''}
                   </div>
                 </div>

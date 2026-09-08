@@ -106,7 +106,7 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
   return (
     <div className="space-y-6">
       {/* Top Header Card */}
-      <div className="glass-panel p-6 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+      <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800/60">
@@ -117,7 +117,7 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
           <h2 className="text-2xl font-bold text-white tracking-tight">
             {geo.name} — Comprehensive Municipal Demographics & Structural Profile
           </h2>
-          <p className="text-xs text-slate-400 mt-1 max-w-3xl">
+          <p className="text-xs text-slate-300 mt-1 max-w-3xl">
             Derived directly from Statistics Canada 2021 Census of Population (Table 98-316-X2021001). All metrics are strictly bound to Census Subdivision boundaries without interpolation.
           </p>
         </div>
@@ -129,15 +129,15 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
 
       {/* Primary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+          <div className="flex items-center justify-between text-slate-300 mb-2">
             <span className="text-xs font-medium uppercase tracking-wider">Population (2021)</span>
             <Users className="w-4 h-4 text-indigo-400" />
           </div>
           <div className="text-3xl font-extrabold text-white">
             {pop2021.toLocaleString()}
           </div>
-          <div className="mt-2 text-xs text-slate-400 flex items-center gap-1.5">
+          <div className="mt-2 text-xs text-slate-300 flex items-center gap-1.5">
             <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
             <span className={popGrowth >= 0 ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
               {popGrowth > 0 ? `+${popGrowth}%` : `${popGrowth}%`}
@@ -146,41 +146,41 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+          <div className="flex items-center justify-between text-slate-300 mb-2">
             <span className="text-xs font-medium uppercase tracking-wider">Share of Ontario Pop</span>
             <Compass className="w-4 h-4 text-blue-400" />
           </div>
           <div className="text-3xl font-extrabold text-white">
             {computedShare}%
           </div>
-          <div className="mt-2 text-xs text-slate-400">
+          <div className="mt-2 text-xs text-slate-300">
             Formula: ({pop2021.toLocaleString()} / 14,223,942) × 100
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+          <div className="flex items-center justify-between text-slate-300 mb-2">
             <span className="text-xs font-medium uppercase tracking-wider">Population Density</span>
             <MapPin className="w-4 h-4 text-amber-400" />
           </div>
           <div className="text-3xl font-extrabold text-white">
             {density}
           </div>
-          <div className="mt-2 text-xs text-slate-400">
+          <div className="mt-2 text-xs text-slate-300">
             Residents per km² across {landArea.toLocaleString()} km²
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+          <div className="flex items-center justify-between text-slate-300 mb-2">
             <span className="text-xs font-medium uppercase tracking-wider">Median Age</span>
             <Users className="w-4 h-4 text-purple-400" />
           </div>
           <div className="text-3xl font-extrabold text-white">
             {medianAge} yrs
           </div>
-          <div className="mt-2 text-xs text-slate-400">
+          <div className="mt-2 text-xs text-slate-300">
             Average Household Size: <strong className="text-white">{avgHhSize}</strong> persons
           </div>
         </div>
@@ -194,26 +194,30 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
       {/* Structural Dwellings & Household Density (Section 4 & 5) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Dwelling Structure */}
-        <div className="glass-panel p-6 rounded-xl border border-slate-800">
+        <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Home className="w-5 h-5 text-indigo-400" />
                 Structural Types of Dwellings
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-300 mt-0.5">
                 Occupied private dwellings: {occupiedDwellings.toLocaleString()} ({((occupiedDwellings / totalDwellings) * 100).toFixed(1)}% occupancy). Click bar to inspect.
               </p>
             </div>
             <ResolutionBadge resolution="CSD" />
           </div>
 
-          <div className="h-64 cursor-pointer">
+          <div 
+            role="region" 
+            aria-label="Structural Types of Dwellings Chart"
+            className="h-64 cursor-pointer"
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
                 data={dwellingTypes} 
                 layout="vertical" 
-                margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
+                margin={{ top: 5, right: 30, left: 125, bottom: 5 }}
                 onClick={(e: any) => {
                   if (e && e.activePayload && e.activePayload.length > 0) {
                     const item = e.activePayload[0].payload;
@@ -239,13 +243,20 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
                 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-                <XAxis type="number" unit="%" stroke="#94a3b8" />
-                <YAxis dataKey="type" type="category" stroke="#94a3b8" width={115} tick={{ fontSize: 11 }} />
+                <XAxis type="number" unit="%" stroke="#94a3b8" tick={{ fontSize: 12, fill: '#cbd5e1' }} />
+                <YAxis dataKey="type" type="category" stroke="#94a3b8" width={120} tick={{ fontSize: 12, fill: '#cbd5e1' }} />
                 <Tooltip 
                   formatter={(val: any, name: any, item: any) => [`${val}% (${item.payload.count.toLocaleString()} units)`, 'Share']}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }}
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)', 
+                    backdropFilter: 'blur(12px)', 
+                    borderColor: 'rgba(255, 255, 255, 0.1)', 
+                    borderRadius: '12px', 
+                    color: '#f8fafc',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+                  }}
                 />
-                <Bar dataKey="pct" radius={[0, 4, 4, 0]}>
+                <Bar dataKey="pct" radius={[0, 6, 6, 0]}>
                   {dwellingTypes.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
@@ -254,10 +265,10 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
             </ResponsiveContainer>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-800 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 pt-4 border-t border-white/5 text-xs">
             {dwellingTypes.map(d => (
-              <div key={d.type} className="p-2 rounded bg-slate-900/60 border border-slate-800">
-                <div className="text-slate-400 truncate">{d.type}</div>
+              <div key={d.type} className="p-2.5 rounded-xl bg-slate-900/70 border border-white/5">
+                <div className="text-slate-300 truncate">{d.type}</div>
                 <div className="text-sm font-semibold text-white mt-0.5">{d.pct}% <span className="text-xs text-slate-400 font-normal">({d.count.toLocaleString()})</span></div>
               </div>
             ))}
@@ -265,21 +276,25 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
         </div>
 
         {/* Household Size Distribution */}
-        <div className="glass-panel p-6 rounded-xl border border-slate-800">
+        <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-indigo-400" />
                 Household Size Breakdown
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-300 mt-0.5">
                 Distribution of households by persons in dwelling. Click bar to inspect.
               </p>
             </div>
             <ResolutionBadge resolution="CSD" />
           </div>
 
-          <div className="h-64 cursor-pointer">
+          <div 
+            role="region" 
+            aria-label="Household Size Breakdown Chart"
+            className="h-64 cursor-pointer"
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
                 data={householdSizes} 
@@ -308,18 +323,25 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
                 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                <XAxis dataKey="size" stroke="#94a3b8" />
-                <YAxis unit="%" stroke="#94a3b8" />
+                <XAxis dataKey="size" stroke="#94a3b8" tick={{ fontSize: 12, fill: '#cbd5e1' }} />
+                <YAxis unit="%" stroke="#94a3b8" tick={{ fontSize: 12, fill: '#cbd5e1' }} />
                 <Tooltip 
                   formatter={(val: any, name: any, item: any) => [`${val}% (${item.payload.count.toLocaleString()} households)`, 'Percentage']}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }}
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)', 
+                    backdropFilter: 'blur(12px)', 
+                    borderColor: 'rgba(255, 255, 255, 0.1)', 
+                    borderRadius: '12px', 
+                    color: '#f8fafc',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+                  }}
                 />
-                <Bar dataKey="pct" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="pct" fill="#6366f1" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
-          <div className="mt-4 p-3 bg-indigo-950/40 border border-indigo-900/60 rounded-lg text-xs text-indigo-200">
+          <div className="mt-4 p-3 bg-indigo-950/50 border border-indigo-700/60 rounded-xl text-xs text-indigo-200">
             <strong>Key Demographic Insight:</strong> {householdSizes[1].pct}% of households in {geo.name} are 2-person households, while 1-person households account for {householdSizes[0].pct}%. This household structure heavily influences commercial basket sizes and demand for dining, tutoring, and personal services.
           </div>
         </div>
@@ -329,7 +351,7 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
       <FeatureOutliersSection cityId={cityId} />
 
       {/* Official Data Coverage & Lineage Report Card */}
-      <div className="glass-panel p-6 rounded-xl border border-slate-800">
+      <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-400" />
@@ -343,26 +365,26 @@ export const CityIntelligenceView: React.FC<CityIntelligenceViewProps> = ({ city
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div className="p-3 bg-slate-900/80 rounded-lg border border-slate-800">
-            <span className="text-slate-400 block mb-1">Authoritative Source</span>
+          <div className="p-3.5 bg-slate-900/80 rounded-xl border border-white/5">
+            <span className="text-slate-300 block mb-1 font-medium">Authoritative Source</span>
             <span className="font-semibold text-white">Statistics Canada — Census of Population</span>
             <span className="text-slate-400 block mt-1">Table 98-316-X2021001 (Released 2022)</span>
           </div>
 
-          <div className="p-3 bg-slate-900/80 rounded-lg border border-slate-800">
-            <span className="text-slate-400 block mb-1">Coverage Scope</span>
+          <div className="p-3.5 bg-slate-900/80 rounded-xl border border-white/5">
+            <span className="text-slate-300 block mb-1 font-medium">Coverage Scope</span>
             <span className="font-semibold text-emerald-400">98.4% CSD Census Attribute Coverage</span>
             <span className="text-slate-400 block mt-1">Zero synthetic or estimated values used</span>
           </div>
 
-          <div className="p-3 bg-slate-900/80 rounded-lg border border-slate-800">
-            <span className="text-slate-400 block mb-1">Geographic Boundary Precision</span>
+          <div className="p-3.5 bg-slate-900/80 rounded-xl border border-white/5">
+            <span className="text-slate-300 block mb-1 font-medium">Geographic Boundary Precision</span>
             <span className="font-semibold text-indigo-300">Census Subdivision (CSD {geo.dguid || geo.id})</span>
             <span className="text-slate-400 block mt-1">Ontario Census Division: {geo.census_division}</span>
           </div>
         </div>
 
-        <div className="mt-4 text-xs text-slate-400 border-t border-slate-800 pt-3">
+        <div className="mt-4 text-xs text-slate-300 border-t border-white/5 pt-3">
           <strong>Methodological note:</strong> Census counts are subject to random rounding to 0 or 5 by Statistics Canada to protect confidentiality. Minor discrepancies between category sums and totals are an intentional artifact of this privacy mechanism.
         </div>
       </div>

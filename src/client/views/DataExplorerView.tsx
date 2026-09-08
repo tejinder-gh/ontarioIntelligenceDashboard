@@ -237,7 +237,7 @@ export const DataExplorerView: React.FC<DataExplorerViewProps> = ({ cityId }) =>
                     className="hover:bg-slate-800/60 transition-colors font-sans cursor-pointer group"
                   >
                     <td className="py-2.5 px-4 font-semibold text-white group-hover:text-indigo-300 transition-colors">{o.city_name}</td>
-                    <td className="py-2.5 px-4 text-[11px] text-slate-400">{o.category}</td>
+                    <td className="py-2.5 px-4 text-xs text-slate-300">{o.category}</td>
                     <td className="py-2.5 px-4 font-medium text-indigo-300">{o.metric_name}</td>
                     <td className="py-2.5 px-4 text-right font-bold text-white font-mono">
                       {o.value_numeric !== null ? Number(o.value_numeric).toLocaleString() : o.value_text}

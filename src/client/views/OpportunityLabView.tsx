@@ -334,7 +334,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                         }`}>
                           {prob.replace('_', ' ')}
                         </span>
-                        <span className="text-[11px] text-slate-400 block mt-1">Score: {rec.opportunityScore}/100</span>
+                        <span className="text-xs text-slate-300 font-medium block mt-1">Score: {rec.opportunityScore}/100</span>
                       </div>
                     </div>
 

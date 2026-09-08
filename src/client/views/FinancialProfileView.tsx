@@ -616,30 +616,30 @@ export const FinancialProfileView: React.FC<FinancialProfileViewProps> = ({ city
         {wealth ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              <div className="p-4 rounded-lg bg-slate-900 border border-slate-800">
-                <span className="text-xs text-slate-400 block mb-1">Median Net Worth</span>
+              <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10">
+                <span className="text-xs text-slate-300 block mb-1">Median Net Worth</span>
                 <span className="text-2xl font-bold text-white">${wealth.medianNetWorth.toLocaleString()}</span>
-                <span className="text-[11px] text-slate-500 block mt-1">Assets minus liabilities</span>
+                <span className="text-xs text-slate-400 block mt-1">Assets minus liabilities</span>
               </div>
-              <div className="p-4 rounded-lg bg-slate-900 border border-slate-800">
-                <span className="text-xs text-slate-400 block mb-1">Average Net Worth</span>
+              <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10">
+                <span className="text-xs text-slate-300 block mb-1">Average Net Worth</span>
                 <span className="text-2xl font-bold text-indigo-400">${wealth.averageNetWorth.toLocaleString()}</span>
-                <span className="text-[11px] text-slate-500 block mt-1">Driven by equity & real estate</span>
+                <span className="text-xs text-slate-400 block mt-1">Driven by equity & real estate</span>
               </div>
-              <div className="p-4 rounded-lg bg-slate-900 border border-slate-800">
-                <span className="text-xs text-slate-400 block mb-1">Median Total Assets</span>
+              <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10">
+                <span className="text-xs text-slate-300 block mb-1">Median Total Assets</span>
                 <span className="text-2xl font-bold text-emerald-400">${wealth.medianAssets.toLocaleString()}</span>
-                <span className="text-[11px] text-slate-500 block mt-1">Real estate, pensions, savings</span>
+                <span className="text-xs text-slate-400 block mt-1">Real estate, pensions, savings</span>
               </div>
-              <div className="p-4 rounded-lg bg-slate-900 border border-slate-800">
-                <span className="text-xs text-slate-400 block mb-1">Median Total Debt</span>
+              <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10">
+                <span className="text-xs text-slate-300 block mb-1">Median Total Debt</span>
                 <span className="text-2xl font-bold text-rose-400">${wealth.medianDebt.toLocaleString()}</span>
-                <span className="text-[11px] text-slate-500 block mt-1">Mortgages & consumer credit</span>
+                <span className="text-xs text-slate-400 block mt-1">Mortgages & consumer credit</span>
               </div>
-              <div className="p-4 rounded-lg bg-slate-900 border border-slate-800">
-                <span className="text-xs text-slate-400 block mb-1">Debt-to-Asset Ratio</span>
+              <div className="p-4 rounded-xl bg-slate-900/90 border border-white/10">
+                <span className="text-xs text-slate-300 block mb-1">Debt-to-Asset Ratio</span>
                 <span className="text-2xl font-bold text-amber-400">{wealth.debtToAssetRatio}%</span>
-                <span className="text-[11px] text-slate-500 block mt-1">Financial leverage metric</span>
+                <span className="text-xs text-slate-400 block mt-1">Financial leverage metric</span>
               </div>
             </div>
           </div>

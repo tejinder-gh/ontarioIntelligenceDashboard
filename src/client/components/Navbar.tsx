@@ -68,11 +68,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div>
             <h1 className="text-base font-bold text-slate-100 tracking-tight flex items-center gap-2">
               <span>Ontario Economic & Business Intelligence</span>
-              <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800/60 uppercase tracking-wide">
+              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-700/60 uppercase tracking-wide">
                 Production Engine
               </span>
             </h1>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-slate-300">
               Authoritative Market Selection & Location Intelligence Platform
             </p>
           </div>
@@ -88,10 +88,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={onToggleCompareMode}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
               isCompareMode 
-                ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
-                : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700/80'
+                ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/20'
+                : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-white/10 hover:border-white/20'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -100,7 +100,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <div 
             title="Local Persistent Operational Store Active (0 unnecessary upstream API round-trips during normal reads)"
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-900/90 text-emerald-300 border border-emerald-900/60"
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900/90 text-emerald-300 border border-emerald-800/60"
           >
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             <span>DB-First: 0 Round-Trips</span>

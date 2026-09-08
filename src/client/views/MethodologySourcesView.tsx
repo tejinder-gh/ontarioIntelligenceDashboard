@@ -303,7 +303,7 @@ export const MethodologySourcesView: React.FC = () => {
                         <span className="font-bold text-white">{c.attributeGroup}</span>
                         <ResolutionBadge resolution={c.supportedResolutions || 'PROVINCE'} />
                       </div>
-                      <p className="text-[11px] text-slate-400">{c.notes}</p>
+                      <p className="text-xs text-slate-300">{c.notes}</p>
                     </div>
                   ))}
                 </div>

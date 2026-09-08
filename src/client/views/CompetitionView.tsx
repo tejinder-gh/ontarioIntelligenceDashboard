@@ -280,7 +280,7 @@ export const CompetitionView: React.FC<CompetitionViewProps> = ({ cityId }) => {
                     <td className="py-3 px-4 text-right font-mono text-xs text-slate-400">
                       {Number(c.latitude).toFixed(4)}, {Number(c.longitude).toFixed(4)}
                     </td>
-                    <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                    <td className="py-3 px-4 text-slate-300 font-mono text-xs">
                       {c.source_type} #{c.source_element_id}
                     </td>
                   </tr>
