@@ -59,15 +59,29 @@ describe('Opportunity Analytics Engine', () => {
     expect(restRec!.gapIndex).toBeLessThan(1.0); // Saturated market (< 1.0)
   });
 
-  it('runs Workflow A with configurable minPopulation filter', async () => {
-    // Mega cities filter (>= 500,000)
-    const megaCities = await runWorkflowA('pizza_store', {}, 500000);
-    // All seeded cities filter (>= 0)
-    const allCities = await runWorkflowA('pizza_store', {}, 0);
+  it('runs Workflow A with all 6 transparent score components (Requirement 17)', async () => {
+    const results = await runWorkflowA('pizza_store', {
+      demandWeight: 0.25,
+      competitionWeight: 0.25,
+      purchasingPowerWeight: 0.20,
+      growthWeight: 0.10,
+      operatingCostWeight: 0.10,
+      laborWeight: 0.10
+    });
 
-    expect(allCities.length).toBeGreaterThan(megaCities.length);
-    for (const city of megaCities) {
-      expect(city.population).toBeGreaterThanOrEqual(500000);
-    }
+    expect(results).toBeDefined();
+    expect(results.length).toBeGreaterThan(0);
+
+    const top = results[0];
+    expect(top.scoreComponents).toBeDefined();
+    expect(top.scoreComponents.demandScore).toBeGreaterThanOrEqual(0);
+    expect(top.scoreComponents.competitionScore).toBeGreaterThanOrEqual(0);
+    expect(top.scoreComponents.purchasingPowerScore).toBeGreaterThanOrEqual(0);
+    expect(top.scoreComponents.growthScore).toBeGreaterThanOrEqual(0);
+    expect(top.scoreComponents.operatingCostScore).toBeGreaterThanOrEqual(0);
+    expect(top.scoreComponents.laborScore).toBeGreaterThanOrEqual(0);
+
+    expect(top.opportunityScore).toBeGreaterThanOrEqual(0);
+    expect(top.opportunityScore).toBeLessThanOrEqual(100);
   });
 });

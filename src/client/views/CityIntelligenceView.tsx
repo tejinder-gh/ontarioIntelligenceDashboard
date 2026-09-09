@@ -29,6 +29,7 @@ import { HousingAndRentalCard } from '../components/HousingAndRentalCard.js';
 import { GasPriceDeltaCard } from '../components/GasPriceDeltaCard.js';
 import { ComparableCitiesCard } from '../components/ComparableCitiesCard.js';
 import { MunicipalPlanningCard } from '../components/MunicipalPlanningCard.js';
+import { DataCoverageCard } from '../components/DataCoverageCard.js';
 
 interface CityIntelligenceProps {
   cityId: string;
@@ -583,113 +584,8 @@ export const CityIntelligenceView: React.FC<CityIntelligenceProps> = ({ cityId, 
       {/* Feature Outliers Section */}
       <FeatureOutliersSection cityId={cityId} />
 
-      {/* Official Data Coverage & Lineage Report Card (Interactive) */}
-      <div className="glass-panel p-6 rounded-2xl border border-white/10 shadow-lg">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-base font-bold text-white">
-              Data Coverage & Provenance Verification
-            </h3>
-          </div>
-          <span className="px-2.5 py-1 rounded text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800/60">
-            Confidence: {coverage.overall_confidence || 'HIGH'}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div 
-            role="button"
-            tabIndex={0}
-            onClick={() => setContributingData({
-              title: 'Statistics Canada Census Lineage & Quality Audit',
-              category: 'Lineage & Quality',
-              metricLabel: 'Authoritative Agency Source',
-              value: 'Statistics Canada 2021 Census Profile',
-              benchmarkValue: 'Table 98-401-X2021001',
-              benchmarkLabel: 'Catalog Number',
-              sourceLineage: 'Federal Census of Population mandated by Statistics Act',
-              referenceYear: '2021 (Released 2022)',
-              decisionImplications: [
-                {
-                  heading: 'Highest Standard of Legal & Statistical Rigor',
-                  insight: 'Response is mandatory by federal law, providing comprehensive municipal coverage without voluntary sampling bias.',
-                  impact: 'positive'
-                }
-              ],
-              onClose: () => setContributingData(null)
-            })}
-            onKeyDown={(e) => e.key === 'Enter' && setContributingData(null)}
-            className="p-3.5 bg-slate-900/80 rounded-xl border border-white/5 hover:border-indigo-500/60 hover:bg-slate-900 transition-all cursor-pointer group"
-          >
-            <span className="text-slate-300 block mb-1 font-medium group-hover:text-indigo-300 transition-colors">Authoritative Source</span>
-            <span className="font-semibold text-white">Statistics Canada — Census of Population</span>
-            <span className="text-slate-400 block mt-1">Table 98-401-X2021001 (Released 2022)</span>
-          </div>
-
-          <div 
-            role="button"
-            tabIndex={0}
-            onClick={() => setContributingData({
-              title: 'Municipal Scope & Census Coverage Scope',
-              category: 'Data Coverage',
-              metricLabel: 'CSD Attribute Coverage',
-              value: '98.4%',
-              benchmarkValue: '100% Zero Synthetic Data',
-              benchmarkLabel: 'Authenticity Guarantee',
-              sourceLineage: 'Statistics Canada Audit Protocol',
-              referenceYear: '2021 Census',
-              decisionImplications: [
-                {
-                  heading: 'Zero Synthetic Fabrication',
-                  insight: 'Every data point is derived strictly from published federal census tables or audited municipal statements. Zero simulated figures.',
-                  impact: 'positive'
-                }
-              ],
-              onClose: () => setContributingData(null)
-            })}
-            onKeyDown={(e) => e.key === 'Enter' && setContributingData(null)}
-            className="p-3.5 bg-slate-900/80 rounded-xl border border-white/5 hover:border-emerald-500/60 hover:bg-slate-900 transition-all cursor-pointer group"
-          >
-            <span className="text-slate-300 block mb-1 font-medium group-hover:text-emerald-300 transition-colors">Coverage Scope</span>
-            <span className="font-semibold text-emerald-400">98.4% CSD Census Attribute Coverage</span>
-            <span className="text-slate-400 block mt-1">Zero synthetic or estimated values used</span>
-          </div>
-
-          <div 
-            role="button"
-            tabIndex={0}
-            onClick={() => setContributingData({
-              title: `${geo.name} Census Subdivision Boundary Precision`,
-              category: 'Geographic Resolution',
-              metricLabel: 'Geographic Unit Type',
-              value: `CSD ${geo.dguid || geo.id}`,
-              benchmarkValue: `Census Division: ${geo.census_division}`,
-              benchmarkLabel: 'Regional Tier',
-              sourceLineage: 'Standard Geographical Classification (SGC 2021)',
-              referenceYear: '2021 Census',
-              decisionImplications: [
-                {
-                  heading: 'True Municipal Resolution',
-                  insight: `Data is authenticated at the municipality (CSD) level rather than aggregated at the broader CMA or county level, ensuring true hyper-local accuracy.`,
-                  impact: 'positive'
-                }
-              ],
-              onClose: () => setContributingData(null)
-            })}
-            onKeyDown={(e) => e.key === 'Enter' && setContributingData(null)}
-            className="p-3.5 bg-slate-900/80 rounded-xl border border-white/5 hover:border-indigo-500/60 hover:bg-slate-900 transition-all cursor-pointer group"
-          >
-            <span className="text-slate-300 block mb-1 font-medium group-hover:text-indigo-300 transition-colors">Geographic Boundary Precision</span>
-            <span className="font-semibold text-indigo-300">Census Subdivision (CSD {geo.dguid || geo.id})</span>
-            <span className="text-slate-400 block mt-1">Ontario Census Division: {geo.census_division}</span>
-          </div>
-        </div>
-
-        <div className="mt-4 text-xs text-slate-300 border-t border-white/5 pt-3">
-          <strong>Methodological note:</strong> Census counts are subject to random rounding to 0 or 5 by Statistics Canada to protect confidentiality. Minor discrepancies between category sums and totals are an intentional artifact of this privacy mechanism.
-        </div>
-      </div>
+      {/* Official Empirical Data Coverage & Lineage Report Card (Requirement 38) */}
+      <DataCoverageCard cityId={cityId} cityName={geo?.name} />
     </div>
   );
 };

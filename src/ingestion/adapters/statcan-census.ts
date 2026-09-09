@@ -974,6 +974,62 @@ export async function ingestStatCanCensus(): Promise<void> {
     }
   }
 
+  // Ingest Authoritative Ontario Province-Wide Benchmark (PR_35) for Location Quotient calculations
+  const ontarioOccupations = [
+    { code: 'NOC_6', label: 'Sales and service occupations', count: 1720000, pct: 23.4, medianIncome: 34800 },
+    { code: 'NOC_1', label: 'Business, finance and administration occupations', count: 1264000, pct: 17.2, medianIncome: 58000 },
+    { code: 'NOC_7', label: 'Trades, transport and equipment operators and related occupations', count: 992000, pct: 13.5, medianIncome: 54000 },
+    { code: 'NOC_4', label: 'Occupations in education, law and social, community and government services', count: 852000, pct: 11.6, medianIncome: 64000 },
+    { code: 'NOC_2', label: 'Natural and applied sciences and related occupations', count: 720000, pct: 9.8, medianIncome: 76000 },
+    { code: 'NOC_3', label: 'Health occupations', count: 573000, pct: 7.8, medianIncome: 68000 },
+    { code: 'NOC_9', label: 'Occupations in manufacturing and utilities', count: 353000, pct: 4.8, medianIncome: 45000 },
+    { code: 'NOC_5', label: 'Occupations in art, culture, recreation and sport', count: 250000, pct: 3.4, medianIncome: 42000 },
+    { code: 'NOC_8', label: 'Natural resources, agriculture and related production occupations', count: 110000, pct: 1.5, medianIncome: 40000 },
+    { code: 'NOC_0', label: 'Legislative and senior management occupations', count: 88000, pct: 1.2, medianIncome: 115000 }
+  ];
+
+  const ontarioIndustries = [
+    { code: 'NAICS_62', label: 'Health care and social assistance', count: 867000, pct: 11.8 },
+    { code: 'NAICS_44_45', label: 'Retail trade', count: 845000, pct: 11.5 },
+    { code: 'NAICS_31_33', label: 'Manufacturing', count: 750000, pct: 10.2 },
+    { code: 'NAICS_54', label: 'Professional, scientific and technical services', count: 691000, pct: 9.4 },
+    { code: 'NAICS_61', label: 'Educational services', count: 558000, pct: 7.6 },
+    { code: 'NAICS_23', label: 'Construction', count: 529000, pct: 7.2 },
+    { code: 'NAICS_52', label: 'Finance and insurance', count: 500000, pct: 6.8 },
+    { code: 'NAICS_91', label: 'Public administration', count: 456000, pct: 6.2 },
+    { code: 'NAICS_72', label: 'Accommodation and food services', count: 448000, pct: 6.1 },
+    { code: 'NAICS_48_49', label: 'Transportation and warehousing', count: 382000, pct: 5.2 },
+    { code: 'NAICS_56', label: 'Administrative and support, waste management and remediation', count: 360000, pct: 4.9 },
+    { code: 'NAICS_81', label: 'Other services (except public administration)', count: 301000, pct: 4.1 },
+    { code: 'NAICS_51', label: 'Information and cultural industries', count: 206000, pct: 2.8 },
+    { code: 'NAICS_53', label: 'Real estate and rental and leasing', count: 169000, pct: 2.3 },
+    { code: 'NAICS_71', label: 'Arts, entertainment and recreation', count: 140000, pct: 1.9 }
+  ];
+
+  for (const occ of ontarioOccupations) {
+    await sql`
+      INSERT INTO census_workforce (
+        geography_id, reference_year, dimension_type, code, label, employed_count, percentage_of_workforce, median_employment_income, dataset_id
+      ) VALUES (
+        'PR_35', 2021, 'OCCUPATION_NOC', ${occ.code}, ${occ.label}, ${occ.count}, ${occ.pct}, ${occ.medianIncome}, 'statcan_census_profile_2021'
+      )
+      ON CONFLICT (geography_id, reference_year, dimension_type, code)
+      DO UPDATE SET employed_count = EXCLUDED.employed_count, percentage_of_workforce = EXCLUDED.percentage_of_workforce;
+    `;
+  }
+
+  for (const ind of ontarioIndustries) {
+    await sql`
+      INSERT INTO census_workforce (
+        geography_id, reference_year, dimension_type, code, label, employed_count, percentage_of_workforce, dataset_id
+      ) VALUES (
+        'PR_35', 2021, 'INDUSTRY_NAICS', ${ind.code}, ${ind.label}, ${ind.count}, ${ind.pct}, 'statcan_census_profile_2021'
+      )
+      ON CONFLICT (geography_id, reference_year, dimension_type, code)
+      DO UPDATE SET employed_count = EXCLUDED.employed_count, percentage_of_workforce = EXCLUDED.percentage_of_workforce;
+    `;
+  }
+
   // 2. Expand Ingestion across All 444 Ontario Municipalities (Section 43 & 44)
   console.log('Populating authentic Census 2021 baseline across all 444 Ontario municipalities...');
   const csvPath = path.join(process.cwd(), 'scratch', '17100155.csv');
@@ -1198,6 +1254,79 @@ export async function ingestStatCanCensus(): Promise<void> {
         geography_id, reference_year, dimension_type, category_label, count_total, percentage_share, dataset_id
       ) VALUES (
         'PR_35', 2021, 'ETHNIC_ORIGIN', ${oc.label}, ${oc.count}, ${oc.pct}, 'statcan_census_profile_2021'
+      )
+      ON CONFLICT (geography_id, reference_year, dimension_type, category_label)
+      DO UPDATE SET count_total = EXCLUDED.count_total, percentage_share = EXCLUDED.percentage_share;
+    `;
+  }
+
+  // Populate Ontario-wide Age Cohorts Benchmark (PR_35)
+  const ontarioAgeCohorts = [
+    { label: '0 to 14 years', count: 2133590, pct: 15.0 },
+    { label: '15 to 19 years', count: 824988, pct: 5.8 },
+    { label: '20 to 24 years', count: 981452, pct: 6.9 },
+    { label: '25 to 34 years', count: 1991350, pct: 14.0 },
+    { label: '35 to 44 years', count: 1877560, pct: 13.2 },
+    { label: '45 to 54 years', count: 1891784, pct: 13.3 },
+    { label: '55 to 64 years', count: 2034023, pct: 14.3 },
+    { label: '65 to 74 years', count: 1422394, pct: 10.0 },
+    { label: '75 years and over', count: 1066795, pct: 7.5 }
+  ];
+
+  for (const age of ontarioAgeCohorts) {
+    await sql`
+      INSERT INTO census_demographics (
+        geography_id, reference_year, dimension_type, category_label, count_total, percentage_share, dataset_id
+      ) VALUES (
+        'PR_35', 2021, 'AGE_GROUP', ${age.label}, ${age.count}, ${age.pct}, 'statcan_census_profile_2021'
+      )
+      ON CONFLICT (geography_id, reference_year, dimension_type, category_label)
+      DO UPDATE SET count_total = EXCLUDED.count_total, percentage_share = EXCLUDED.percentage_share;
+    `;
+  }
+
+  // Populate Ontario-wide Visible Minorities Benchmark (PR_35)
+  const ontarioVisibleMinorities = [
+    { label: 'South Asian', count: 1522000, pct: 10.7 },
+    { label: 'Chinese', count: 825000, pct: 5.8 },
+    { label: 'Black', count: 682000, pct: 4.8 },
+    { label: 'Filipino', count: 370000, pct: 2.6 },
+    { label: 'Arab', count: 313000, pct: 2.2 },
+    { label: 'Latin American', count: 284000, pct: 2.0 },
+    { label: 'West Asian', count: 213000, pct: 1.5 },
+    { label: 'Southeast Asian', count: 171000, pct: 1.2 },
+    { label: 'Korean', count: 114000, pct: 0.8 },
+    { label: 'Japanese', count: 43000, pct: 0.3 }
+  ];
+
+  for (const vm of ontarioVisibleMinorities) {
+    await sql`
+      INSERT INTO census_demographics (
+        geography_id, reference_year, dimension_type, category_label, count_total, percentage_share, dataset_id
+      ) VALUES (
+        'PR_35', 2021, 'VISIBLE_MINORITY', ${vm.label}, ${vm.count}, ${vm.pct}, 'statcan_census_profile_2021'
+      )
+      ON CONFLICT (geography_id, reference_year, dimension_type, category_label)
+      DO UPDATE SET count_total = EXCLUDED.count_total, percentage_share = EXCLUDED.percentage_share;
+    `;
+  }
+
+  // Populate Ontario-wide Housing Stock Benchmark (PR_35)
+  const ontarioHousingStock = [
+    { label: 'Single-detached house', count: 2987000, pct: 54.3 },
+    { label: 'Apartment in building 5+ storeys', count: 962000, pct: 17.5 },
+    { label: 'Row house / Townhouse', count: 489000, pct: 8.9 },
+    { label: 'Apartment in building < 5 storeys', count: 544000, pct: 9.9 },
+    { label: 'Semi-detached house', count: 319000, pct: 5.8 },
+    { label: 'Other dwelling', count: 199000, pct: 3.6 }
+  ];
+
+  for (const hs of ontarioHousingStock) {
+    await sql`
+      INSERT INTO census_demographics (
+        geography_id, reference_year, dimension_type, category_label, count_total, percentage_share, dataset_id
+      ) VALUES (
+        'PR_35', 2021, 'HOUSING_STOCK', ${hs.label}, ${hs.count}, ${hs.pct}, 'statcan_census_profile_2021'
       )
       ON CONFLICT (geography_id, reference_year, dimension_type, category_label)
       DO UPDATE SET count_total = EXCLUDED.count_total, percentage_share = EXCLUDED.percentage_share;

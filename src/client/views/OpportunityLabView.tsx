@@ -76,10 +76,12 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
   
   // Workflow A State ("I know the business")
   const [selectedCategory, setSelectedCategory] = useState<string>('pizza_store');
-  const [demandWeight, setDemandWeight] = useState<number>(0.35);
-  const [compWeight, setCompWeight] = useState<number>(0.30);
+  const [demandWeight, setDemandWeight] = useState<number>(0.25);
+  const [compWeight, setCompWeight] = useState<number>(0.25);
   const [incomeWeight, setIncomeWeight] = useState<number>(0.20);
-  const [growthWeight, setGrowthWeight] = useState<number>(0.15);
+  const [growthWeight, setGrowthWeight] = useState<number>(0.10);
+  const [costWeight, setCostWeight] = useState<number>(0.10);
+  const [laborWeight, setLaborWeight] = useState<number>(0.10);
   const [minPopulation, setMinPopulation] = useState<number>(0);
   const [workflowAResults, setWorkflowAResults] = useState<any[]>([]);
   const [loadingA, setLoadingA] = useState(false);
@@ -166,6 +168,8 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
         competition: compWeight.toString(),
         income: incomeWeight.toString(),
         growth: growthWeight.toString(),
+        operatingCost: costWeight.toString(),
+        labor: laborWeight.toString(),
         minPopulation: minPopulation.toString()
       });
       fetch(`/api/opportunity/business-search?${params.toString()}`)
@@ -179,7 +183,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
           setLoadingA(false);
         });
     }
-  }, [workflow, selectedCategory, demandWeight, compWeight, incomeWeight, growthWeight, minPopulation]);
+  }, [workflow, selectedCategory, demandWeight, compWeight, incomeWeight, growthWeight, costWeight, laborWeight, minPopulation]);
 
   // Fetch Workflow B
   useEffect(() => {
@@ -598,22 +602,23 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
               </div>
             </div>
 
-            {/* Weight Sliders */}
+            {/* 6-Factor Transparent Weight Sliders (Requirement 17) */}
             <div className="space-y-2">
               <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-                Multi-Criteria Feasibility Weights (Total: {Math.round((demandWeight + compWeight + incomeWeight + growthWeight) * 100)}%)
+                Multi-Criteria Feasibility Weights (Total: {Math.round((demandWeight + compWeight + incomeWeight + growthWeight + costWeight + laborWeight) * 100)}%)
               </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-1">
+                {/* 1. Demand */}
                 <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-slate-400">Demand / Population</span>
+                    <span className="text-slate-400 truncate" title="Demand & Population Base">Demand</span>
                     <span className="font-bold text-indigo-300">{Math.round(demandWeight * 100)}%</span>
                   </div>
                   <input
                     type="range"
-                    min="0.1"
-                    max="0.6"
+                    min="0.05"
+                    max="0.5"
                     step="0.05"
                     value={demandWeight}
                     onChange={(e) => setDemandWeight(parseFloat(e.target.value))}
@@ -621,14 +626,15 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   />
                 </div>
 
+                {/* 2. Competition */}
                 <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-slate-400">Saturation Penalty</span>
+                    <span className="text-slate-400 truncate" title="Saturation & Competitor Density">Competition</span>
                     <span className="font-bold text-indigo-300">{Math.round(compWeight * 100)}%</span>
                   </div>
                   <input
                     type="range"
-                    min="0.1"
+                    min="0.05"
                     max="0.5"
                     step="0.05"
                     value={compWeight}
@@ -637,14 +643,15 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   />
                 </div>
 
+                {/* 3. Purchasing Power */}
                 <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-slate-400">Purchasing Power</span>
+                    <span className="text-slate-400 truncate" title="Median Household Income">Purchasing</span>
                     <span className="font-bold text-indigo-300">{Math.round(incomeWeight * 100)}%</span>
                   </div>
                   <input
                     type="range"
-                    min="0.1"
+                    min="0.05"
                     max="0.4"
                     step="0.05"
                     value={incomeWeight}
@@ -653,9 +660,10 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   />
                 </div>
 
+                {/* 4. Growth */}
                 <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-slate-400">5-Yr Growth Rate</span>
+                    <span className="text-slate-400 truncate" title="5-Year Population Trajectory">Growth</span>
                     <span className="font-bold text-indigo-300">{Math.round(growthWeight * 100)}%</span>
                   </div>
                   <input
@@ -665,6 +673,40 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                     step="0.05"
                     value={growthWeight}
                     onChange={(e) => setGrowthWeight(parseFloat(e.target.value))}
+                    className="w-full accent-indigo-500"
+                  />
+                </div>
+
+                {/* 5. Operating Cost */}
+                <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-slate-400 truncate" title="Commercial Lease Rates & Taxes">Operating Cost</span>
+                    <span className="font-bold text-indigo-300">{Math.round(costWeight * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="0.3"
+                    step="0.05"
+                    value={costWeight}
+                    onChange={(e) => setCostWeight(parseFloat(e.target.value))}
+                    className="w-full accent-indigo-500"
+                  />
+                </div>
+
+                {/* 6. Labour Availability */}
+                <div className="p-3 bg-slate-900/60 rounded-lg border border-slate-800">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-slate-400 truncate" title="Labor Force Participation & Talent Pool">Labour Pool</span>
+                    <span className="font-bold text-indigo-300">{Math.round(laborWeight * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="0.3"
+                    step="0.05"
+                    value={laborWeight}
+                    onChange={(e) => setLaborWeight(parseFloat(e.target.value))}
                     className="w-full accent-indigo-500"
                   />
                 </div>
@@ -831,8 +873,27 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                           </td>
                           <td className="py-3 px-4 font-semibold text-white">{r.cityName}</td>
                           <td className="py-3 px-4 text-right">
-                            <span className="font-extrabold text-emerald-400 text-sm">{r.opportunityScore}</span>
-                            <span className="text-slate-400 text-xs font-normal">/100</span>
+                            <div className="flex flex-col items-end">
+                              <div>
+                                <span className="font-extrabold text-emerald-400 text-sm">{r.opportunityScore}</span>
+                                <span className="text-slate-400 text-xs font-normal">/100</span>
+                              </div>
+                              {r.scoreComponents && (
+                                <div className="flex items-center gap-1 text-[9px] font-mono text-slate-400 mt-0.5">
+                                  <span title={`Demand Score: ${r.scoreComponents.demandScore}`} className="text-indigo-300">D:{r.scoreComponents.demandScore}</span>
+                                  <span>•</span>
+                                  <span title={`Competition Score: ${r.scoreComponents.competitionScore}`} className="text-purple-300">C:{r.scoreComponents.competitionScore}</span>
+                                  <span>•</span>
+                                  <span title={`Purchasing Power: ${r.scoreComponents.purchasingPowerScore}`} className="text-emerald-300">P:{r.scoreComponents.purchasingPowerScore}</span>
+                                  <span>•</span>
+                                  <span title={`Growth Score: ${r.scoreComponents.growthScore}`} className="text-blue-300">G:{r.scoreComponents.growthScore}</span>
+                                  <span>•</span>
+                                  <span title={`Operating Cost: ${r.scoreComponents.operatingCostScore}`} className="text-amber-300">O:{r.scoreComponents.operatingCostScore}</span>
+                                  <span>•</span>
+                                  <span title={`Labour Pool: ${r.scoreComponents.laborScore}`} className="text-teal-300">L:{r.scoreComponents.laborScore}</span>
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-4 text-right font-medium text-white">{dScore}</td>
                           <td className="py-3 px-4 text-right">

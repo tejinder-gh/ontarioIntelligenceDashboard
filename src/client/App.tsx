@@ -34,6 +34,65 @@ import {
 } from 'lucide-react';
 import { AlertSubscriptionModal } from './components/AlertSubscriptionModal.js';
 
+const TAB_TO_SLUG: Record<ActiveTab, string> = {
+  overview: 'overview',
+  city_intelligence: 'intelligence',
+  demographics: 'demographics',
+  financial_profile: 'finances',
+  consumer_spending: 'spending',
+  workforce: 'workforce',
+  business_landscape: 'business',
+  municipality_finances: 'muni-finances',
+  city_rankings: 'rankings',
+  opportunity_lab: 'opportunity',
+  competition: 'competition',
+  business_listings: 'listings',
+  outliers: 'outliers',
+  data_explorer: 'explorer',
+  methodology_sources: 'sources'
+};
+
+const SLUG_TO_TAB: Record<string, ActiveTab> = {
+  overview: 'overview',
+  intelligence: 'city_intelligence',
+  city: 'city_intelligence',
+  demographics: 'demographics',
+  finances: 'financial_profile',
+  financial: 'financial_profile',
+  wealth: 'financial_profile',
+  spending: 'consumer_spending',
+  consumer: 'consumer_spending',
+  workforce: 'workforce',
+  labor: 'workforce',
+  business: 'business_landscape',
+  landscape: 'business_landscape',
+  'muni-finances': 'municipality_finances',
+  'muni-budget': 'municipality_finances',
+  municipal: 'municipality_finances',
+  rankings: 'city_rankings',
+  opportunity: 'opportunity_lab',
+  lab: 'opportunity_lab',
+  competition: 'competition',
+  listings: 'business_listings',
+  sales: 'business_listings',
+  outliers: 'outliers',
+  explorer: 'data_explorer',
+  sources: 'methodology_sources',
+  methodology: 'methodology_sources'
+};
+
+const isCityTab = (tab: ActiveTab) => [
+  'overview',
+  'city_intelligence',
+  'demographics',
+  'financial_profile',
+  'consumer_spending',
+  'workforce',
+  'business_landscape',
+  'municipality_finances',
+  'competition'
+].includes(tab);
+
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
   const [selectedCityId, setSelectedCityId] = useState<string>('CSD_burlington');
@@ -55,12 +114,113 @@ export const App: React.FC = () => {
   // Mobile sidebar state
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  // Cross-Module Drill-Down State (Requirement 33)
+  const [drillDownOptions, setDrillDownOptions] = useState<{ category?: string; community?: string; ageCohort?: string }>({});
+
+  // Helper to build deep-link URL (Requirement 40)
+  const buildUrl = (tab: ActiveTab, cityName: string, options?: { category?: string; community?: string; ageCohort?: string }) => {
+    const citySlug = cityName.toLowerCase().replace(/\s+/g, '-');
+    if (tab === 'competition' && options?.category) {
+      const catSlug = options.category.replace(/_/g, '-');
+      return `/competition/${citySlug}/${catSlug}`;
+    }
+    if (isCityTab(tab)) {
+      return `/city/${citySlug}/${TAB_TO_SLUG[tab]}`;
+    }
+    return `/${TAB_TO_SLUG[tab]}`;
+  };
+
+  // Deep-linking programmatic navigation with cross-module drill-down parameters
+  const navigateTo = (
+    tab: ActiveTab, 
+    cityId?: string, 
+    cityName?: string, 
+    options?: { category?: string; community?: string; ageCohort?: string }
+  ) => {
+    setActiveTab(tab);
+    if (cityId) setSelectedCityId(cityId);
+    if (cityName) setSelectedCityName(cityName);
+    if (options) {
+      setDrillDownOptions(options);
+    } else {
+      setDrillDownOptions({});
+    }
+    setMobileSidebarOpen(false);
+
+    const targetCity = cityName || selectedCityName;
+    const newPath = buildUrl(tab, targetCity, options);
+    if (window.location.pathname !== newPath) {
+      window.history.pushState({ tab, cityId: cityId || selectedCityId, cityName: targetCity, options }, '', newPath);
+    }
+  };
+
   const handleSelectCity = (city: GeographySummary) => {
     setSelectedCityId(city.id);
     setSelectedCityName(city.name);
+    if (isCityTab(activeTab)) {
+      const newPath = buildUrl(activeTab, city.name);
+      if (window.location.pathname !== newPath) {
+        window.history.pushState({ tab: activeTab, cityId: city.id, cityName: city.name }, '', newPath);
+      }
+    }
   };
 
-  // Sync city name
+  // URL synchronization & back/forward history listener (Requirement 40)
+  useEffect(() => {
+    const handlePopState = () => {
+      const pathname = window.location.pathname;
+      const parts = pathname.split('/').filter(Boolean);
+      if (parts.length === 0) return;
+
+      if (parts[0] === 'city' && parts.length >= 2) {
+        const cityNameSlug = parts[1];
+        const tabSlug = parts[2] || 'overview';
+        const matchedTab = SLUG_TO_TAB[tabSlug] || 'overview';
+        setActiveTab(matchedTab);
+
+        // Fetch matched geography by name
+        fetch(`/api/geographies?q=${cityNameSlug}`)
+          .then(res => res.json())
+          .then(json => {
+            if (json.data && json.data.length > 0) {
+              const matched = json.data[0];
+              setSelectedCityId(matched.id);
+              setSelectedCityName(matched.name);
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+
+      if (parts[0] === 'competition' && parts.length >= 2) {
+        setActiveTab('competition');
+        if (parts.length >= 3) {
+          setDrillDownOptions({ category: parts[2].replace(/-/g, '_') });
+        }
+        fetch(`/api/geographies?q=${parts[1]}`)
+          .then(res => res.json())
+          .then(json => {
+            if (json.data && json.data.length > 0) {
+              setSelectedCityId(json.data[0].id);
+              setSelectedCityName(json.data[0].name);
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+
+      const matchedTab = SLUG_TO_TAB[parts[0]];
+      if (matchedTab) {
+        setActiveTab(matchedTab);
+      }
+    };
+
+    handlePopState();
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Sync city name if ID changes externally
   useEffect(() => {
     fetch(`/api/geographies?q=${selectedCityId.replace('CSD_', '')}`)
       .then(res => res.json())
@@ -163,8 +323,7 @@ export const App: React.FC = () => {
         <Sidebar
           activeTab={activeTab}
           onTabChange={(t) => {
-            setActiveTab(t);
-            setMobileSidebarOpen(false);
+            navigateTo(t);
           }}
           selectedCityId={selectedCityId}
           onSelectCity={handleSelectCity}
@@ -253,18 +412,22 @@ export const App: React.FC = () => {
           {activeTab === 'overview' && (
             <OverviewView 
               cityId={selectedCityId} 
-              onNavigateTab={setActiveTab} 
-              onSelectCity={(id) => { setSelectedCityId(id); setActiveTab('overview'); }}
+              onNavigateTab={(t, opts) => navigateTo(t, undefined, undefined, opts)} 
+              onSelectCity={(id) => navigateTo('overview', id)}
             />
           )}
           {activeTab === 'city_intelligence' && (
             <CityIntelligenceView 
               cityId={selectedCityId} 
-              onSelectCity={setSelectedCityId} 
+              onSelectCity={(id) => navigateTo('city_intelligence', id)} 
             />
           )}
           {activeTab === 'demographics' && (
-            <DemographicsView cityId={selectedCityId} />
+            <DemographicsView 
+              cityId={selectedCityId} 
+              initialCohort={drillDownOptions.ageCohort}
+              initialCommunity={drillDownOptions.community}
+            />
           )}
           {activeTab === 'financial_profile' && (
             <FinancialProfileView cityId={selectedCityId} />
@@ -281,23 +444,26 @@ export const App: React.FC = () => {
           {activeTab === 'municipality_finances' && (
             <MunicipalityFinancesView 
               cityId={selectedCityId} 
-              onSelectCity={(id) => { setSelectedCityId(id); setActiveTab('overview'); }}
+              onSelectCity={(id) => navigateTo('municipality_finances', id)}
             />
           )}
           {activeTab === 'city_rankings' && (
-            <CityRankingsView onSelectCity={(id) => { setSelectedCityId(id); setActiveTab('overview'); }} />
+            <CityRankingsView onSelectCity={(id) => navigateTo('overview', id)} />
           )}
           {activeTab === 'opportunity_lab' && (
-            <OpportunityLabView cityId={selectedCityId} onSelectCity={(id) => { setSelectedCityId(id); setActiveTab('overview'); }} />
+            <OpportunityLabView cityId={selectedCityId} onSelectCity={(id) => navigateTo('overview', id)} />
           )}
           {activeTab === 'competition' && (
-            <CompetitionView cityId={selectedCityId} />
+            <CompetitionView 
+              cityId={selectedCityId} 
+              initialCategory={drillDownOptions.category}
+            />
           )}
           {activeTab === 'business_listings' && (
             <BusinessListingsView cityId={selectedCityId} />
           )}
           {activeTab === 'outliers' && (
-            <OutliersView onSelectCity={(id) => { setSelectedCityId(id); setActiveTab('overview'); }} />
+            <OutliersView onSelectCity={(id) => navigateTo('overview', id)} />
           )}
           {activeTab === 'data_explorer' && (
             <DataExplorerView cityId={selectedCityId} />

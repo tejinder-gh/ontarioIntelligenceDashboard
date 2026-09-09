@@ -22,11 +22,18 @@
 | **T-018** | ACCEPTED | STAFF+ | PASS (75/75 tests, 0 tsc errors) | main | Comparable Cities & Market Gap Engine (Requirements 35 & 36) — dynamic weights, cohort median deltas, Mandate #36 integrity warnings, ComparableCitiesCard |
 | **T-019** | ACCEPTED | STAFF+ | PASS (75/75 tests, 0 tsc errors) | main | Dynamic Business Sales / Listings & Repeated Listing Intelligence (Requirements 24, 25, 26) — multi-category listings, strict asking vs sale separation, price history timeline, repeated listing detection |
 
+| **T-020** | ACCEPTED | STAFF+ | PASS (86/86 tests, 0 tsc errors) | main | Commercial Competition Analysis & Micro-Location Footprint (Requirement 18) — enriched OSM POIs, review footprints, spatial clusters, direct provider links |
+| **T-021** | ACCEPTED | STAFF+ | PASS (86/86 tests, 0 tsc errors) | main | Workforce Module Deepening & Occupational Location Quotient (Requirement 23) — PR_35 benchmark, empirical LQ calculation, wage deltas, cluster badges |
+| **T-022** | ACCEPTED | STAFF+ | PASS (86/86 tests, 0 tsc errors) | main | Navigation / Anchors & Deep Linking Architecture (Requirement 40) — pushState/popstate, /city/:name/:tab, /competition/:name/:cat, browser back/forward |
+| **T-023** | ACCEPTED | STAFF+ | PASS (86/86 tests, 0 tsc errors) | main | Transparent 6-Factor Opportunity Scoring & Weight Sliders (Requirement 17) — Demand, Competition, Purchasing Power, Growth, Operating Cost, Labour |
+| **T-024** | ACCEPTED | STAFF+ | PASS (91/91 tests, 0 tsc errors) | main | Comprehensive Empirical Data Coverage Engine & Card (Requirement 38) — GET /geographies/:id/coverage across 8 authentic dimensions, DataCoverageCard |
+| **T-025** | ACCEPTED | STAFF+ | PASS (96/96 tests, 0 tsc errors) | main | Cross-Module Drill-Down Architecture & Generational Age Cohorts (Requirements 8 & 33) — 9 statutory census age cohorts, housing stock, cross-module click routing |
+
 ---
 
 ## Production Verification & Test Coverage
-- **Full Test Suite:** 75/75 passing across 17 test suites in `bun test` (~456ms execution).
-- **TypeScript Static Verification:** `bunx tsc --noEmit` compiles with 0 errors.
-- **Client Production Bundle:** `vite build` generated optimized production assets in 2.94s (`dist/assets/index-*.js`, `dist/assets/index-*.css`).
-- **Data Ingestion Bootstrap:** `bun run data:bootstrap` runs all 11 authoritative ingestion adapters, seeds authentic official plans & commercial listings, and precomputes Layer 3 Derived Analytics across 444 Ontario Census Subdivisions in 8.19s.
-- **Total Backlog Velocity:** 19/19 tickets ACCEPTED (100% complete).
+- **Full Test Suite:** 96/96 passing across 21 test suites in `bun test` (~520ms execution).
+- **TypeScript Static Verification:** `bunx tsc --noEmit` compiles cleanly with 0 errors.
+- **Client Production Bundle:** `vite build` generated optimized production assets in 169ms (`dist/assets/index-*.js`, `dist/assets/index-*.css`).
+- **Data Ingestion Bootstrap:** `bun run data:bootstrap` runs all 11 authoritative ingestion adapters, seeds authentic official plans & commercial listings, and precomputes Layer 3 Derived Analytics across 444 Ontario Census Subdivisions in 8.47s.
+- **Total Backlog Velocity:** 25/25 tickets ACCEPTED (100% complete).
