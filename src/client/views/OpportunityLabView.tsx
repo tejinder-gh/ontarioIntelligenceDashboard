@@ -31,21 +31,6 @@ interface OpportunityLabViewProps {
   onSelectCity: (cityId: string) => void;
 }
 
-const DEFAULT_BUSINESS_CATEGORIES = [
-  { id: 'pizza_store', name: 'Pizza Store / Pizzeria (NAICS 722513)', icon: '🍕' },
-  { id: 'full_service_restaurant', name: 'Full-Service Restaurant (NAICS 722511)', icon: '🍽️' },
-  { id: 'coffee_shop', name: 'Coffee & Snack Shop (NAICS 722515)', icon: '☕' },
-  { id: 'tutoring_centre', name: 'Tutoring & Learning Centre (NAICS 611691)', icon: '📚' },
-  { id: 'fitness_centre', name: 'Fitness & Recreational Sports (NAICS 713940)', icon: '🏋️' },
-  { id: 'child_daycare', name: 'Child Daycare Facility (NAICS 624410)', icon: '👶' },
-  { id: 'automotive_repair', name: 'General Automotive Repair (NAICS 811111)', icon: '🚗' },
-  { id: 'dental_clinic', name: 'Offices of Dentists (NAICS 621210)', icon: '🦷' },
-  { id: 'hair_salon', name: 'Hair & Beauty Salon (NAICS 812111)', icon: '💇' },
-  { id: 'pet_services', name: 'Veterinary & Pet Care (NAICS 541940)', icon: '🐾' },
-  { id: 'pharmacy', name: 'Pharmacies & Drug Stores (NAICS 446110)', icon: '💊' },
-  { id: 'grocery_specialty', name: 'Specialty Food & Grocery (NAICS 445290)', icon: '🥖' }
-];
-
 const getIconForCategory = (catId: string): string => {
   const iconMap: Record<string, string> = {
     pizza_store: '🍕',
@@ -56,6 +41,7 @@ const getIconForCategory = (catId: string): string => {
     child_daycare: '👶',
     automotive_repair: '🚗',
     dental_clinic: '🦷',
+    medical_clinic: '🏥',
     hair_salon: '💇',
     pet_services: '🐾',
     pharmacy: '💊',
@@ -75,7 +61,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
   const [workflow, setWorkflow] = useState<'VISUAL' | 'B' | 'A'>('VISUAL'); // Default to Visual Picture & Keyword Mapping Matrix
   
   // Workflow A State ("I know the business")
-  const [selectedCategory, setSelectedCategory] = useState<string>('pizza_store');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [demandWeight, setDemandWeight] = useState<number>(0.25);
   const [compWeight, setCompWeight] = useState<number>(0.25);
   const [incomeWeight, setIncomeWeight] = useState<number>(0.20);
@@ -86,8 +72,8 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
   const [workflowAResults, setWorkflowAResults] = useState<any[]>([]);
   const [loadingA, setLoadingA] = useState(false);
 
-  // Dynamic Business Taxonomy & Autocomplete State
-  const [categories, setCategories] = useState<{ id: string; name: string; icon?: string; naicsCode?: string }[]>(DEFAULT_BUSINESS_CATEGORIES);
+  // Dynamic Business Taxonomy & Autocomplete State (Derived from Database API)
+  const [categories, setCategories] = useState<{ id: string; name: string; icon?: string; naicsCode?: string }[]>([]);
   const [autocompleteQuery, setAutocompleteQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -104,9 +90,10 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
             naicsCode: c.naicsCode
           }));
           setCategories(mapped);
+          setSelectedCategory(prev => prev || mapped[0].id);
         }
       })
-      .catch(err => console.error('Error fetching taxonomy categories:', err));
+      .catch(err => console.error('Error fetching dynamic taxonomy categories:', err));
   }, []);
 
   useEffect(() => {
@@ -147,11 +134,28 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
   const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
   const [modalContributingData, setModalContributingData] = useState<ContributingDataProps | null>(null);
 
+  // Dynamic list of geographies for Workflow B selection
+  const [availableCities, setAvailableCities] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/geographies?limit=200')
+      .then(res => res.json())
+      .then(json => {
+        if (json.data && Array.isArray(json.data)) {
+          setAvailableCities(json.data.map((g: any) => ({
+            id: g.id,
+            name: `${g.name}${g.csd_type ? ` (${g.csd_type})` : ''}`
+          })));
+        }
+      })
+      .catch(err => console.error('Error fetching dynamic geographies:', err));
+  }, []);
+
   // Feasibility Dossier Modal State (Amendment #8 & T-008)
   const [isDossierOpen, setIsDossierOpen] = useState<boolean>(false);
   const [dossierCityId, setDossierCityId] = useState<string>(cityId);
-  const [dossierCategoryId, setDossierCategoryId] = useState<string>('pizza_store');
-  const [dossierCityName, setDossierCityName] = useState<string>('Burlington');
+  const [dossierCategoryId, setDossierCategoryId] = useState<string>(selectedCategory || '');
+  const [dossierCityName, setDossierCityName] = useState<string>(cityId.replace('CSD_', ''));
 
   // Sync selectedCityId with prop
   useEffect(() => {
@@ -234,19 +238,23 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
   }, [activeDetail]);
 
   const handleCardClick = (rec: any) => {
-    const oppScore = rec.opportunityScore || 85;
-    const revMedian = rec.revenueBenchmarkRange?.median || rec.estimatedAnnualRevenueCAD?.median || 750000;
-    const density = rec.competitorDensity !== undefined ? rec.competitorDensity : (rec.countPer10kPop || 0);
+    const oppScore = rec.opportunityScore !== undefined && rec.opportunityScore !== null ? rec.opportunityScore : null;
+    const revMedian = rec.revenueBenchmarkRange?.median || rec.estimatedAnnualRevenueCAD?.median || null;
+    const density = rec.competitorDensity !== undefined ? rec.competitorDensity : (rec.countPer10kPop !== undefined ? rec.countPer10kPop : null);
+    const peerBench = rec.peerBenchmarkPer10kPop ?? null;
+    const gapIndex = rec.gapIndex ?? null;
+    const capexMin = rec.typicalInvestmentCAD?.min ?? null;
+    const capexMax = rec.typicalInvestmentCAD?.max ?? null;
 
     setContributingData({
       title: `${rec.categoryName} Feasibility Breakdown in ${selectedCityId.replace('CSD_', '')}`,
       category: 'Market Opportunity & Feasibility',
       metricLabel: 'Opportunity Feasibility Score',
-      value: `${oppScore}/100`,
-      percentageOfTotal: `${rec.gapIndex ? `+${rec.gapIndex}x` : '+2.1x'} Gap Index`,
-      benchmarkValue: `${rec.peerBenchmarkPer10kPop || 2.8} stores / 10k pop`,
+      value: oppScore !== null ? `${oppScore}/100` : '—',
+      percentageOfTotal: gapIndex ? `+${gapIndex}x Gap Index` : 'Market Gap Under Evaluation',
+      benchmarkValue: peerBench ? `${peerBench} stores / 10k pop` : 'Provincial Saturation Baseline',
       benchmarkLabel: 'Ontario Peer Saturation Benchmark',
-      deltaPct: rec.gapIndex ? Math.round((rec.gapIndex - 1) * 100) : 25,
+      deltaPct: gapIndex ? Math.round((gapIndex - 1) * 100) : 0,
       sourceLineage: `StatCan NAICS ${rec.naicsCode} & Survey of Service Industries`,
       referenceYear: '2021 Census & 2025 Commercial Registry',
       provenance: {
@@ -258,26 +266,34 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
         sourceUrl: 'https://www12.statcan.gc.ca/'
       },
       contextDrivers: [
-        rec.rationale || `Evaluated against ${density} existing competitors per 10k residents.`,
-        `Estimated Median Unit Revenue: $${Number(revMedian).toLocaleString()} CAD / yr`,
-        `Typical Initial Capital Investment: $${Number(rec.typicalInvestmentCAD?.min || 150000).toLocaleString()} – $${Number(rec.typicalInvestmentCAD?.max || 450000).toLocaleString()} CAD`,
+        rec.rationale || (density !== null ? `Evaluated against ${density} existing competitors per 10k residents.` : 'Evaluated against municipal commercial establishment footprint.'),
+        revMedian ? `Estimated Median Unit Revenue: $${Number(revMedian).toLocaleString()} CAD / yr` : 'Revenue benchmarks calculated on deep dive via audited filings.',
+        (capexMin && capexMax)
+          ? `Typical Initial Capital Investment: $${Number(capexMin).toLocaleString()} – $${Number(capexMax).toLocaleString()} CAD`
+          : 'Capital requirements dynamically evaluated in unit economics modal.',
         ...(rec.keyDrivers || [])
       ],
       decisionImplications: [
         {
           heading: 'Market Entry Viability',
-          insight: `With a ${rec.gapIndex ? `+${rec.gapIndex}x` : 'strong'} gap index, local demand outstrips current physical retail capacity, indicating room for profitable new market entrants.`,
+          insight: gapIndex
+            ? `With a +${gapIndex}x gap index, local demand outstrips current physical retail capacity, indicating room for profitable new market entrants.`
+            : 'Evaluating local demand versus commercial capacity.',
           impact: 'positive'
         },
         {
           heading: 'Revenue Realization & Debt Coverage',
-          insight: `Median unit revenue of $${Number(revMedian).toLocaleString()} CAD supports targeted debt service coverage ratios (DSCR > 1.35x) assuming occupancy costs remain under 8.5% of gross sales.`,
+          insight: revMedian
+            ? `Median unit revenue of $${Number(revMedian).toLocaleString()} CAD supports targeted debt service coverage ratios (DSCR > 1.35x) assuming occupancy costs remain under 8.5% of gross sales.`
+            : 'Revenue realization targets calculated against provincial benchmarks.',
           impact: 'neutral'
         },
         {
           heading: 'Competitor Density Baseline',
-          insight: `At ${density} locations per 10k residents compared to the Ontario peer average of ${rec.peerBenchmarkPer10kPop || 2.8}/10k, saturation risk is minimal.`,
-          impact: 'positive'
+          insight: (density !== null && peerBench)
+            ? `At ${density} locations per 10k residents compared to the Ontario peer average of ${peerBench}/10k, saturation risk is ${density < peerBench ? 'minimal' : 'moderate'}.`
+            : 'Competitor footprint mapped against provincial peer baselines.',
+          impact: (density !== null && peerBench && density >= peerBench) ? 'warning' : 'positive'
         }
       ],
       strategicRecommendations: [
@@ -407,18 +423,15 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                 <select
                   value={selectedCityId}
                   onChange={(e) => setSelectedCityId(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 text-white font-bold text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500"
+                  className="bg-slate-900 border border-slate-700 text-white font-bold text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 max-w-xs"
                 >
-                  <option value="CSD_burlington">Burlington (CSD 3524002)</option>
-                  <option value="CSD_oakville">Oakville (CSD 3524001)</option>
-                  <option value="CSD_milton">Milton (CSD 3524009)</option>
-                  <option value="CSD_toronto">Toronto (CSD 3520005)</option>
-                  <option value="CSD_mississauga">Mississauga (CSD 3521005)</option>
-                  <option value="CSD_ottawa">Ottawa (CSD 3506008)</option>
-                  <option value="CSD_hamilton">Hamilton (CSD 3525005)</option>
-                  <option value="CSD_waterloo">Waterloo (CSD 3530016)</option>
-                  <option value="CSD_guelph">Guelph (CSD 3523001)</option>
-                  <option value="CSD_barrie">Barrie (CSD 3543042)</option>
+                  {availableCities.length > 0 ? (
+                    availableCities.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))
+                  ) : (
+                    <option value={selectedCityId}>{selectedCityId.replace('CSD_', '')}</option>
+                  )}
                 </select>
                 <span className="text-xs text-slate-400">
                   Showing highest probability business opportunities ranked by market gap index. Click any card for contributing data.
@@ -432,10 +445,12 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                 'NAICS Code': r.naicsCode,
                 'Opportunity Score': r.opportunityScore,
                 'Gap Index': r.gapIndex,
-                'Demand Score': r.demandScore || 75,
-                'Competition Score': r.competitionScore || 65,
+                'Demand Score': r.demandScore ?? r.scoreComponents?.demandScore ?? '—',
+                'Competition Score': r.competitionScore ?? r.scoreComponents?.competitionScore ?? '—',
                 'Success Probability': (r.successProbability || 'HIGH').replace('_', ' '),
-                'Median Revenue Benchmark': `$${Number(r.revenueBenchmarkRange?.median || r.estimatedAnnualRevenueCAD?.median || 750000).toLocaleString()}`
+                'Median Revenue Benchmark': (r.revenueBenchmarkRange?.median || r.estimatedAnnualRevenueCAD?.median)
+                  ? `$${Number(r.revenueBenchmarkRange?.median || r.estimatedAnnualRevenueCAD?.median).toLocaleString()}`
+                  : '—'
               }))} 
               filename={`${selectedCityId}_business_opportunities`} 
               label="Export City Opportunities" 
@@ -450,8 +465,8 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {workflowBResults.map((rec) => {
                 const prob = rec.successProbability || (rec.opportunityScore >= 85 ? 'VERY_HIGH' : rec.opportunityScore >= 70 ? 'HIGH' : 'MODERATE');
-                const medianRev = rec.revenueBenchmarkRange?.median || rec.estimatedAnnualRevenueCAD?.median || 750000;
-                const density = rec.competitorDensity !== undefined ? rec.competitorDensity : (rec.countPer10kPop || 0);
+                const medianRev = rec.revenueBenchmarkRange?.median || rec.estimatedAnnualRevenueCAD?.median || null;
+                const density = rec.competitorDensity !== undefined ? rec.competitorDensity : (rec.countPer10kPop !== undefined ? rec.countPer10kPop : null);
 
                 return (
                   <div 
@@ -492,17 +507,21 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                       </div>
                       <div>
                         <span className="text-slate-400 block mb-0.5">Demand Score</span>
-                        <span className="font-semibold text-white">{rec.demandScore || 80}/100</span>
+                        <span className="font-semibold text-white">
+                          {rec.demandScore ?? rec.scoreComponents?.demandScore ?? '—'}/100
+                        </span>
                       </div>
                       <div>
                         <span className="text-slate-400 block mb-0.5">Competitor Density</span>
-                        <span className="font-semibold text-indigo-300">{density} / 10k</span>
+                        <span className="font-semibold text-indigo-300">
+                          {density !== null ? `${density} / 10k` : '—'}
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/80">
                       <span className="text-slate-400">
-                        Annual Revenue: <strong className="text-white">${(medianRev / 1000).toFixed(0)}k</strong>
+                        Annual Revenue: <strong className="text-white">{medianRev ? `$${(medianRev / 1000).toFixed(0)}k` : '—'}</strong>
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] text-slate-500 group-hover:text-indigo-400 transition-colors">
@@ -767,11 +786,11 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   Rank: idx + 1,
                   Municipality: r.cityName,
                   'Opportunity Score': r.opportunityScore,
-                  'Demand Score': r.demandScore || r.scoreComponents?.demandScore || 80,
-                  'Saturation Index': r.saturationIndex || r.competitorsPer10kPop || 2.5,
-                  'Median Income': `$${Number(r.medianIncome || r.medianHouseholdIncome || 95000).toLocaleString()}`,
-                  'Competitor Count': r.competitorCount,
-                  'Est Annual Revenue': `$${Number(r.estimatedRevenue || 750000).toLocaleString()}`
+                  'Demand Score': r.demandScore ?? r.scoreComponents?.demandScore ?? '—',
+                  'Saturation Index': r.saturationIndex ?? r.competitorsPer10kPop ?? '—',
+                  'Median Income': (r.medianIncome || r.medianHouseholdIncome) ? `$${Number(r.medianIncome || r.medianHouseholdIncome).toLocaleString()}` : '—',
+                  'Competitor Count': r.competitorCount ?? '—',
+                  'Est Annual Revenue': r.estimatedRevenue ? `$${Number(r.estimatedRevenue).toLocaleString()}` : '—'
                 }))} 
                 filename={`top_cities_${selectedCategory}`} 
                 label="Export Ranking" 
@@ -799,9 +818,9 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   </thead>
                   <tbody className="divide-y divide-slate-800 text-slate-300">
                     {workflowAResults.map((r, idx) => {
-                      const dScore = r.demandScore || r.scoreComponents?.demandScore || 80;
-                      const sat = r.saturationIndex || r.competitorsPer10kPop || 2.5;
-                      const inc = r.medianIncome || r.medianHouseholdIncome || 95000;
+                      const dScore = r.demandScore ?? r.scoreComponents?.demandScore ?? '—';
+                      const sat = r.saturationIndex ?? r.competitorsPer10kPop ?? null;
+                      const inc = r.medianIncome ?? r.medianHouseholdIncome ?? null;
 
                       return (
                         <tr 
@@ -814,9 +833,9 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                               metricLabel: 'Opportunity Feasibility Score',
                               value: `${r.opportunityScore}/100`,
                               percentageOfTotal: `Rank #${idx + 1} of 444 Ontario Municipalities`,
-                              benchmarkValue: `$${Number(inc).toLocaleString()}`,
+                              benchmarkValue: inc ? `$${Number(inc).toLocaleString()}` : 'Provincial Census Data',
                               benchmarkLabel: 'Median Household Income',
-                              deltaPct: Math.round(((inc - 95000) / 95000) * 100),
+                              deltaPct: inc ? Math.round(((inc - 95000) / 95000) * 100) : 0,
                               sourceLineage: 'StatCan 2021 Census & OSM Geographic Survey',
                               referenceYear: '2021 / 2025-Q4',
                               provenance: {
@@ -836,13 +855,17 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                                 },
                                 {
                                   heading: 'Household Income Support',
-                                  insight: `Median household income of $${Number(inc).toLocaleString()} represents significant disposable capacity for discretionary services.`,
+                                  insight: inc 
+                                    ? `Median household income of $${Number(inc).toLocaleString()} represents significant disposable capacity for discretionary services.`
+                                    : 'Median household income reflects local purchasing power.',
                                   impact: 'positive'
                                 },
                                 {
                                   heading: 'Saturation & Density',
-                                  insight: `Competitor density of ${sat} / 10k residents indicates manageable entry barriers.`,
-                                  impact: sat < 2.5 ? 'positive' : 'warning'
+                                  insight: sat !== null
+                                    ? `Competitor density of ${sat} / 10k residents indicates manageable entry barriers.`
+                                    : 'Competitor footprint mapped against local demographic base.',
+                                  impact: (sat !== null && sat < 2.5) ? 'positive' : 'warning'
                                 }
                               ],
                               strategicRecommendations: [
@@ -897,12 +920,12 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                           </td>
                           <td className="py-3 px-4 text-right font-medium text-white">{dScore}</td>
                           <td className="py-3 px-4 text-right">
-                            <span className={sat < 2.5 ? 'text-emerald-400' : 'text-amber-400'}>
-                              {sat} / 10k
+                            <span className={sat !== null ? (sat < 2.5 ? 'text-emerald-400' : 'text-amber-400') : 'text-slate-400'}>
+                              {sat !== null ? `${sat} / 10k` : '—'}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-right font-medium">${Number(inc).toLocaleString()}</td>
-                          <td className="py-3 px-4 text-right">{r.competitorCount}</td>
+                          <td className="py-3 px-4 text-right font-medium">{inc ? `$${Number(inc).toLocaleString()}` : '—'}</td>
+                          <td className="py-3 px-4 text-right">{r.competitorCount ?? '—'}</td>
                           <td className="py-3 px-4 text-right">
                             <button
                               type="button"
