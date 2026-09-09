@@ -84,3 +84,77 @@ This document details the metrics, definitions, mathematical formulations, units
 * **Unit**: CAD ($)
 * **Scope**: CSD
 * **Definition**: Total property tax levy collected by the municipality from residential, commercial, and industrial assessment classes.
+
+---
+
+## 5. Generational Age Cohorts (Source: StatCan Table 98-401-X2021001)
+
+### `age_cohort_0_14` to `age_cohort_85_plus`
+* **Name**: Statutory Census Age Cohorts (9 Tiers)
+* **Tiers**: 0–14, 15–24, 25–34, 35–44, 45–54, 55–64, 65–74, 75–84, 85+
+* **Unit**: Persons & Percentage of Total Population
+* **Aggregates**:
+  * `youth_aggregate`: Ages 0 to 14 (Indicator of child-care and primary education demand)
+  * `working_age_aggregate`: Ages 15 to 64 (Prime labor force & consumer purchasing engine)
+  * `senior_aggregate`: Ages 65+ (Healthcare, retirement living, and accessibility services demand)
+* **Benchmark**: Evaluated against Ontario provincial distribution (`PR_35`).
+
+---
+
+## 6. Workforce & Occupational Specialization
+
+### `occupational_location_quotient` (LQ)
+* **Name**: Occupational Location Quotient
+* **Formula**: `(Local_Occupation_Employment / Local_Total_Employment) / (Ontario_Occupation_Employment / Ontario_Total_Employment)`
+* **Interpretation**:
+  * `LQ > 1.25`: High local talent specialization / commercial cluster advantage.
+  * `0.85 <= LQ <= 1.25`: Balanced local representation aligned with provincial norm.
+  * `LQ < 0.85`: Talent deficit; may require recruitment from outside the municipality.
+* **Scope**: CSD (compared against `PR_35`).
+
+---
+
+## 7. Retail Fuel & Fleet Operating Costs (Source: StatCan Table 18-10-0001-01)
+
+### `retail_gas_price_cents_litre`
+* **Name**: Regular Unleaded Fuel Retail Average
+* **Unit**: Cents / Litre (¢/L)
+* **Scope**: Regional CMA & Regional Markets
+* **Significance**: Core operating cost for logistics, last-mile delivery, and mobile trade contractors.
+
+---
+
+## 8. Commercial Opportunity & Feasibility Metrics
+
+### `opportunity_gap_index`
+* **Name**: Commercial Opportunity Gap Index
+* **Formula**: `Provincial_Benchmark_Establishments_Per_10k / Local_Establishments_Per_10k`
+* **Interpretation**:
+  * `Gap Index >= 1.5`: High Expansion Opportunity (Severely underserved local market).
+  * `1.0 <= Gap Index < 1.5`: Balanced Market (Healthy commercial absorption).
+  * `Gap Index < 1.0`: Saturated / Competitive Market.
+* **Scope**: CSD by NAICS Business Category.
+
+### `feasibility_composite_score`
+* **Name**: 6-Factor Multi-Criteria Opportunity Score (0 to 100)
+* **Formula**: Weighted sum of:
+  * Demand & Population Scale ($W = 25\%$)
+  * Competition Penalty & Gap Index ($W = 25\%$)
+  * Household Purchasing Power ($W = 20\%$)
+  * 5-Year Population Growth ($W = 10\%$)
+  * Commercial Rent Affordability ($W = 10\%$)
+  * Workforce & Talent Availability ($W = 10\%$)
+* **Scope**: CSD relative to provincial distributions.
+
+---
+
+## 9. Empirical Data Coverage Scoring
+
+### `overall_coverage_pct`
+* **Name**: Empirical Attribute Completeness Percentage
+* **Formula**: Unweighted proportion of 8 core dimensions with authentic observed records in the relational store.
+* **Confidence Rating**:
+  * `HIGH`: Coverage $\ge 75\%$
+  * `MEDIUM`: $40\% \le \text{Coverage} < 75\%$
+  * `LOW`: Coverage $< 40\%$
+* **Guardrail**: Modeled, estimated, or unobserved metrics are strictly excluded from the observation count.

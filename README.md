@@ -42,7 +42,7 @@ The system utilizes a 3-layer data architecture:
                                ▼
  [ Layer 2: Normalized Persistent PostgreSQL Store ]
  ├── Database: ontario_economic_intelligence (Docker PostgreSQL 16 on port 5432)
- ├── 22 Relational Tables (geographies, observations, metrics_definitions, etc.)
+ ├── 33 Relational Tables (geographies, observations, metrics_definitions, etc.)
  ├── Strict geographic hierarchy (PROVINCE -> CD -> CMA -> CSD)
  └── Immutable provenance, reference periods, confidence, and ETag tracking
                                │
@@ -75,34 +75,46 @@ The system utilizes a 3-layer data architecture:
 
 ## 🚀 Key Features & 15 Intelligence Views
 
-1. **Overview View (`OverviewView`)**: Executive municipal dashboard, Core KPIs (Population, 5-yr growth, Ontario population share, median income, business counts, density), and quick navigators.
-2. **City Intelligence View (`CityIntelligenceView`)**: Comprehensive census demographics, population density, occupancy rates, structural dwelling types, household sizes, and provenance audit cards.
-3. **Demographics View (`DemographicsView`)**: Dynamic ethnic origins (Top 20 communities), visible minorities, and demographic diversification.
+1. **Overview View (`OverviewView`)**: Executive municipal dashboard, Core KPIs (Population, 5-yr growth, Ontario population share, median income, business counts, density), 8-dimension empirical data coverage card, and 1-click **$199 Location Feasibility Dossier** generator.
+2. **City Intelligence View (`CityIntelligenceView`)**: Comprehensive census demographics, population density, occupancy rates, structural dwelling types, household sizes, and municipal planning growth corridor cards.
+3. **Demographics View (`DemographicsView`)**: 9 statutory Census age cohorts (youth, working age, seniors), housing stock composition, and Top 20 ethnocultural communities with provincial benchmarks.
 4. **Financial Profile View (`FinancialProfileView`)**: Mean vs. Median household income delta, skewness analysis, monthly tenant rent vs. owner payments, and strictly labeled SFS net worth benchmarks.
 5. **Consumer Spending View (`ConsumerSpendingView`)**: StatCan SHS household spending across food (restaurant vs grocery), recreation, transportation, and retail categories with mandatory resolution notices.
-6. **Workforce View (`WorkforceView`)**: Top 20 NOC occupations with median earnings, Top 20 NAICS industries, labor participation, and unemployment rates.
-7. **Business Landscape View (`BusinessLandscapeView`)**: Table 33-10-1097-01 employer business counts by employee size bands (1-4, 5-9, 10-19, 20-49, 50-99, 100+), density, and sector distributions.
+6. **Workforce View (`WorkforceView`)**: Top 20 NOC occupations with median earnings, Occupational Location Quotient (LQ) vs provincial average, Top 20 NAICS industries, labor participation, and unemployment rates.
+7. **Business Landscape View (`BusinessLandscapeView`)**: Table 33-10-1097-01 employer business counts by employee size bands (1-4, 5-9, 10-19, 20-49, 50-99, 100+), density, and sector distributions with decision drill-downs.
 8. **Municipality Finances View (`MunicipalityFinancesView`)**: Ontario FIR statements, municipal operating/capital budgets, property taxation revenue, and per-capita spending across municipal departments.
 9. **City Rankings View (`CityRankingsView`)**: Interactive multi-metric sortable league table comparing Ontario municipalities with population filters, percentile rankings, and outlier alerts.
 10. **Opportunity Lab View (`OpportunityLabView`)**:
-    * **Workflow A**: "I know the business" — Ranks Ontario municipalities with dynamic sliders for demand, saturation penalty, purchasing power, and growth weights.
-    * **Workflow B**: "I know the city" (e.g. Burlington) — Ranks business categories with gap index, unit economics, commercial real estate lease benchmarks, and verified competitor maps.
+    * **Workflow A**: "I know the business" — Transparent 6-factor multi-criteria opportunity scoring across Demand (25%), Saturation (25%), Purchasing Power (20%), Growth (10%), Operating Costs (10%), and Labour Availability (10%).
+    * **Workflow B**: "I know the city" (e.g. Burlington) — Dynamic NAICS business recommendations, gap indices, audited Table 33-10-1097 counts, verified revenue benchmark chains, and competitor maps.
+    * **Visual Domain Matrix**: Dynamic keyword search, category synonyms, and image-rich domain tiles.
 11. **Competition View (`CompetitionView`)**: OpenStreetMap-listed commercial competitors with exact lat/long coordinates, chain vs. independent ratios, and unconfigured review provider notice.
-12. **Business Listings View (`BusinessListingsView`)**: Commercial listings with strict separation of asking vs confirmed sale price, price drops, days on market, and repeated listing match confidence.
+12. **Business Listings View (`BusinessListingsView`)**: Commercial listings with strict separation of asking vs confirmed sale price, price drops, relistings, days on market, and automated subscriber watch creation.
 13. **Outliers View (`OutliersView`)**: Non-parametric Tukey IQR fences and Gaussian z-scores (|z| ≥ 2.0) identifying extreme divergences with natural language explanations.
 14. **Data Explorer View (`DataExplorerView`)**: SQL queryable observation store with multi-attribute filtering, search, confidence badges, and 1-click CSV/JSON export.
 15. **Methodology & Sources View (`MethodologySourcesView`)**: Complete Data Dictionary, Source Capabilities Registry, freshness metadata, and live Zero-Round-Trip verification counter.
 
 ---
 
+## 🏛️ Major Engines & Commercial Features
+
+* **$199 CAD Location Feasibility Dossier Generator**: Generates comprehensive lender-ready commercial feasibility PDF reports combining 2021 Census profiles, Canadian Business Counts, municipal finances, and commercial real estate rent baselines (`GET /api/dossier/:cityId/:categoryId`).
+* **Alert & Diff Change Detection Ledger**: Automated temporal tracking of listing price drops, relistings, and municipal budget updates (`audit_events` and `subscriber_watches`).
+* **Empirical Data Coverage Engine**: Real-time evaluation of data completeness across 8 authentic dimensions with explicit confidence levels (HIGH / MEDIUM / LOW), completely eliminating synthetic fallbacks (`GET /api/geographies/:id/coverage`).
+* **Comparable Peer Cities Engine**: Multi-dimensional Euclidean distance similarity calculation across population, growth, median income, density, and age cohort distributions (`GET /api/geographies/:id/similar`).
+* **Dynamic Business Category Taxonomy**: NAICS 2022 taxonomy service supporting colloquial synonym autocomplete (e.g. `pizza`, `pizzeria`, `daycare`, `gym`) mapped to canonical sector definitions (`GET /api/taxonomy/...`).
+
+---
+
 ## 🛠️ Technology Stack
 
 * **Backend Runtime**: [Bun 1.3](https://bun.sh/) (native TypeScript, high performance)
-* **Database**: [PostgreSQL 16](https://www.postgresql.org/) in Docker (`shared-postgres` service)
-* **API Framework**: [Express 5](https://expressjs.com/) with strict parameter handling and CORS
-* **Frontend Framework**: [React 19](https://react.dev/) + [Vite 8](https://vitejs.dev/) + [Tailwind CSS 4](https://tailwindcss.com/)
-* **Visualization**: [Recharts 3](https://recharts.org/) + [Lucide Icons](https://lucide.dev/)
-* **Testing**: [Vitest](https://vitest.dev/)
+* **Database**: [PostgreSQL 16](https://www.postgresql.org/) (33 normalized relational tables, zero external HTTP round-trips)
+* **API Framework**: [Express 5.2](https://expressjs.com/) with health probes, graceful shutdown, and CORS
+* **Frontend Framework**: [React 19.2](https://react.dev/) + [Vite 8.2](https://vitejs.dev/) (Rolldown engine) + [Tailwind CSS 4.3](https://tailwindcss.com/)
+* **Visualization**: [Recharts 3.10](https://recharts.org/) + [Lucide Icons](https://lucide.dev/)
+* **Testing**: [Vitest](https://vitest.dev/) / `bun test` (99 tests across 23 test suites)
+* **Design System**: Dark-mode Apple HIG specular glass materials, accessible inputs, and bilingual (en-CA / fr-CA) scaffolding
 
 ---
 
@@ -119,11 +131,9 @@ bun run data:bootstrap
 ```
 
 ### 2. Run Test Suite
-Verify that all 13 automated tests pass, including zero-round-trip verification and statistical correctness:
+Verify that all 99 automated tests pass across 23 test suites:
 ```bash
 bun test
-# or
-bun run test
 ```
 
 ### 3. Build Production Bundle
@@ -135,7 +145,7 @@ bun run build
 ```bash
 bun start
 ```
-The server will be live at `http://localhost:3001` (serving both API endpoints and the compiled React SPA).
+The server will be live at `http://localhost:3001` (serving both API endpoints, cloud health checks at `/api/health`, and the compiled React SPA).
 
 For independent Vite frontend development:
 ```bash
@@ -149,13 +159,36 @@ Navigate to `http://localhost:3000`.
 
 ---
 
+## 🐳 Containerized Production Deployment (Docker)
+
+A multi-stage production [`Dockerfile`](./Dockerfile) is provided:
+
+```bash
+# Build production container
+docker build -t ontario-economic-intelligence:latest .
+
+# Run container with external PostgreSQL
+docker run -d \
+  -p 3001:3001 \
+  -e PORT=3001 \
+  -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/ontario_economic_intelligence" \
+  --name ontario-intelligence \
+  ontario-economic-intelligence:latest
+```
+
+### Cloud Health Check Probes
+Orchestration systems (Kubernetes, AWS ALB, Render, Fly.io) can poll:
+* `GET http://localhost:3001/api/health` — Returns JSON with database connection state, uptime, and version.
+
+---
+
 ## 📋 Acceptance Verification Highlights
 
 * **Dynamic Pop Share Calculation**: Burlington's population share of Ontario is dynamically computed as `(186,948 / 14,223,942) * 100 = 1.314%`.
 * **Zero External Round Trips**: Confirmed with live counter `externalApiCallCount === 0`.
-* **444 Municipalities Stored**: All 444 Ontario Census Subdivisions are indexed and searchable.
-* **Table 33-10-1097-01**: Successfully replaces legacy Table 33-10-0222-01.
-* **Pricing Separation**: Asking prices are never conflated with confirmed sale prices.
+* **All 444 Municipalities Stored**: All 444 Ontario Census Subdivisions are indexed, normalized, and searchable.
+* **Table 33-10-1097-01**: Ingests December 2025 reference counts across employee size bands and NAICS sectors.
+* **Pricing Separation**: Asking prices are strictly separated from confirmed transaction closing prices.
 
 ---
 

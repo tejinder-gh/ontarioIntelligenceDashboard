@@ -2,17 +2,34 @@
 
 Base URL: `http://localhost:3001/api`
 
-All endpoints query the local PostgreSQL relational operational store (`ontario_economic_intelligence`) with **zero external HTTP round trips**.
+All endpoints query the local persistent PostgreSQL operational store (`ontario_economic_intelligence`) with **zero external HTTP round trips** at runtime.
 
 ---
 
-## 1. Geographies & Profiles
+## 0. Cloud Infrastructure & Health Probes
+
+### `GET /api/health`
+Liveness and readiness probe for cloud orchestration (Kubernetes, AWS ALB, Render, Fly.io).
+* **Response `(200 OK)`**:
+  ```json
+  {
+    "status": "healthy",
+    "uptime": 128.45,
+    "timestamp": "2026-09-09T02:24:23.688Z",
+    "database": "connected",
+    "version": "1.0.0"
+  }
+  ```
+
+---
+
+## 1. Geographies, Profiles & Demographics
 
 ### `GET /api/geographies`
-Lists or searches Ontario municipalities.
+Lists or searches all 444 Ontario municipalities and Census Subdivisions.
 * **Query Parameters**:
   * `q` (string, optional): Search query matching municipality name or normalized alias.
-  * `limit` (number, default: 100): Maximum number of results.
+  * `limit` (number, default: 100, max: 500): Maximum results to return.
 * **Response**:
   ```json
   {
@@ -20,82 +37,177 @@ Lists or searches Ontario municipalities.
       {
         "id": "CSD_burlington",
         "name": "Burlington",
-        "display_name": "Burlington (City), Halton",
+        "display_name": "Burlington, City (Halton)",
         "geo_type": "CSD",
         "csd_type": "City",
-        "census_division": "Halton",
+        "municipal_tier": "LOWER_TIER",
         "population_2021": 186948,
         "population_growth_pct": 2.0,
         "ontario_pop_share_pct": 1.314
       }
     ],
-    "total": 1
+    "total": 444
   }
   ```
 
 ### `GET /api/geographies/:id/profile`
-Returns comprehensive demographic profile, observations, and coverage report for a municipality.
+Returns full demographic profile, core census indicators, household incomes, and business counts.
+
+### `GET /api/geographies/:id/coverage`
+Evaluates empirical data completeness across 8 authentic dimensions with confidence scoring (`HIGH`, `MEDIUM`, `LOW`), with explicit data lineage notices.
+* **Dimensions Evaluated**: Population, Demographics, Incomes, Workforce/NOC, Municipal Finance, Commercial Rent, Competitor Ratings, Confirmed Sales.
+
+### `GET /api/geographies/:id/age-profile`
+Returns 9 statutory Census age cohorts with exact counts, percentages, and deltas against the Ontario provincial benchmark (`PR_35`), plus Youth (0-14), Working-Age (15-64), and Senior (65+) aggregates.
 
 ### `GET /api/geographies/:id/demographics`
-Returns dynamic Top 20 ethnic origins and visible minority breakdowns.
+Returns Top 20 ethnic origins, visible minority breakdowns, housing stock types (single-detached, apartments), and structural dwelling counts.
 
 ### `GET /api/geographies/:id/financials`
-Returns median vs. average household income, skewness indication, shelter costs, and Survey of Financial Security net worth benchmarks.
+Returns median vs. average household income, after-tax income, monthly shelter costs (tenant rent vs. homeowner costs), and Survey of Financial Security net worth benchmarks.
 
 ### `GET /api/geographies/:id/spending`
-Returns Survey of Household Spending (SHS) consumption categories with explicit CMA/Provincial resolution tags.
+Returns Survey of Household Spending (SHS) consumption estimates across restaurant food, grocery, recreation, transportation, and retail goods.
 
 ### `GET /api/geographies/:id/workforce`
-Returns dynamic Top 20 NOC occupations, Top 20 NAICS industries, labor participation, and unemployment rates.
+Returns Top 20 NOC occupations, Top 20 NAICS industries, labor participation rate, unemployment rate, and empirical Occupational Location Quotient (LQ) calculations.
 
 ### `GET /api/geographies/:id/municipal-budget`
-Returns Ontario FIR municipal operating and capital budgets, property tax revenue, and departmental expenses.
+Returns Ontario Financial Information Return (FIR) Schedule 10/40 operating revenues, expenditures, taxation levy, and per-capita spending.
+
+### `GET /api/geographies/:id/planning-initiatives`
+Returns official municipal plans, secondary growth corridors, urban expansion initiatives, and official bylaw document citations.
+
+### `GET /api/geographies/:id/fuel`
+Returns retail gasoline and diesel price monitoring with regional price delta comparisons.
+
+### `GET /api/geographies/:id/housing-rental`
+Returns primary rental market vacancy rates and average rents by bedroom count (Bachelor, 1-Bed, 2-Bed, 3-Bed+).
 
 ---
 
 ## 2. Multi-City Comparison & Similarity
 
 ### `GET /api/geographies/compare`
-Compares multiple municipalities side-by-side.
+Compares up to 8 municipalities side-by-side across demographics, finances, business counts, and municipal budgets.
 * **Query Parameters**:
   * `ids`: Comma-separated list of geography IDs (e.g. `CSD_burlington,CSD_oakville,CSD_milton`).
 
 ### `GET /api/geographies/:id/similar`
-Calculates multi-attribute Euclidean distance similarity across population, growth, income, median age, household size, and business density.
+Calculates multi-dimensional Euclidean distance similarity across population scale, 5-year growth, median income, business density, and median age, returning the Top 5 peer municipalities.
+* **Query Parameters**:
+  * `popWeight` (default: 0.35)
+  * `incomeWeight` (default: 0.25)
+  * `densityWeight` (default: 0.20)
+  * `growthWeight` (default: 0.20)
 
 ---
 
-## 3. Opportunity Lab & Rankings
+## 3. Dynamic Category Taxonomy
 
-### `GET /api/opportunity/business-search` (Workflow A)
-Ranks Ontario municipalities for opening a selected business category.
-* **Query Parameters**:
-  * `category`: Business category ID (e.g. `pizza_store`).
-  * `demand`: User weight for population/demand (default: 0.20).
-  * `competition`: User weight for competition penalty (default: 0.25).
-  * `income`: User weight for purchasing power (default: 0.20).
-  * `growth`: User weight for growth (default: 0.15).
+### `GET /api/taxonomy/categories`
+Returns all canonical NAICS 2022 business categories with display names, descriptions, and capital expenditure guidelines.
 
-### `GET /api/opportunity/city-recommendations` (Workflow B)
-Ranks business categories for a specific city based on market gap index and peer benchmarks.
+### `GET /api/taxonomy/search`
+Fuzzy prefix and synonym search across colloquial terms (e.g. `pizzeria`, `daycare`, `gym`, `auto body`).
 * **Query Parameters**:
-  * `cityId`: Target municipality ID (e.g. `CSD_burlington`).
+  * `q` (string, required): Search query.
+  * `limit` (number, default: 8): Max suggestions.
+
+### `GET /api/taxonomy/resolve`
+Resolves a colloquial search query or alias to its canonical NAICS business category.
+* **Query Parameters**:
+  * `q` or `alias` (string, required): Term to resolve.
+
+---
+
+## 4. Opportunity Lab & Rankings
+
+### `GET /api/opportunity/business-search` (Workflow A: "I know the business")
+Ranks Ontario municipalities for opening a selected business type with transparent 6-factor weighting:
+* **Query Parameters**:
+  * `category` (string, required): Category ID or synonym (e.g. `pizza_store`).
+  * `demand` (number, default: 0.25): Population & market scale weight.
+  * `competition` (number, default: 0.25): Saturation penalty weight.
+  * `income` (number, default: 0.20): Purchasing power weight.
+  * `growth` (number, default: 0.10): 5-year population growth weight.
+  * `cost` (number, default: 0.10): Commercial rent affordability weight.
+  * `labor` (number, default: 0.10): Workforce availability weight.
+  * `minPopulation` (number, default: 0): Minimum municipality population floor slider.
+
+### `GET /api/opportunity/city-recommendations` (Workflow B: "I know the city")
+Ranks business categories for a specific city based on empirical gap indices, Table 33-10-1097 business counts, and peer benchmarks.
+* **Query Parameters**:
+  * `cityId` (string, required): Target municipality ID (e.g. `CSD_burlington`).
 
 ### `GET /api/opportunity/business-detail`
-Returns verified revenue benchmark chains, commercial real estate lease benchmarks, and OpenStreetMap-listed competitors.
+Returns detailed feasibility metrics for a specific city-category pair, including revenue benchmark chains, commercial rent averages, and physical competitor maps.
+* **Query Parameters**:
+  * `cityId` (string, required)
+  * `categoryId` (string, required)
 
 ### `GET /api/rankings`
-Sortable Ontario league table by metric (e.g. `income_median_hh`, `population_growth_pct`).
+Sortable Ontario league table across all 444 municipalities by metric (e.g. `population_2021`, `income_median_hh`, `businesses_per_1000_pop`).
 
 ### `GET /api/analytics/outliers`
-Returns Tukey IQR and z-score statistical anomalies with natural language rationale.
+Detects statistical outliers using non-parametric Tukey IQR fences ($Q_1 - 1.5 \times \text{IQR}$, $Q_3 + 1.5 \times \text{IQR}$) and Gaussian z-scores (|z| ≥ 2.0).
 
 ---
 
-## 4. Metadata & Verification
+## 5. Location Feasibility Dossier & Commercial Monetization
+
+### `GET /api/dossier/:cityId/:categoryId`
+Generates a complete, lender-ready **$199 CAD Location Feasibility Dossier** combining:
+* Executive Summary & Feasibility Score
+* 2021 Census Demographic & Income Profile
+* Canadian Business Counts Table 33-10-1097-01 Distribution by Employee Band
+* Commercial Real Estate Net & Gross Lease Rates
+* Operating Unit Economics & SDE/EBITDA Margin Projections
+* Competitive Saturation & Gap Index
+* Official Statistics Canada & MMAH Citations
+
+---
+
+## 6. Alerts & Diff Change Detection Ledger
+
+### `GET /api/alerts/events`
+Returns temporal change detection events (price changes, relistings, budget revisions).
+* **Query Parameters**:
+  * `limit` (default: 50)
+  * `eventType` (optional: `PRICE_DROP`, `RELISTED`, `BUDGET_REVISED`, `DATASET_UPDATED`)
+
+### `POST /api/alerts/watches`
+Registers an automated subscriber watch for notifications when listings drop in price or match target geography/radius.
+* **Request Body**:
+  ```json
+  {
+    "subscriberEmail": "analyst@example.com",
+    "geographyId": "CSD_burlington",
+    "categoryId": "pizza_store",
+    "watchType": "PRICE_DROP",
+    "thresholdPct": 5.0,
+    "radiusKm": 25.0
+  }
+  ```
+
+### `GET /api/alerts/watches`
+Lists active subscriber watches.
+
+### `GET /api/alerts/notifications/pending`
+Returns pending notifications evaluated in a single pass against the change detection ledger.
+
+---
+
+## 7. Metadata & Provenance
 
 ### `GET /api/meta/dictionary`
-Returns canonical data dictionary definitions, formulas, and limitations.
+Returns canonical metric definitions, units, calculation formulas, and known statistical limitations.
 
 ### `GET /api/meta/freshness`
-Returns system operational health, total persisted records, and verifies zero external API round trips (`externalApiCallCount: 0`).
+Returns system operational health, total database observations, and confirms zero external API round trips (`externalApiCallCount: 0`).
+
+### `GET /api/sources`
+Returns the authorized registry of all 26 upstream data sources, official catalogue codes, and update frequencies.
+
+### `GET /api/sources/:code`
+Returns detailed provenance metadata, release dates, and staleness parameters for a specific dataset code.
