@@ -236,14 +236,13 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
           role="button"
           tabIndex={0}
           onClick={() => {
-            if (microCount === null) return;
             setContributingData({
               title: `${geo.name} Small Business & Entrepreneurial Density`,
               category: 'Enterprise Scale Profile',
               metricLabel: 'Micro & Small Enterprises (< 10 employees)',
-              value: microCount,
+              value: microCount !== null ? microCount : 'Data Pending',
               unit: 'establishments',
-              percentageOfTotal: '87%',
+              percentageOfTotal: microCount !== null ? '87%' : '—',
               benchmarkValue: '88.1% Ontario Average',
               benchmarkLabel: 'Small Business Provincial Share',
               sourceLineage: 'Statistics Canada Table 33-10-1097-01',
@@ -251,7 +250,9 @@ export const BusinessLandscapeView: React.FC<BusinessLandscapeViewProps> = ({ ci
               decisionImplications: [
                 {
                   heading: 'Entrepreneurial Composition',
-                  insight: `87% of all local employers (${microCount.toLocaleString()} businesses) operate with fewer than 10 employees. Confirms an agile, entrepreneurial commercial fabric where independent operators successfully compete alongside regional chains.`,
+                  insight: microCount !== null
+                    ? `87% of all local employers (${microCount.toLocaleString()} businesses) operate with fewer than 10 employees. Confirms an agile, entrepreneurial commercial fabric where independent operators successfully compete alongside regional chains.`
+                    : 'Canadian Business Counts data pending synchronization for this municipality.',
                   impact: 'positive'
                 }
               ],

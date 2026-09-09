@@ -1388,6 +1388,14 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
         cityId={cityId} 
         onSelectCity={onSelectCity} 
       />
+
+      {/* Location Feasibility Dossier Modal (Amendment #8 & T-008) */}
+      <FeasibilityDossierModal
+        isOpen={isDossierOpen}
+        onClose={() => setIsDossierOpen(false)}
+        cityId={cityId}
+        cityName={geo?.name || 'Burlington'}
+      />
     </div>
   );
 };

@@ -184,7 +184,9 @@ export const BusinessVisualSelector: React.FC<BusinessVisualSelectorProps> = ({
   const summary = activeCityDetail?.summary || {};
   const activeCityCompetitorDensity = summary.competitorsPer10k !== undefined ? summary.competitorsPer10k : (activeCityFit?.competitorDensity ?? 0);
   const activeCityCompetitors = summary.totalCompetitors !== undefined ? summary.totalCompetitors : (activeCityFit?.competitorCount ?? 0);
-  const activeCityPopPerComp = summary.populationPerCompetitor !== undefined ? summary.populationPerCompetitor : Math.round((activeCityFit?.population || 186948) / Math.max(1, activeCityCompetitors));
+  const activeCityPopPerComp = summary.populationPerCompetitor !== undefined 
+    ? summary.populationPerCompetitor 
+    : (activeCityFit?.population && activeCityCompetitors > 0 ? Math.round(activeCityFit.population / activeCityCompetitors) : 0);
   const peerBenchmarkDensity = 3.0; // Provincial average benchmark per 10k residents
 
   return (

@@ -11,6 +11,7 @@ import {
 } from '../alerts/watch-evaluator.js';
 import type { SubscriberWatch } from '../alerts/types.js';
 import { getAllCategories, searchCategories, resolveCategory } from '../analytics/taxonomy-service.js';
+import { businessCountsData } from '../ingestion/adapters/statcan-business-counts.js';
 
 export const apiRouter = Router();
 
@@ -1300,7 +1301,7 @@ apiRouter.get('/taxonomy/search', async (req, res) => {
 
 apiRouter.get('/taxonomy/resolve', async (req, res) => {
   try {
-    const q = req.query.q as string || '';
+    const q = ((req.query.q as string) || (req.query.alias as string) || '').trim();
     if (!q) return res.status(400).json({ error: 'Query parameter q is required' });
     const resolved = await resolveCategory(q);
     if (!resolved) {
@@ -1879,17 +1880,27 @@ apiRouter.get('/dossier/:cityId/:categoryId', async (req, res) => {
     `;
 
     // 5. Business Counts (Table 33-10-1097-01)
-    const [counts] = await sql`
-      SELECT total_establishments, without_employees, emp_1_to_4, emp_5_to_9, emp_10_to_19, emp_20_to_49, emp_50_to_99, emp_100_plus
-      FROM business_counts
-      WHERE geography_id = ${geo.id} AND naics_code = ${category.naics_code};
-    `;
+    const cityCounts = businessCountsData.find(b => b.geoId.toLowerCase() === geo.id.toLowerCase());
+    let counts: any = null;
+    if (cityCounts) {
+      const sb = (cityCounts.sizeBands || {}) as Record<string, number>;
+      counts = {
+        total_establishments: cityCounts.totalBusinesses,
+        without_employees: 0,
+        emp_1_to_4: sb['size_1_4'] || 0,
+        emp_5_to_9: sb['size_5_9'] || 0,
+        emp_10_to_19: sb['size_10_19'] || 0,
+        emp_20_to_49: sb['size_20_49'] || 0,
+        emp_50_to_99: sb['size_50_99'] || 0,
+        emp_100_plus: sb['size_100_plus'] || 0
+      };
+    }
 
-    // 6. Unit Economics / Revenue Chain
+    // 6. Unit Economics / Revenue Chain (StatCan / Industry Filings)
     const [chain] = await sql`
       SELECT low_annual_revenue, median_annual_revenue, avg_annual_revenue, high_annual_revenue,
              cogs_pct, labor_pct, rent_pct, sde_ebitda_pct, assumptions, confidence
-      FROM unit_economics
+      FROM revenue_benchmark_chains
       WHERE category_id = ${category.id} AND (geography_id = ${geo.id} OR geography_id = 'PR_35')
       ORDER BY (geography_id = ${geo.id}) DESC
       LIMIT 1;
