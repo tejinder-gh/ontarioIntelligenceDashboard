@@ -13,6 +13,11 @@ import { ingestCmhcRentalMarket } from './adapters/cmhc-rental.js';
 import { ingestOsmBusinesses } from './adapters/osm-businesses.js';
 import { ingestBusinessListingsAndBenchmarks } from './adapters/business-listings.js';
 import { ingestMunicipalOfficialPlans } from './adapters/muni-official-plans.js';
+import { ingestStatCanProjections } from './adapters/statcan-projections.js';
+import { ingestStatCanLfsCma } from './adapters/statcan-lfs-cma.js';
+import { ingestBuildingInvestments } from './adapters/building-investments.js';
+import { ingestMunicipalDevCharges } from './adapters/muni-dev-charges.js';
+import { syncCreaDdfListings } from './adapters/crea-ddf.js';
 import { precomputeDerivedAnalytics } from '../analytics/precompute.js';
 
 export async function runBootstrap(): Promise<void> {
@@ -43,34 +48,49 @@ export async function runBootstrap(): Promise<void> {
     // 5. Retail Gasoline Pricing & Delta Engine (FUEL-RETAIL Table 18-10-0001-01)
     await ingestStatCanFuel();
 
-    // 6. Canadian Business Counts (Dec 2025)
+    // 6. Canadian Business Counts (June 2026 Table 33-10-1176-01 & Dec 2025 Table 33-10-1097-01)
     await ingestStatCanBusinessCounts();
 
-    // 5. Ontario MMAH Financial Information Returns (FIR)
+    // 7. Population Projections (POP-CSD-PROJ Table 17-10-0162-01)
+    await ingestStatCanProjections();
+
+    // 8. Labour Force Survey by CMA (LAB-CMA Tables 14-10-0468-01, 14-10-0461-01)
+    await ingestStatCanLfsCma();
+
+    // 9. Ontario MMAH Financial Information Returns (FIR)
     await ingestOntarioFir();
 
-    // 6. Statistics Canada Survey of Household Spending (SHS)
+    // 10. Statistics Canada Survey of Household Spending (SHS)
     await ingestStatCanSpending();
 
-    // 7. Statistics Canada Survey of Financial Security (SFS)
+    // 11. Statistics Canada Survey of Financial Security (SFS)
     await ingestStatCanWealth();
 
-    // 8. Statistics Canada Residential Property Ownership (Table 46-10-0096-01)
+    // 12. Statistics Canada Residential Property Ownership (Table 46-10-0096-01)
     await ingestStatCanPropertyOwners();
 
-    // 9. CMHC Rental Market Survey (RMS) Indicators
+    // 13. CMHC Rental Market Survey (RMS) Indicators
     await ingestCmhcRentalMarket();
 
-    // 10. OpenStreetMap Business Locations
+    // 14. Investment in Building Construction (BUILD-INVEST Table 34-10-0293-01)
+    await ingestBuildingInvestments();
+
+    // 15. Municipal Development Charges By-laws (MUNI-DEV-CHARGE)
+    await ingestMunicipalDevCharges();
+
+    // 16. CREA DDF Listings Boundary Verification (CRE-LISTING-DDF)
+    await syncCreaDdfListings();
+
+    // 17. OpenStreetMap Business Locations
     await ingestOsmBusinesses();
 
-    // 9. Commercial Listings, CRE Benchmarks & Benchmark Chains
+    // 18. Commercial Listings, CRE Benchmarks & Benchmark Chains
     await ingestBusinessListingsAndBenchmarks();
 
-    // 10. Municipal Official Plans & Strategic Growth Initiatives (Requirement 13)
+    // 19. Municipal Official Plans & Strategic Growth Initiatives (Requirement 13)
     await ingestMunicipalOfficialPlans();
 
-    // 11. Precompute Layer 3 Derived Analytics, Rankings & Outliers
+    // 20. Precompute Layer 3 Derived Analytics, Rankings & Outliers
     await precomputeDerivedAnalytics();
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);

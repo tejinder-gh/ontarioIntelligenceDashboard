@@ -76,6 +76,7 @@ export const NotEnoughData: React.FC<NotEnoughDataProps> = ({
     setErrorMessage('');
 
     try {
+      // Record user insight request
       const res = await fetch('/api/insights/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -90,6 +91,21 @@ export const NotEnoughData: React.FC<NotEnoughDataProps> = ({
           userEmail: userEmail || null
         })
       });
+
+      // Also persist to coverage gaps ledger per Section 39 & 40
+      fetch('/api/coverage-gaps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestedMetric,
+          requestedGeography,
+          closestAvailableGeography: nearestAvailableGeography,
+          sourcesChecked,
+          reason: diagnosticReason,
+          fallbackBenchmarkCode: hasBenchmarkAvailable ? 'PR_35' : null,
+          userContext: userContext || null
+        })
+      }).catch(() => {});
 
       if (!res.ok) {
         throw new Error(`Server returned HTTP ${res.status}`);

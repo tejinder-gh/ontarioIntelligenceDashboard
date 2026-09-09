@@ -12,6 +12,12 @@ import {
 import type { SubscriberWatch } from '../alerts/types.js';
 import { getAllCategories, searchCategories, resolveCategory } from '../analytics/taxonomy-service.js';
 import { businessCountsData } from '../ingestion/adapters/statcan-business-counts.js';
+import { 
+  checkDatasetCapability, 
+  recordCoverageGap, 
+  recordSourceDisagreement, 
+  getDetailedProvenance 
+} from '../ingestion/capability-engine.js';
 
 export const apiRouter = Router();
 
@@ -1699,13 +1705,13 @@ apiRouter.get('/meta/freshness', async (req, res) => {
   }
 });
 
-// 18c. Authoritative Sources Registry & Capability Matrix (Section 5, 6, 7)
+// 18c. Authoritative Sources Registry & Capability Matrix (Section 5, 6, 7 & 40)
 apiRouter.get('/sources', async (req, res) => {
   try {
     const sources = await sql`
       SELECT s.id, s.friendly_code, s.name, s.organization_type, s.official_dataset_id,
-             s.website_url, s.frequency, s.supported_geography, s.licence_rules,
-             s.cache_policy, s.priority_rank, s.is_authoritative,
+             s.official_publisher, s.doi, s.website_url, s.frequency, s.supported_geography, 
+             s.licence_rules, s.cache_policy, s.priority_rank, s.is_authoritative,
              COALESCE(
                json_agg(
                  json_build_object(
@@ -1719,8 +1725,8 @@ apiRouter.get('/sources', async (req, res) => {
       FROM sources s
       LEFT JOIN source_capabilities sc ON sc.source_id = s.id
       GROUP BY s.id, s.friendly_code, s.name, s.organization_type, s.official_dataset_id,
-               s.website_url, s.frequency, s.supported_geography, s.licence_rules,
-               s.cache_policy, s.priority_rank, s.is_authoritative
+               s.official_publisher, s.doi, s.website_url, s.frequency, s.supported_geography, 
+               s.licence_rules, s.cache_policy, s.priority_rank, s.is_authoritative
       ORDER BY s.priority_rank ASC, s.friendly_code ASC;
     `;
     res.json({ sources, count: sources.length });
@@ -1734,8 +1740,8 @@ apiRouter.get('/sources/:code', async (req, res) => {
     const { code } = req.params;
     const [source] = await sql`
       SELECT s.id, s.friendly_code, s.name, s.organization_type, s.official_dataset_id,
-             s.website_url, s.frequency, s.supported_geography, s.licence_rules,
-             s.cache_policy, s.priority_rank, s.is_authoritative
+             s.official_publisher, s.doi, s.website_url, s.frequency, s.supported_geography, 
+             s.licence_rules, s.cache_policy, s.priority_rank, s.is_authoritative
       FROM sources s
       WHERE s.friendly_code = ${code} OR s.id = ${code} OR LOWER(s.friendly_code) = ${code.toLowerCase()};
     `;
@@ -1751,12 +1757,192 @@ apiRouter.get('/sources/:code', async (req, res) => {
     `;
 
     const datasets = await sql`
-      SELECT id, name, dataset_code, reference_period, release_date, source_url, update_frequency, is_current
-      FROM datasets
-      WHERE source_id = ${source.id};
+      SELECT d.id, d.name, d.dataset_code, d.reference_period, d.release_date, d.source_url, 
+             d.doi, d.official_publisher, d.classification, d.update_frequency, d.is_current,
+             d.superseding_dataset_id, d.stale_after_days
+      FROM datasets d
+      WHERE d.source_id = ${source.id};
     `;
 
     res.json({ source, capabilities, datasets });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 18d. Authoritative Datasets Catalog & Lifecycle (Section 40)
+apiRouter.get('/datasets', async (req, res) => {
+  try {
+    const datasets = await sql`
+      SELECT d.id, d.source_id, s.friendly_code as source_friendly_code, s.name as source_name,
+             d.name, d.dataset_code, d.reference_period, d.release_date, d.source_url,
+             d.doi, d.official_publisher, d.geographic_coverage, d.naics_version,
+             d.update_frequency, d.classification, d.superseding_dataset_id, d.stale_after_days,
+             d.is_current, d.is_active,
+             rp.check_cadence, rp.policy_description as refresh_policy,
+             lr.licence_name, lr.restrictions_summary as licence_restrictions, lr.attribution_text
+      FROM datasets d
+      JOIN sources s ON s.id = d.source_id
+      LEFT JOIN dataset_refresh_policies rp ON rp.dataset_id = d.id
+      LEFT JOIN dataset_licence_rules lr ON lr.dataset_id = d.id
+      ORDER BY s.priority_rank ASC, d.is_current DESC, d.name ASC;
+    `;
+    res.json({ datasets, total: datasets.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.get('/datasets/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const [dataset] = await sql`
+      SELECT d.id, d.source_id, s.friendly_code as source_friendly_code, s.name as source_name,
+             d.name, d.dataset_code, d.reference_period, d.release_date, d.source_url,
+             d.doi, d.official_publisher, d.geographic_coverage, d.naics_version,
+             d.update_frequency, d.classification, d.superseding_dataset_id, d.stale_after_days,
+             d.is_current, d.is_active
+      FROM datasets d
+      JOIN sources s ON s.id = d.source_id
+      WHERE d.id = ${code} OR d.dataset_code = ${code};
+    `;
+
+    if (!dataset) {
+      return res.status(404).json({ error: `Dataset '${code}' not found.` });
+    }
+
+    const capabilities = await sql`
+      SELECT attribute_group, capability_name, is_provided, supported_resolutions, notes
+      FROM dataset_capabilities
+      WHERE dataset_id = ${dataset.id};
+    `;
+
+    const versions = await sql`
+      SELECT version_tag, reference_period, release_date, source_url, ingested_at, is_current, change_summary
+      FROM dataset_versions
+      WHERE dataset_id = ${dataset.id}
+      ORDER BY release_date DESC NULLS LAST;
+    `;
+
+    const dependencies = await sql`
+      SELECT dd.dependency_type, dd.notes,
+             prereq.name as prerequisite_name, prereq.dataset_code as prerequisite_code
+      FROM dataset_dependencies dd
+      JOIN datasets prereq ON prereq.id = dd.prerequisite_dataset_id
+      WHERE dd.dependent_dataset_id = ${dataset.id};
+    `;
+
+    const [refreshPolicy] = await sql`
+      SELECT frequency, stale_after_days, check_cadence, policy_description, next_check_expected
+      FROM dataset_refresh_policies
+      WHERE dataset_id = ${dataset.id};
+    `;
+
+    const [licenceRule] = await sql`
+      SELECT licence_name, licence_url, permissions_summary, restrictions_summary,
+             max_cache_duration_hours, can_persist_identifiers_only, attribution_required, attribution_text
+      FROM dataset_licence_rules
+      WHERE dataset_id = ${dataset.id};
+    `;
+
+    res.json({
+      dataset,
+      capabilities,
+      versions,
+      dependencies,
+      refreshPolicy: refreshPolicy || null,
+      licenceRule: licenceRule || null
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 18e. Authoritative Provenance Drawer Inspection Engine (Section 38 & 40)
+apiRouter.get('/provenance/:metricId/:geographyId', async (req, res) => {
+  try {
+    const { metricId, geographyId } = req.params;
+    const provenance = await getDetailedProvenance(metricId, geographyId);
+
+    if (!provenance) {
+      return res.status(404).json({
+        error: `No authoritative observation found for metric '${metricId}' and geography '${geographyId}'.`,
+        suggestion: 'Consider logging a coverage gap via POST /api/coverage-gaps.'
+      });
+    }
+
+    res.json({ provenance });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 18f. Coverage Gaps & Demand-Driven Ingestion Ledger (Section 39)
+apiRouter.get('/coverage-gaps', async (req, res) => {
+  try {
+    const gaps = await sql`
+      SELECT id, requested_metric, requested_geography, closest_available_geography,
+             sources_checked, reason, fallback_benchmark_code, user_context, requested_at
+      FROM coverage_gaps
+      ORDER BY requested_at DESC
+      LIMIT 100;
+    `;
+    res.json({ coverageGaps: gaps, count: gaps.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.post('/coverage-gaps', async (req, res) => {
+  try {
+    const { 
+      requestedMetric, 
+      requestedGeography, 
+      closestAvailableGeography, 
+      sourcesChecked, 
+      reason, 
+      fallbackBenchmarkCode, 
+      userContext 
+    } = req.body;
+
+    if (!requestedMetric || !requestedGeography || !reason) {
+      return res.status(400).json({ error: 'Missing required fields: requestedMetric, requestedGeography, reason' });
+    }
+
+    const gapId = await recordCoverageGap({
+      requestedMetric,
+      requestedGeography,
+      closestAvailableGeography,
+      sourcesChecked: sourcesChecked || [],
+      reason,
+      fallbackBenchmarkCode,
+      userContext
+    });
+
+    res.status(201).json({ success: true, gapId, message: 'Coverage gap recorded for demand-driven ingestion prioritization.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 18g. Source Disagreements Audit Ledger (Section 36)
+apiRouter.get('/source-disagreements', async (req, res) => {
+  try {
+    const disagreements = await sql`
+      SELECT sd.id, sd.metric_id, m.name as metric_name, sd.geography_id, g.name as geography_name,
+             sd.reference_period, sd.source_a_id, sa.friendly_code as source_a_code, sd.value_a,
+             sd.source_b_id, sb.friendly_code as source_b_code, sd.value_b, sd.discrepancy_pct,
+             sd.preferred_source_id, sp.friendly_code as preferred_source_code,
+             sd.selection_rationale, sd.detected_at
+      FROM source_disagreements sd
+      JOIN metrics_definitions m ON m.id = sd.metric_id
+      JOIN geographies g ON g.id = sd.geography_id
+      JOIN sources sa ON sa.id = sd.source_a_id
+      JOIN sources sb ON sb.id = sd.source_b_id
+      LEFT JOIN sources sp ON sp.id = sd.preferred_source_id
+      ORDER BY sd.detected_at DESC;
+    `;
+    res.json({ disagreements, count: disagreements.length });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

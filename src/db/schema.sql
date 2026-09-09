@@ -64,10 +64,13 @@ CREATE TABLE IF NOT EXISTS sources (
     last_changed TIMESTAMPTZ,
     priority_rank INTEGER NOT NULL,          -- 1 (highest) to 10 (lowest)
     is_authoritative BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    official_publisher VARCHAR(255),
+    doi VARCHAR(128),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Source Capabilities Registry (Enforces authorized scopes per Section 11 of User Spec)
+-- 4. Source Capabilities Registry (Legacy & Source-Level)
 CREATE TABLE IF NOT EXISTS source_capabilities (
     id SERIAL PRIMARY KEY,
     source_id VARCHAR(64) NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
@@ -83,20 +86,139 @@ CREATE TABLE IF NOT EXISTS datasets (
     id VARCHAR(128) PRIMARY KEY,             -- e.g. 'statcan_census_profile_2021', 'statcan_business_counts_2025_12'
     source_id VARCHAR(64) NOT NULL REFERENCES sources(id),
     name VARCHAR(255) NOT NULL,
-    dataset_code VARCHAR(64),                -- '98-401-X2021001', '33-10-1097-01', '11-10-0222-01'
-    reference_period VARCHAR(64) NOT NULL,   -- '2021', 'December 2025', '2023-2024'
+    dataset_code VARCHAR(64),                -- '98-401-X2021001', '33-10-1176-01', '11-10-0222-01'
+    reference_period VARCHAR(64) NOT NULL,   -- '2021', 'June 2026', '2023-2024'
     release_date DATE,
     source_url TEXT NOT NULL,
+    doi VARCHAR(128),
+    official_publisher VARCHAR(255),
     geographic_coverage VARCHAR(64) NOT NULL,-- 'CSD_CANADA', 'CSD_ONTARIO', 'PROVINCE_ONTARIO'
     naics_version VARCHAR(32),               -- '2022 v1.0', '2017'
     update_frequency VARCHAR(32),            -- 'QUENQUENNIAL', 'SEMI_ANNUAL', 'ANNUAL', 'CONTINUOUS'
+    classification VARCHAR(32) CHECK (classification IN ('OBSERVED', 'BENCHMARK', 'DERIVED', 'MODELED')) DEFAULT 'OBSERVED',
     superseding_dataset_id VARCHAR(128),
+    checksum VARCHAR(128),
     etag VARCHAR(255),
     last_modified_header VARCHAR(255),
     stale_after_days INTEGER DEFAULT 365,
     is_current BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5a. Dataset Versions (Audit trail and historical lineage per Section 40)
+CREATE TABLE IF NOT EXISTS dataset_versions (
+    id VARCHAR(128) PRIMARY KEY,
+    dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    version_tag VARCHAR(64) NOT NULL,
+    reference_period VARCHAR(64) NOT NULL,
+    release_date DATE,
+    source_url TEXT NOT NULL,
+    checksum VARCHAR(128),
+    etag VARCHAR(255),
+    last_modified VARCHAR(255),
+    ingested_at TIMESTAMPTZ DEFAULT NOW(),
+    is_current BOOLEAN DEFAULT TRUE,
+    supersedes_version_id VARCHAR(128),
+    record_count INTEGER DEFAULT 0,
+    change_summary TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_ds_versions_ds ON dataset_versions(dataset_id);
+
+-- 5b. Dataset Capabilities Registry (Granular Positive & Negative Capability Enforcement)
+CREATE TABLE IF NOT EXISTS dataset_capabilities (
+    id SERIAL PRIMARY KEY,
+    dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    source_id VARCHAR(64) NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    attribute_group VARCHAR(64) NOT NULL,
+    capability_name VARCHAR(128) NOT NULL,
+    is_provided BOOLEAN NOT NULL DEFAULT TRUE, -- TRUE = yes, FALSE = no
+    supported_resolutions TEXT[] DEFAULT ARRAY[]::TEXT[],
+    notes TEXT,
+    constraints TEXT,
+    UNIQUE(dataset_id, attribute_group, capability_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ds_caps_ds ON dataset_capabilities(dataset_id);
+CREATE INDEX IF NOT EXISTS idx_ds_caps_attr ON dataset_capabilities(attribute_group);
+
+-- 5c. Dataset Geographies Registry (Allowed geographic resolutions per Section 40)
+CREATE TABLE IF NOT EXISTS dataset_geographies (
+    id SERIAL PRIMARY KEY,
+    dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    geographic_resolution VARCHAR(32) NOT NULL, -- 'CANADA', 'PROVINCE', 'CMA', 'CA', 'CD', 'CSD', 'DA'
+    notes TEXT,
+    UNIQUE(dataset_id, geographic_resolution)
+);
+
+-- 5d. Dataset Refresh Policies (Section 34 & Section 40)
+CREATE TABLE IF NOT EXISTS dataset_refresh_policies (
+    id SERIAL PRIMARY KEY,
+    dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    source_id VARCHAR(64) NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    frequency VARCHAR(32) NOT NULL, -- 'ANNUAL', 'SEMI_ANNUAL', 'MONTHLY', 'QUENQUENNIAL', 'DAILY', 'ON_DEMAND'
+    stale_after_days INTEGER NOT NULL DEFAULT 365,
+    check_cadence VARCHAR(64) NOT NULL,
+    policy_description TEXT NOT NULL,
+    next_check_expected DATE,
+    UNIQUE(dataset_id)
+);
+
+-- 5e. Dataset Licence Rules (Provider Restrictions & Storage Policies per Section 40)
+CREATE TABLE IF NOT EXISTS dataset_licence_rules (
+    id SERIAL PRIMARY KEY,
+    dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    source_id VARCHAR(64) NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    licence_name VARCHAR(255) NOT NULL,
+    licence_url TEXT,
+    permissions_summary TEXT,
+    restrictions_summary TEXT,
+    max_cache_duration_hours INTEGER, -- e.g. 24 for Yelp Places
+    can_persist_identifiers_only BOOLEAN DEFAULT FALSE, -- e.g. Google Place IDs or Yelp IDs
+    attribution_required BOOLEAN DEFAULT FALSE,
+    attribution_text TEXT,
+    UNIQUE(dataset_id)
+);
+
+-- 5f. Dataset Dependencies (Dependency Graph per Section 40)
+CREATE TABLE IF NOT EXISTS dataset_dependencies (
+    id SERIAL PRIMARY KEY,
+    dependent_dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    prerequisite_dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+    dependency_type VARCHAR(64) NOT NULL, -- 'TAXONOMY', 'GEOGRAPHY_PARENT', 'BENCHMARK_BASE', 'PER_CAPITA_POPULATION', 'SUPERSESSION'
+    notes TEXT,
+    UNIQUE(dependent_dataset_id, prerequisite_dataset_id, dependency_type)
+);
+
+-- 5g. Source Disagreements Ledger (Discrepancy Resolution per Section 36)
+CREATE TABLE IF NOT EXISTS source_disagreements (
+    id SERIAL PRIMARY KEY,
+    metric_id VARCHAR(64) NOT NULL REFERENCES metrics_definitions(id),
+    geography_id VARCHAR(64) NOT NULL REFERENCES geographies(id),
+    reference_period VARCHAR(64) NOT NULL,
+    source_a_id VARCHAR(64) NOT NULL REFERENCES sources(id),
+    value_a NUMERIC(16, 4),
+    source_b_id VARCHAR(64) NOT NULL REFERENCES sources(id),
+    value_b NUMERIC(16, 4),
+    discrepancy_pct NUMERIC(6, 2),
+    preferred_source_id VARCHAR(64) REFERENCES sources(id),
+    selection_rationale TEXT,
+    detected_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5h. Coverage Gaps Ledger (Tracking Unsupported Resolution Requests per Section 39)
+CREATE TABLE IF NOT EXISTS coverage_gaps (
+    id SERIAL PRIMARY KEY,
+    requested_metric VARCHAR(64) NOT NULL,
+    requested_geography VARCHAR(64) NOT NULL,
+    closest_available_geography VARCHAR(64),
+    sources_checked TEXT[] NOT NULL,
+    reason TEXT NOT NULL,
+    fallback_benchmark_code VARCHAR(64),
+    user_context TEXT,
+    requested_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 6. Ingestion Runs (Audit trail for synchronization)

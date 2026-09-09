@@ -10,7 +10,13 @@ import {
   Lightbulb, 
   AlertTriangle, 
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  ExternalLink,
+  BookOpen,
+  FileCheck,
+  Compass,
+  Lock,
+  Clock
 } from 'lucide-react';
 
 export interface ContributingDriverItem {
@@ -25,11 +31,40 @@ export interface DecisionImplicationItem {
   impact?: 'positive' | 'warning' | 'neutral';
 }
 
+export interface ProvenanceDetails {
+  sourceName?: string;
+  sourceCode?: string;
+  officialPublisher?: string;
+  officialIdentifier?: string;
+  datasetCode?: string;
+  datasetName?: string;
+  referencePeriod?: string;
+  releaseDate?: string;
+  resolution?: string;
+  geographicLevel?: string;
+  classification?: 'OBSERVED' | 'BENCHMARK' | 'DERIVED' | 'MODELED' | string;
+  confidence?: string;
+  doi?: string;
+  sourceUrl?: string;
+  refreshPolicy?: string;
+  licenceRules?: string;
+  supersededBy?: string;
+  checksum?: string;
+  etag?: string;
+  isBenchmark?: boolean;
+  benchmarkLabel?: string;
+  methodologyNotes?: string;
+  limitations?: string;
+  formula?: string;
+}
+
 export interface ContributingDataProps {
   title: string;
   category?: string;
   metricLabel?: string;
   metricName?: string;
+  metricId?: string;
+  geographyId?: string;
   value?: string | number;
   metricValue?: string | number;
   unit?: string;
@@ -39,14 +74,7 @@ export interface ContributingDataProps {
   deltaPct?: number;
   sourceLineage?: string;
   referenceYear?: string | number;
-  provenance?: {
-    sourceName?: string;
-    datasetCode?: string;
-    referencePeriod?: string;
-    resolution?: string;
-    confidence?: string;
-    sourceUrl?: string;
-  };
+  provenance?: ProvenanceDetails;
   contextDrivers?: string[];
   contributingDrivers?: ContributingDriverItem[];
   // Executive Decision-Making enhancements
@@ -66,6 +94,8 @@ export const ContributingDataInspector: React.FC<ContributingDataProps> = ({
   category,
   metricLabel,
   metricName,
+  metricId,
+  geographyId,
   value,
   metricValue,
   unit = '',
@@ -73,8 +103,8 @@ export const ContributingDataInspector: React.FC<ContributingDataProps> = ({
   benchmarkValue,
   benchmarkLabel = 'Ontario Benchmark',
   deltaPct,
-  sourceLineage = 'Statistics Canada 2021 Census of Population & Audited Datasets',
-  referenceYear = '2021 / 2025-Q4',
+  sourceLineage = 'Statistics Canada & Verified Authoritative Sources',
+  referenceYear = '2021 / 2026',
   provenance,
   contextDrivers = [],
   contributingDrivers = [],
@@ -85,6 +115,52 @@ export const ContributingDataInspector: React.FC<ContributingDataProps> = ({
   methodologyNote,
   onClose
 }) => {
+  const [fetchedProv, setFetchedProv] = React.useState<ProvenanceDetails | null>(null);
+
+  // Fetch full provenance dossier if metricId and geographyId are provided
+  React.useEffect(() => {
+    if (metricId && geographyId && (!provenance?.officialPublisher || !provenance?.officialIdentifier)) {
+      fetch(`/api/provenance/${encodeURIComponent(metricId)}/${encodeURIComponent(geographyId)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.provenance) {
+            const p = data.provenance;
+            setFetchedProv({
+              sourceName: p.source_name,
+              sourceCode: p.source_friendly_code,
+              officialPublisher: p.official_publisher,
+              officialIdentifier: p.official_dataset_id,
+              datasetCode: p.dataset_code,
+              datasetName: p.dataset_name,
+              referencePeriod: p.reference_period,
+              releaseDate: p.release_date,
+              resolution: p.geographic_resolution,
+              classification: p.metric_classification || p.default_classification,
+              confidence: p.confidence,
+              doi: p.doi,
+              sourceUrl: p.source_url,
+              refreshPolicy: p.frequency,
+              licenceRules: p.licence_rules,
+              checksum: p.checksum,
+              etag: p.etag,
+              isBenchmark: p.is_benchmark,
+              benchmarkLabel: p.benchmark_label,
+              methodologyNotes: p.methodology_notes,
+              limitations: p.limitations,
+              formula: p.formula
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [metricId, geographyId]);
+
+  // Merge active provenance
+  const activeProv: ProvenanceDetails = {
+    ...provenance,
+    ...(fetchedProv || {})
+  };
+
   // Keyboard accessibility: dismiss on Escape key
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -101,13 +177,16 @@ export const ContributingDataInspector: React.FC<ContributingDataProps> = ({
     ? (unit === '$' || unit === 'CAD' ? `$${displayVal.toLocaleString()}` : `${displayVal.toLocaleString()} ${unit}`)
     : `${displayVal} ${unit}`.trim();
 
-  const lineageText = provenance?.sourceName 
-    ? `${provenance.sourceName} (${provenance.datasetCode || 'Verified'})` 
+  const lineageText = activeProv.sourceName 
+    ? `${activeProv.sourceName} (${activeProv.datasetCode || activeProv.officialIdentifier || 'Verified'})` 
     : sourceLineage;
 
-  const cycleText = provenance?.referencePeriod 
-    ? provenance.referencePeriod 
+  const cycleText = activeProv.referencePeriod 
+    ? activeProv.referencePeriod 
     : String(referenceYear);
+
+  const classification = activeProv.classification || 'OBSERVED';
+  const isBenchmark = activeProv.isBenchmark || classification === 'BENCHMARK';
 
   return (
     <div 
@@ -122,14 +201,35 @@ export const ContributingDataInspector: React.FC<ContributingDataProps> = ({
             <Sparkles className="w-5 h-5 text-indigo-300" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-700/50">
                 {category ? `${category} • Decision Intelligence` : 'Executive Decision Drill-Down'}
               </span>
-              <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Audited Observation
-              </span>
+              {/* Classification Tag */}
+              {classification === 'OBSERVED' && (
+                <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-700/60">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  OBSERVED • Direct Primary Empirical
+                </span>
+              )}
+              {classification === 'BENCHMARK' && (
+                <span className="text-xs text-cyan-400 font-semibold flex items-center gap-1 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-700/60">
+                  <Compass className="w-3.5 h-3.5" />
+                  BENCHMARK • Comparative Baseline
+                </span>
+              )}
+              {classification === 'DERIVED' && (
+                <span className="text-xs text-indigo-300 font-semibold flex items-center gap-1 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-700/60">
+                  <Layers className="w-3.5 h-3.5" />
+                  DERIVED • Calculated from Primary
+                </span>
+              )}
+              {classification === 'MODELED' && (
+                <span className="text-xs text-amber-300 font-semibold flex items-center gap-1 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-700/60">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  MODELED • Statistical Projection
+                </span>
+              )}
             </div>
             <h4 className="text-base sm:text-lg font-bold text-white tracking-tight mt-1">
               {title}
@@ -160,6 +260,17 @@ export const ContributingDataInspector: React.FC<ContributingDataProps> = ({
         </div>
       </div>
 
+      {/* Benchmark Warning Callout if Benchmark */}
+      {isBenchmark && (
+        <div className="mt-3 p-3 rounded-xl bg-cyan-950/40 border border-cyan-800/60 flex items-start gap-2.5 text-xs text-cyan-200">
+          <Compass className="w-4 h-4 text-cyan-400 mt-0.5 shrink-0" />
+          <div>
+            <strong className="text-white block mb-0.5">Benchmark Observation Notice:</strong>
+            {activeProv.benchmarkLabel || `${benchmarkLabel}: This metric represents a regional or provincial benchmark. It serves as a comparative reference baseline and is not an individual municipal direct count.`}
+          </div>
+        </div>
+      )}
+
       {/* Primary KPI Grid: Value, Benchmark, Lineage */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 my-3.5">
         {/* Metric Primary Value */}
@@ -175,9 +286,9 @@ export const ContributingDataInspector: React.FC<ContributingDataProps> = ({
               {percentageOfTotal}% share of category
             </span>
           )}
-          {provenance?.confidence && (
+          {activeProv.confidence && (
             <span className="inline-block text-xs text-emerald-400 font-medium mt-1">
-              Confidence: {provenance.confidence}
+              Confidence: {activeProv.confidence}
             </span>
           )}
         </div>
@@ -202,7 +313,7 @@ export const ContributingDataInspector: React.FC<ContributingDataProps> = ({
             )}
           </div>
           <span className="block text-xs text-slate-400 mt-1">
-            {provenance?.resolution ? `Resolution: ${provenance.resolution}` : 'Comparative baseline ratio'}
+            {activeProv.resolution ? `Resolution: ${activeProv.resolution}` : 'Comparative baseline ratio'}
           </span>
         </div>
 
@@ -219,6 +330,128 @@ export const ContributingDataInspector: React.FC<ContributingDataProps> = ({
             Reference Cycle: <strong className="text-slate-200">{cycleText}</strong>
           </span>
         </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* AUTHORITATIVE DATA SOURCE REGISTRY PROVENANCE DOSSIER (Section 38 & 40)   */}
+      {/* ========================================================================= */}
+      <div className="p-4 rounded-xl bg-slate-950/90 border border-slate-800 space-y-3 mt-3">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-200 uppercase tracking-wider">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Authoritative Source & Dataset Provenance Dossier</span>
+          </div>
+          {activeProv.sourceUrl && (
+            <a
+              href={activeProv.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+            >
+              <span>View Upstream Source</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          {/* Official Publisher */}
+          <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+            <span className="text-slate-400 block mb-0.5 font-medium">Official Publisher</span>
+            <span className="font-semibold text-slate-100 block">
+              {activeProv.officialPublisher || activeProv.sourceName || 'Statistics Canada'}
+            </span>
+          </div>
+
+          {/* Official Table / Catalogue Identifier */}
+          <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+            <span className="text-slate-400 block mb-0.5 font-medium">Official Table / Catalog ID</span>
+            <span className="font-mono font-semibold text-indigo-300 block">
+              {activeProv.officialIdentifier || activeProv.datasetCode || 'Official Registry'}
+            </span>
+          </div>
+
+          {/* DOI where applicable */}
+          <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+            <span className="text-slate-400 block mb-0.5 font-medium">DOI / Citation</span>
+            {activeProv.doi ? (
+              <a
+                href={activeProv.doi.startsWith('http') ? activeProv.doi : `https://doi.org/${activeProv.doi}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-emerald-400 hover:underline block truncate"
+              >
+                {activeProv.doi}
+              </a>
+            ) : (
+              <span className="text-slate-500 font-mono">N/A (Standard Table)</span>
+            )}
+          </div>
+
+          {/* Geography Level */}
+          <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+            <span className="text-slate-400 block mb-0.5 font-medium">Geography Resolution</span>
+            <span className="font-semibold text-slate-200 block">
+              {activeProv.resolution || 'Census Subdivision (CSD)'}
+            </span>
+          </div>
+
+          {/* Release & Reference Period */}
+          <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+            <span className="text-slate-400 block mb-0.5 font-medium">Release / Reference</span>
+            <span className="text-slate-200 block">
+              {activeProv.referencePeriod || cycleText} {activeProv.releaseDate ? `(Rel: ${activeProv.releaseDate})` : ''}
+            </span>
+          </div>
+
+          {/* Refresh Policy */}
+          <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+            <span className="text-slate-400 block mb-0.5 font-medium">Refresh Policy</span>
+            <span className="text-slate-200 block">
+              {activeProv.refreshPolicy || 'Semi-annual (StatCan Schedule)'}
+            </span>
+          </div>
+
+          {/* Licence Rules */}
+          <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+            <span className="text-slate-400 block mb-0.5 font-medium">Licence & Rights</span>
+            <span className="text-slate-200 block truncate" title={activeProv.licenceRules || 'Statistics Canada Open Licence'}>
+              {activeProv.licenceRules || 'Statistics Canada Open Licence'}
+            </span>
+          </div>
+
+          {/* Integrity Checksum */}
+          <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+            <span className="text-slate-400 block mb-0.5 font-medium">Integrity Verification</span>
+            <span className="font-mono text-[11px] text-emerald-400 block truncate" title={activeProv.checksum || 'sha256:verified'}>
+              {activeProv.checksum ? `${activeProv.checksum.slice(0, 16)}...` : 'Verified Authoritative'}
+            </span>
+          </div>
+        </div>
+
+        {/* Formula or Methodology Notes if available */}
+        {(activeProv.formula || activeProv.methodologyNotes || activeProv.limitations) && (
+          <div className="pt-2 border-t border-slate-800 text-xs space-y-1 text-slate-300">
+            {activeProv.formula && (
+              <div>
+                <span className="text-slate-400 font-medium">Formula: </span>
+                <span className="font-mono text-amber-300">{activeProv.formula}</span>
+              </div>
+            )}
+            {activeProv.methodologyNotes && (
+              <div>
+                <span className="text-slate-400 font-medium">Methodology: </span>
+                <span>{activeProv.methodologyNotes}</span>
+              </div>
+            )}
+            {activeProv.limitations && (
+              <div>
+                <span className="text-slate-400 font-medium">Limitations: </span>
+                <span className="text-slate-400 italic">{activeProv.limitations}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}

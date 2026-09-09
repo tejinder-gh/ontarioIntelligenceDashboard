@@ -3,7 +3,7 @@
 **Architectural Target:** Statistics Canada Ontario CSD bulk data → Streaming Ingestion → Normalization → SQLite persistence → Indexes → Analytical Queries  
 **Evaluation Standard:** Phase 2 Amendment #1  
 **Execution Environment:** macOS / Darwin ARM64, Bun v1.3.14, Native SQLite engine (`bun:sqlite`)  
-**Timestamp:** 2026-09-09T02:26:50.185Z
+**Timestamp:** 2026-09-09T02:38:49.053Z
 
 ---
 
@@ -16,12 +16,12 @@ The benchmark validates that the streaming ingestion architecture processes the 
 | **Compressed Download Size** | 0.077 MB (80,312 bytes) | Stream-compressed archive | **PASS** |
 | **Uncompressed Size** | 0.70 MB (739,024 bytes) | > 2x compression ratio | **PASS** |
 | **Rows Processed** | 6,661 rows | Complete Ontario CSD scope | **PASS** |
-| **Peak RAM Consumption** | 116.25 MB | < 512 MB ceiling | **PASS** |
-| **Ingestion Duration** | 15.25 ms (436,874 rows/sec) | High-speed batch pipeline | **PASS** |
+| **Peak RAM Consumption** | 117.42 MB | < 512 MB ceiling | **PASS** |
+| **Ingestion Duration** | 15.7 ms (424,315 rows/sec) | High-speed batch pipeline | **PASS** |
 | **Resulting SQLite DB Size** | 1.17 MB (1,228,800 bytes) | Zero-bloat local persistence | **PASS** |
-| **Index-Build Duration** | 2.41 ms | Post-ingestion indexing | **PASS** |
-| **Typical City-Query Latency (p50 / p99)** | **0.005 ms** / **0.093 ms** | < 10 ms target | **PASS** |
-| **Ontario-Wide Ranking Latency (p50 / p99)** | **0.59 ms** / **0.725 ms** | < 25 ms target | **PASS** |
+| **Index-Build Duration** | 2.33 ms | Post-ingestion indexing | **PASS** |
+| **Typical City-Query Latency (p50 / p99)** | **0.005 ms** / **0.073 ms** | < 10 ms target | **PASS** |
+| **Ontario-Wide Ranking Latency (p50 / p99)** | **0.605 ms** / **0.735 ms** | < 25 ms target | **PASS** |
 
 ---
 
@@ -42,13 +42,13 @@ flowchart LR
    - **Frequency:** Quinquennial official benchmark.
 2. **Streaming Parser:**
    - Utilizes node stream reader with `crlfDelay` to process records sequentially without holding multi-hundred MB payloads in JS memory.
-   - Peak RSS is capped at **116.25 MB**, completely eliminating out-of-memory crash risks.
+   - Peak RSS is capped at **117.42 MB**, completely eliminating out-of-memory crash risks.
 3. **Database & Index Performance:**
    - Applied WAL (Write-Ahead Logging) and `synchronous = NORMAL`.
-   - Index build took **2.41 ms** across composite foreign-key and metric-lookup indices.
+   - Index build took **2.33 ms** across composite foreign-key and metric-lookup indices.
 4. **Analytical Query Speed:**
-   - Individual municipal profiles resolve in **0.005 ms** (p50) / **0.093 ms** (p99).
-   - Full provincial multi-criteria ranking across all 444 municipalities executes in **0.59 ms** (p50) / **0.725 ms** (p99).
+   - Individual municipal profiles resolve in **0.005 ms** (p50) / **0.073 ms** (p99).
+   - Full provincial multi-criteria ranking across all 444 municipalities executes in **0.605 ms** (p50) / **0.735 ms** (p99).
 
 ---
 
