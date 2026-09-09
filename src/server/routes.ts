@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sql } from '../db/index.js';
+import { sql, testConnection } from '../db/index.js';
 import { runWorkflowA, runWorkflowB } from '../analytics/opportunity-engine.js';
 import { computeCitySimilarity, type SimilarityWeights } from '../analytics/similarity.js';
 import { persistAuditEvent } from '../alerts/diff-engine.js';
@@ -14,6 +14,22 @@ import { getAllCategories, searchCategories, resolveCategory } from '../analytic
 import { businessCountsData } from '../ingestion/adapters/statcan-business-counts.js';
 
 export const apiRouter = Router();
+
+// 0. Production Health & Liveness Probe (Cloud / Kubernetes readiness)
+apiRouter.get('/health', async (req, res) => {
+  try {
+    const dbOk = await testConnection();
+    res.status(dbOk ? 200 : 503).json({
+      status: dbOk ? 'healthy' : 'degraded',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      database: dbOk ? 'connected' : 'disconnected',
+      version: '1.0.0'
+    });
+  } catch (err: any) {
+    res.status(503).json({ status: 'unhealthy', error: err.message });
+  }
+});
 
 // Track external API calls (User Instruction #74 & Section 83)
 let externalApiCallCount = 0;

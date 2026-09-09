@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+.agents
+.cursor
+scratch
+tests
+*.log
+.DS_Store
