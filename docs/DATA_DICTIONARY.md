@@ -4,7 +4,7 @@ This document details the metrics, definitions, mathematical formulations, units
 
 ---
 
-## 1. Demographics & Housing (Source: Statistics Canada Profile 98-316-X2021001)
+## 1. Demographics & Housing (Source: Statistics Canada Profile 98-401-X2021001)
 
 ### `population_2021`
 * **Name**: Total Population (2021)
@@ -29,7 +29,7 @@ This document details the metrics, definitions, mathematical formulations, units
 
 ---
 
-## 2. Household Income & Shelter Costs (Source: Statistics Canada Table 98-316-X2021001)
+## 2. Household Income & Shelter Costs (Source: Statistics Canada Table 98-401-X2021001)
 
 ### `income_median_hh`
 * **Name**: Median Household Total Income

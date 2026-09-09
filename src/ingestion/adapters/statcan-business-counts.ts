@@ -1,18 +1,15 @@
 import { sql } from '../../db/index.js';
 
-export async function ingestStatCanBusinessCounts(): Promise<void> {
-  console.log('Ingesting Canadian Business Counts (Table 33-10-1097-01, Dec 2025)...');
-
-  // Authoritative Canadian Business Counts data by CSD (December 2025 reference period)
-  // Source: Statistics Canada Table 33-10-1097-01
-  const businessCountsData = [
-    {
-      geoId: 'CSD_burlington',
-      totalBusinesses: 5820,
-      pop: 186948,
-      sizeBands: {
-        'size_1_4': 3240,
-        'size_5_9': 1180,
+// Authoritative Canadian Business Counts data by CSD (December 2025 reference period)
+// Source: Statistics Canada Table 33-10-1097-01
+export const businessCountsData = [
+  {
+    geoId: 'CSD_burlington',
+    totalBusinesses: 5820,
+    pop: 186948,
+    sizeBands: {
+      'size_1_4': 3240,
+      'size_5_9': 1180,
         'size_10_19': 740,
         'size_20_49': 450,
         'size_50_99': 140,
@@ -190,6 +187,8 @@ export async function ingestStatCanBusinessCounts(): Promise<void> {
     }
   ];
 
+export async function ingestStatCanBusinessCounts(): Promise<void> {
+  console.log('Ingesting Canadian Business Counts (Table 33-10-1097-01, Dec 2025)...');
   for (const b of businessCountsData) {
     const bizPer1k = parseFloat(((b.totalBusinesses / b.pop) * 1000).toFixed(2));
 

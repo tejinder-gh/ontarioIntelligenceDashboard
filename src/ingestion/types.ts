@@ -8,6 +8,39 @@ export type GeographicResolution =
   | 'DA' 
   | 'NEIGHBOURHOOD';
 
+export type MunicipalTier = 
+  | 'SINGLE_TIER' 
+  | 'UPPER_TIER' 
+  | 'LOWER_TIER' 
+  | 'UNORGANIZED';
+
+export type MetricClassification = 
+  | 'OBSERVED' 
+  | 'BENCHMARK' 
+  | 'DERIVED' 
+  | 'MODELED';
+
+export interface GeographyRecord {
+  id: string;
+  dguid?: string;
+  name: string;
+  displayName: string;
+  geoType: GeographicResolution;
+  csdType?: string;
+  municipalTier?: MunicipalTier | null;
+  censusDivision?: string;
+  censusDivisionId?: string | null;
+  cmaId?: string | null;
+  parentId?: string | null;
+  landAreaSqkm?: number;
+  latitude?: number;
+  longitude?: number;
+  population2021?: number;
+  population2016?: number;
+  populationGrowthPct?: number;
+  ontarioPopSharePct?: number;
+}
+
 export interface DatasetMetadata {
   id: string;
   sourceId: string;
@@ -39,11 +72,32 @@ export interface NormalizedObservation {
   geographicResolution: GeographicResolution;
   isBenchmark: boolean;
   benchmarkLabel?: string;
+  metricClassification?: MetricClassification;
   sourceId: string;
   datasetId: string;
   confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'BENCHMARK';
   isEstimate: boolean;
   methodologyNotes?: string;
+  vintageDate?: string;
+  effectiveDate?: string;
+  revisionNumber?: number;
+  isSuperseded?: boolean;
+}
+
+export interface ObservationHistoryRecord {
+  id?: number;
+  observationId?: number;
+  geographyId: string;
+  metricId: string;
+  referenceYear: number;
+  vintageDate: string;
+  recordedValueNumeric: number | null;
+  recordedValueText?: string;
+  datasetId: string;
+  changeType: 'OBSERVED' | 'REVISED' | 'SUPERSEDED';
+  validFrom: string;
+  validTo?: string;
+  auditNotes?: string;
 }
 
 export interface NormalizedDemographic {

@@ -11,9 +11,12 @@ CREATE TABLE IF NOT EXISTS geographies (
     dguid VARCHAR(64) UNIQUE,                 -- Statistics Canada Dissemination Geography Unique ID
     name VARCHAR(255) NOT NULL,              -- e.g. 'Burlington', 'Ontario', 'Toronto'
     display_name VARCHAR(255) NOT NULL,      -- e.g. 'Burlington, City of (Halton)'
-    geo_type VARCHAR(32) NOT NULL,           -- 'PROVINCE', 'CMA', 'CA', 'CD', 'CSD'
+    geo_type VARCHAR(32) NOT NULL,           -- 'PROVINCE', 'CMA', 'CA', 'CD', 'CSD', 'DISSEMINATION_AREA'
     csd_type VARCHAR(64),                    -- 'City', 'Town', 'Township', 'Municipality'
+    municipal_tier VARCHAR(32) CHECK (municipal_tier IN ('SINGLE_TIER', 'UPPER_TIER', 'LOWER_TIER', 'UNORGANIZED')),
     census_division VARCHAR(128),            -- e.g. 'Halton', 'Peel', 'Simcoe'
+    census_division_id VARCHAR(64) REFERENCES geographies(id),
+    cma_id VARCHAR(64) REFERENCES geographies(id),
     parent_id VARCHAR(64) REFERENCES geographies(id),
     land_area_sqkm NUMERIC(12, 2),
     latitude NUMERIC(10, 6),
@@ -28,8 +31,11 @@ CREATE TABLE IF NOT EXISTS geographies (
 );
 
 CREATE INDEX IF NOT EXISTS idx_geographies_type ON geographies(geo_type);
+CREATE INDEX IF NOT EXISTS idx_geographies_tier ON geographies(municipal_tier);
 CREATE INDEX IF NOT EXISTS idx_geographies_name ON geographies(name);
 CREATE INDEX IF NOT EXISTS idx_geographies_parent ON geographies(parent_id);
+CREATE INDEX IF NOT EXISTS idx_geographies_cd_id ON geographies(census_division_id);
+CREATE INDEX IF NOT EXISTS idx_geographies_cma_id ON geographies(cma_id);
 
 -- 2. Geographic Aliases (for search and mapping)
 CREATE TABLE IF NOT EXISTS geographic_aliases (
@@ -42,12 +48,20 @@ CREATE TABLE IF NOT EXISTS geographic_aliases (
 
 CREATE INDEX IF NOT EXISTS idx_geo_aliases_norm ON geographic_aliases(normalized_alias);
 
--- 3. Sources Registry
+-- 3. Sources Registry (Sections 5 & 6)
 CREATE TABLE IF NOT EXISTS sources (
-    id VARCHAR(64) PRIMARY KEY,              -- 'statcan', 'ontario_mmah', 'osm', 'sedar_fdd'
+    id VARCHAR(64) PRIMARY KEY,              -- 'statcan', 'ontario_mmah', 'osm', 'sedar_fdd', etc.
+    friendly_code VARCHAR(64) UNIQUE,        -- 'DEM-CEN21', 'POP-CSD-EST', 'BUS-CNT-CSD', 'FUEL-RETAIL', etc.
     name VARCHAR(255) NOT NULL,              -- 'Statistics Canada', 'Ontario Ministry of Municipal Affairs'
     organization_type VARCHAR(64) NOT NULL,  -- 'FEDERAL_GOV', 'PROVINCIAL_GOV', 'MUNICIPAL_GOV', 'OPEN_DATA', 'REGULATORY_FILING'
+    official_dataset_id VARCHAR(64),         -- e.g. '98-316-X2021001', '17-10-0155-01'
     website_url TEXT NOT NULL,
+    frequency VARCHAR(32),                   -- 'QUENQUENNIAL', 'ANNUAL', 'SEMI_ANNUAL', 'MONTHLY', 'DAILY'
+    supported_geography VARCHAR(64),         -- 'PROVINCE', 'CMA', 'CD', 'CSD'
+    licence_rules TEXT,
+    cache_policy TEXT,
+    last_checked TIMESTAMPTZ,
+    last_changed TIMESTAMPTZ,
     priority_rank INTEGER NOT NULL,          -- 1 (highest) to 10 (lowest)
     is_authoritative BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -120,6 +134,7 @@ CREATE TABLE IF NOT EXISTS metrics_definitions (
     category VARCHAR(64) NOT NULL,           -- 'Demographics', 'Financial', 'Workforce', 'Businesses', 'Spending', 'Municipal'
     subcategory VARCHAR(64),
     unit VARCHAR(64) NOT NULL,               -- 'people', 'CAD', 'CAD/year', 'businesses/10k pop', '%'
+    default_classification VARCHAR(32) CHECK (default_classification IN ('OBSERVED', 'BENCHMARK', 'DERIVED', 'MODELED')) DEFAULT 'OBSERVED',
     definition TEXT NOT NULL,
     formula TEXT,
     preferred_aggregation VARCHAR(32),       -- 'SUM', 'MEDIAN', 'MEAN', 'WEIGHTED_AVG'
@@ -140,11 +155,16 @@ CREATE TABLE IF NOT EXISTS observations (
     geographic_resolution VARCHAR(32) NOT NULL, -- 'CSD', 'CMA', 'PROVINCE', 'CANADA'
     is_benchmark BOOLEAN DEFAULT FALSE,
     benchmark_label VARCHAR(128),              -- e.g. 'Toronto CMA benchmark — not Burlington-specific'
+    metric_classification VARCHAR(32) CHECK (metric_classification IN ('OBSERVED', 'BENCHMARK', 'DERIVED', 'MODELED')) DEFAULT 'OBSERVED',
     source_id VARCHAR(64) NOT NULL REFERENCES sources(id),
     dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id),
     confidence VARCHAR(32) DEFAULT 'HIGH',     -- 'HIGH', 'MEDIUM', 'LOW', 'BENCHMARK'
     is_estimate BOOLEAN DEFAULT FALSE,
     methodology_notes TEXT,
+    vintage_date DATE DEFAULT CURRENT_DATE,
+    effective_date DATE DEFAULT CURRENT_DATE,
+    revision_number INTEGER DEFAULT 1,
+    is_superseded BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE NULLS NOT DISTINCT (geography_id, metric_id, reference_year, is_benchmark, benchmark_label)
@@ -152,6 +172,28 @@ CREATE TABLE IF NOT EXISTS observations (
 
 CREATE INDEX IF NOT EXISTS idx_obs_geo_metric ON observations(geography_id, metric_id);
 CREATE INDEX IF NOT EXISTS idx_obs_metric_year ON observations(metric_id, reference_year);
+CREATE INDEX IF NOT EXISTS idx_obs_vintage ON observations(vintage_date);
+CREATE INDEX IF NOT EXISTS idx_obs_classification ON observations(metric_classification);
+
+-- 9b. Observation Snapshots & Longitudinal Change Ledger (Preserves temporal moat per Amendment #11)
+CREATE TABLE IF NOT EXISTS observation_history (
+    id BIGSERIAL PRIMARY KEY,
+    observation_id BIGINT REFERENCES observations(id) ON DELETE CASCADE,
+    geography_id VARCHAR(64) NOT NULL REFERENCES geographies(id) ON DELETE CASCADE,
+    metric_id VARCHAR(64) NOT NULL REFERENCES metrics_definitions(id),
+    reference_year INTEGER NOT NULL,
+    vintage_date DATE NOT NULL,
+    recorded_value_numeric NUMERIC(16, 4),
+    recorded_value_text TEXT,
+    dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id),
+    change_type VARCHAR(32) DEFAULT 'OBSERVED', -- 'OBSERVED', 'REVISED', 'SUPERSEDED'
+    valid_from TIMESTAMPTZ DEFAULT NOW(),
+    valid_to TIMESTAMPTZ,
+    audit_notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_obs_hist_geo_metric ON observation_history(geography_id, metric_id, reference_year);
+CREATE INDEX IF NOT EXISTS idx_obs_hist_vintage ON observation_history(vintage_date);
 
 -- 10. Census Demographics: Structured Dynamic Breakdown (Section 5 & 6)
 CREATE TABLE IF NOT EXISTS census_demographics (
@@ -259,6 +301,21 @@ CREATE TABLE IF NOT EXISTS business_categories (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 15b. Business Category Aliases & Synonyms Taxonomy (Section 15)
+CREATE TABLE IF NOT EXISTS category_aliases (
+    id SERIAL PRIMARY KEY,
+    category_id VARCHAR(64) NOT NULL REFERENCES business_categories(id) ON DELETE CASCADE,
+    alias_term VARCHAR(128) NOT NULL,
+    match_type VARCHAR(32) NOT NULL DEFAULT 'SYNONYM', -- 'CANONICAL', 'SYNONYM', 'ALIAS', 'PROVIDER_MAPPING', 'NAICS'
+    provider_name VARCHAR(64) DEFAULT 'INTERNAL',      -- 'INTERNAL', 'STATCAN', 'OSM', 'GOOGLE', 'YELP'
+    confidence_weight NUMERIC(4, 2) DEFAULT 1.0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(category_id, alias_term, provider_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cat_alias_term ON category_aliases(alias_term);
+CREATE INDEX IF NOT EXISTS idx_cat_alias_cat_id ON category_aliases(category_id);
+
 -- 16. Businesses & Locations (OSM-listed and Directory locations, Section 17 & 18)
 CREATE TABLE IF NOT EXISTS businesses (
     id VARCHAR(64) PRIMARY KEY,              -- e.g. 'osm_node_1234567'
@@ -304,20 +361,27 @@ CREATE TABLE IF NOT EXISTS business_listings (
     listing_uid VARCHAR(128) UNIQUE NOT NULL,
     category_id VARCHAR(64) NOT NULL REFERENCES business_categories(id),
     geography_id VARCHAR(64) NOT NULL REFERENCES geographies(id),
+    title VARCHAR(255),
     business_name VARCHAR(255),
     address VARCHAR(255),
     asking_price NUMERIC(14, 2) NOT NULL,    -- Strictly separate
+    previous_asking_price NUMERIC(14, 2),    -- Historical asking price before reduction
     confirmed_sale_price NUMERIC(14, 2),     -- Strictly NULL unless legally confirmed
     status VARCHAR(32) NOT NULL,             -- 'ACTIVE', 'REMOVED', 'EXPIRED', 'RELISTED', 'PRICE_CHANGED', 'CONFIRMED_SOLD', 'UNKNOWN'
     revenue_disclosed NUMERIC(14, 2),
+    ebitda_disclosed NUMERIC(14, 2),
     sde_cashflow_disclosed NUMERIC(14, 2),
     monthly_rent NUMERIC(10, 2),
     square_footage INTEGER,
+    is_franchise BOOLEAN DEFAULT FALSE,
     franchise_brand VARCHAR(128),
     broker_name VARCHAR(128),
     source_url TEXT,
+    phone VARCHAR(64),
+    coordinates VARCHAR(64),
     first_listed_date DATE NOT NULL,
     last_active_date DATE NOT NULL,
+    removed_date DATE,
     repeated_listing_parent_id INTEGER REFERENCES business_listings(id),
     match_confidence NUMERIC(4, 2),          -- 0.00 to 1.00
     notes TEXT,
@@ -327,6 +391,19 @@ CREATE TABLE IF NOT EXISTS business_listings (
 
 CREATE INDEX IF NOT EXISTS idx_listings_geo_cat ON business_listings(geography_id, category_id);
 CREATE INDEX IF NOT EXISTS idx_listings_status ON business_listings(status);
+
+-- 18b. Historical Listing Price & Status Timeline (Requirement 26)
+CREATE TABLE IF NOT EXISTS business_listing_price_history (
+    id SERIAL PRIMARY KEY,
+    listing_id INTEGER REFERENCES business_listings(id) ON DELETE CASCADE,
+    recorded_date DATE NOT NULL,
+    asking_price NUMERIC(14, 2) NOT NULL,
+    event_type VARCHAR(64) NOT NULL,         -- 'INITIAL_LISTING', 'PRICE_REDUCTION', 'PRICE_INCREASE', 'RELISTED', 'REMOVED', 'CONFIRMED_SOLD'
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_listing_price_history ON business_listing_price_history(listing_id, recorded_date);
 
 -- 19. Commercial Real Estate Benchmarks (Section 16 & 17)
 CREATE TABLE IF NOT EXISTS commercial_real_estate (
@@ -408,3 +485,167 @@ CREATE TABLE IF NOT EXISTS data_coverage_reports (
     generated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(geography_id)
 );
+
+-- 23. Audit Events Ledger (Phase 2 Amendment #6 & T-006)
+CREATE TABLE IF NOT EXISTS audit_events (
+    id SERIAL PRIMARY KEY,
+    event_type VARCHAR(64) NOT NULL,             -- 'LISTING_NEW', 'LISTING_PRICE_CHANGE', 'LISTING_RELIST', 'COMMERCIAL_LEASE_CHANGE', 'MUNICIPAL_BUDGET_NEW', 'STATCAN_RELEASE', 'ECONOMIC_INDICATOR_CHANGE'
+    entity_type VARCHAR(64) NOT NULL,            -- 'business_listing', 'commercial_lease', 'observation', 'municipal_finance', 'dataset'
+    entity_id VARCHAR(128) NOT NULL,
+    geography_id VARCHAR(64) REFERENCES geographies(id),
+    category_id VARCHAR(64) REFERENCES business_categories(id),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    old_value NUMERIC(16, 4),
+    new_value NUMERIC(16, 4),
+    delta_pct NUMERIC(8, 4),
+    metadata JSONB,
+    occurred_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_events_type ON audit_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_audit_events_geo ON audit_events(geography_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_entity ON audit_events(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_occurred ON audit_events(occurred_at DESC);
+
+-- 24. Subscriber Watches for Automated Alerts (Phase 2 Amendment #6 & T-006)
+CREATE TABLE IF NOT EXISTS subscriber_watches (
+    id SERIAL PRIMARY KEY,
+    subscriber_email VARCHAR(255) NOT NULL,
+    subscriber_name VARCHAR(255),
+    watch_type VARCHAR(64) NOT NULL,             -- 'LISTING_WATCH', 'INDICATOR_WATCH', 'BUDGET_WATCH'
+    geography_id VARCHAR(64) REFERENCES geographies(id),
+    radius_km NUMERIC(6, 2),
+    category_id VARCHAR(64) REFERENCES business_categories(id),
+    metric_id VARCHAR(64) REFERENCES metrics_definitions(id),
+    threshold_pct NUMERIC(6, 2),
+    notification_channel VARCHAR(32) DEFAULT 'EMAIL',
+    is_active BOOLEAN DEFAULT TRUE,
+    last_evaluated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sub_watches_active ON subscriber_watches(is_active);
+CREATE INDEX IF NOT EXISTS idx_sub_watches_geo ON subscriber_watches(geography_id);
+CREATE INDEX IF NOT EXISTS idx_sub_watches_email ON subscriber_watches(subscriber_email);
+
+-- 25. Watch Notification Queue & Dispatch Ledger (Phase 2 Amendment #6 & T-006)
+CREATE TABLE IF NOT EXISTS watch_notifications (
+    id SERIAL PRIMARY KEY,
+    watch_id INTEGER NOT NULL REFERENCES subscriber_watches(id) ON DELETE CASCADE,
+    event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE CASCADE,
+    subscriber_email VARCHAR(255) NOT NULL,
+    delivered BOOLEAN DEFAULT FALSE,
+    delivered_at TIMESTAMPTZ,
+    channel VARCHAR(32) DEFAULT 'EMAIL',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(watch_id, event_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_watch_notif_pending ON watch_notifications(delivered);
+
+-- 26. Retail Fuel Pricing & Gas Price Delta Engine (Section 6, 11 & T-013)
+CREATE TABLE IF NOT EXISTS fuel_prices (
+    id SERIAL PRIMARY KEY,
+    geography_id VARCHAR(64) NOT NULL REFERENCES geographies(id) ON DELETE CASCADE,
+    product_type VARCHAR(64) NOT NULL DEFAULT 'Regular unleaded gasoline at self service filling stations',
+    reference_month DATE NOT NULL,
+    price_cents_per_litre NUMERIC(8, 2) NOT NULL,
+    toronto_benchmark_cents NUMERIC(8, 2) NOT NULL,
+    absolute_delta_cents NUMERIC(8, 2) NOT NULL,
+    delta_pct NUMERIC(6, 2) NOT NULL,
+    source_id VARCHAR(64) NOT NULL REFERENCES sources(id),
+    dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(geography_id, product_type, reference_month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fuel_geo_month ON fuel_prices(geography_id, reference_month);
+
+-- 27. Residential Property Ownership Concentration (Section 6, 9 & T-014)
+CREATE TABLE IF NOT EXISTS property_ownership (
+    id SERIAL PRIMARY KEY,
+    geography_id VARCHAR(64) NOT NULL REFERENCES geographies(id) ON DELETE CASCADE,
+    reference_year INTEGER NOT NULL,
+    total_owners INTEGER NOT NULL,
+    single_property_owners INTEGER NOT NULL,
+    multi_property_owners INTEGER NOT NULL,
+    multi_property_owner_pct NUMERIC(6, 2) NOT NULL,
+    source_id VARCHAR(64) NOT NULL REFERENCES sources(id),
+    dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(geography_id, reference_year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_prop_owner_geo_year ON property_ownership(geography_id, reference_year);
+
+-- 28. CMHC Rental Market Survey Indicators (Section 6, 9 & T-014)
+CREATE TABLE IF NOT EXISTS rental_market (
+    id SERIAL PRIMARY KEY,
+    geography_id VARCHAR(64) NOT NULL REFERENCES geographies(id) ON DELETE CASCADE,
+    reference_year INTEGER NOT NULL,
+    average_rent_cad NUMERIC(10, 2) NOT NULL,
+    median_rent_cad NUMERIC(10, 2),
+    vacancy_rate_pct NUMERIC(5, 2) NOT NULL,
+    rent_bachelor_cad NUMERIC(10, 2),
+    rent_1bed_cad NUMERIC(10, 2),
+    rent_2bed_cad NUMERIC(10, 2),
+    rent_3bed_plus_cad NUMERIC(10, 2),
+    rental_universe INTEGER,
+    turnover_rate_pct NUMERIC(5, 2),
+    source_id VARCHAR(64) NOT NULL REFERENCES sources(id),
+    dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(geography_id, reference_year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rental_geo_year ON rental_market(geography_id, reference_year);
+
+-- 29. User-Requested Analytical Insights Ledger (Section 1, 41 & T-010)
+CREATE TABLE IF NOT EXISTS requested_insights (
+    id SERIAL PRIMARY KEY,
+    geography_id VARCHAR(64) REFERENCES geographies(id),
+    geography_name VARCHAR(255),
+    metric_id VARCHAR(64),
+    metric_name VARCHAR(255),
+    module VARCHAR(64) NOT NULL,             -- 'Demographics', 'Competition', 'Financial', 'Workforce', 'RealEstate', 'Municipal'
+    business_category VARCHAR(64),
+    demographic VARCHAR(64),
+    user_context TEXT,
+    user_email VARCHAR(255),
+    status VARCHAR(32) DEFAULT 'PENDING',    -- 'PENDING', 'QUEUED_FOR_INGESTION', 'INGESTED', 'DECLINED'
+    request_count INTEGER DEFAULT 1,
+    last_requested_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_req_insights_geo ON requested_insights(geography_id);
+CREATE INDEX IF NOT EXISTS idx_req_insights_module ON requested_insights(module);
+CREATE INDEX IF NOT EXISTS idx_req_insights_metric ON requested_insights(metric_id);
+
+-- 30. Municipal Official Plans & Strategic Growth Initiatives (Requirement 13 & T-017)
+CREATE TABLE IF NOT EXISTS municipal_planning_initiatives (
+    id SERIAL PRIMARY KEY,
+    geography_id VARCHAR(64) NOT NULL REFERENCES geographies(id) ON DELETE CASCADE,
+    plan_type VARCHAR(64) NOT NULL,          -- 'OFFICIAL_PLAN', 'SECONDARY_PLAN', 'TRANSPORTATION_MASTER_PLAN', 'HOUSING_ACTION_PLAN', 'GROWTH_STRATEGY', 'DEVELOPMENT_CHARGE_STUDY'
+    initiative_category VARCHAR(64) NOT NULL, -- 'RESIDENTIAL_GROWTH', 'COMMERCIAL_NODE', 'INDUSTRIAL_EXPANSION', 'TRANSIT_PROJECT', 'MAJOR_ROAD', 'HOUSING_PROJECT', 'INFRASTRUCTURE', 'INTENSIFICATION_AREA', 'EMPLOYMENT_AREA', 'ZONING_AMENDMENT'
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    target_completion_year INTEGER,
+    estimated_capital_cad NUMERIC(16, 2),
+    housing_units_targeted INTEGER,
+    commercial_sqft_targeted INTEGER,
+    spatial_corridor VARCHAR(255),
+    status VARCHAR(32) NOT NULL DEFAULT 'APPROVED', -- 'APPROVED', 'UNDER_CONSTRUCTION', 'PLANNED', 'PROPOSED'
+    source_document VARCHAR(255) NOT NULL,
+    source_page_ref VARCHAR(128),
+    reference_date DATE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_planning_geo ON municipal_planning_initiatives(geography_id);
+CREATE INDEX IF NOT EXISTS idx_planning_cat ON municipal_planning_initiatives(initiative_category);
+CREATE INDEX IF NOT EXISTS idx_planning_type ON municipal_planning_initiatives(plan_type);
+
+

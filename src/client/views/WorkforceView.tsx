@@ -7,7 +7,8 @@ import {
   Building, 
   DollarSign, 
   CheckCircle2,
-  GraduationCap
+  GraduationCap,
+  ChevronRight
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from 'recharts';
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
@@ -113,44 +114,157 @@ export const WorkforceView: React.FC<WorkforceViewProps> = ({ cityId }) => {
         </div>
       </div>
 
-      {/* Labor Market Health KPIs */}
+      {/* Labor Market Health KPIs (Clickable for Decision Drill-Down) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+        {/* Participation Rate */}
+        <div 
+          role="button"
+          tabIndex={0}
+          onClick={() => setContributingData({
+            title: `${cityId.replace('CSD_', '')} Labor Force Participation Rate Analysis`,
+            category: 'Labor Market Engagement',
+            metricLabel: 'Labor Participation Rate',
+            value: `${partRate}%`,
+            unit: '',
+            benchmarkValue: '65.1% Ontario Benchmark',
+            benchmarkLabel: 'Provincial Participation Rate',
+            deltaPct: Math.round(((partRate - 65.1) / 65.1) * 100),
+            sourceLineage: 'Statistics Canada 2021 Census of Population (Table 98-400-X)',
+            referenceYear: '2021 Census Reference Period',
+            decisionImplications: [
+              {
+                heading: 'Labor Engagement & Active Workforce',
+                insight: `A participation rate of ${partRate}% indicates high economic engagement among working-age residents (ages 15+), confirming strong workforce attachment and steady regular employment income.`,
+                impact: 'positive'
+              },
+              {
+                heading: 'Hiring Reservoir Depth',
+                insight: `High participation leaves a smaller pool of inactive workers, meaning new employers must attract staff away from existing local firms or recruit from neighboring census divisions.`,
+                impact: 'neutral'
+              }
+            ],
+            strategicRecommendations: [
+              'Highlight flexible scheduling, professional development, and employee perks to attract passive talent.',
+              'Leverage automated self-service technologies to reduce front-of-house headcount requirements.'
+            ],
+            onClose: () => setContributingData(null)
+          })}
+          onKeyDown={(e) => e.key === 'Enter' && setContributingData(null)}
+          className="glass-panel p-5 rounded-2xl border border-white/10 hover:border-indigo-500/80 hover:bg-slate-900 transition-all shadow-lg cursor-pointer group active:scale-[0.98]"
+          title="Click to inspect labor participation rate implications"
+        >
           <div className="flex items-center justify-between text-slate-300 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Participation Rate</span>
+            <span className="text-xs font-medium uppercase tracking-wider group-hover:text-indigo-300 transition-colors">Participation Rate</span>
             <Briefcase className="w-4 h-4 text-indigo-400" />
           </div>
-          <div className="text-3xl font-extrabold text-white">
+          <div className="text-3xl font-extrabold text-white group-hover:text-indigo-200 transition-colors">
             {partRate}%
           </div>
-          <div className="mt-2 text-xs text-slate-300">
-            Share of working-age population actively working or seeking work
+          <div className="mt-2 text-xs text-slate-300 flex items-center justify-between">
+            <span>Share of working-age population</span>
+            <span className="text-[10px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+              Inspect <ChevronRight className="w-3 h-3" />
+            </span>
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+        {/* Unemployment Rate */}
+        <div 
+          role="button"
+          tabIndex={0}
+          onClick={() => setContributingData({
+            title: `${cityId.replace('CSD_', '')} Unemployment & Hiring Tightness`,
+            category: 'Recruiting & Wage Pressure',
+            metricLabel: 'Unemployment Rate',
+            value: `${unempRate}%`,
+            unit: '',
+            benchmarkValue: '6.8% Ontario Benchmark',
+            benchmarkLabel: 'Provincial Unemployment Rate',
+            deltaPct: Math.round(((unempRate - 6.8) / 6.8) * 100),
+            sourceLineage: 'Statistics Canada 2021 Census Profile & Monthly LFS',
+            referenceYear: '2021 Census Cycle',
+            decisionImplications: [
+              {
+                heading: 'Wage Competition & Candidate Availability',
+                insight: `An unemployment rate of ${unempRate}% reflects a tight labor market where applicants frequently have multiple competing offers. Starting hourly rates must match or exceed local prevailing norms.`,
+                impact: 'warning'
+              },
+              {
+                heading: 'Consumer Household Purchasing Cushion',
+                insight: `Low municipal unemployment guarantees regular payroll paychecks and consistent retail spending power.`,
+                impact: 'positive'
+              }
+            ],
+            riskMitigations: [
+              'Build strong relationships with local high schools, colleges, and university placement offices for seasonal staffing.',
+              'Implement employee retention bonuses after 90 and 180 days of tenure.'
+            ],
+            onClose: () => setContributingData(null)
+          })}
+          onKeyDown={(e) => e.key === 'Enter' && setContributingData(null)}
+          className="glass-panel p-5 rounded-2xl border border-white/10 hover:border-emerald-500/80 hover:bg-slate-900 transition-all shadow-lg cursor-pointer group active:scale-[0.98]"
+          title="Click to inspect hiring tightness and wage dynamics"
+        >
           <div className="flex items-center justify-between text-slate-300 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Unemployment Rate</span>
+            <span className="text-xs font-medium uppercase tracking-wider group-hover:text-emerald-300 transition-colors">Unemployment Rate</span>
             <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
-          <div className="text-3xl font-extrabold text-white">
+          <div className="text-3xl font-extrabold text-white group-hover:text-emerald-200 transition-colors">
             {unempRate}%
           </div>
-          <div className="mt-2 text-xs text-slate-300">
-            Census reference week unemployment rate
+          <div className="mt-2 text-xs text-slate-300 flex items-center justify-between">
+            <span>Census reference week rate</span>
+            <span className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+              Inspect <ChevronRight className="w-3 h-3" />
+            </span>
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+        {/* Active Labor Pool */}
+        <div 
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            const totalEmployed = occupations.reduce((acc: number, o: any) => acc + Number(o.employed_count || 0), 0);
+            setContributingData({
+              title: `${cityId.replace('CSD_', '')} Active Municipal Labor Pool`,
+              category: 'Workforce Size & Talent Pool',
+              metricLabel: 'Employed Resident Workforce',
+              value: totalEmployed,
+              unit: 'workers',
+              benchmarkValue: `${occupations.length} Tracked NOC Occupations`,
+              benchmarkLabel: 'Occupational Diversity',
+              sourceLineage: 'Statistics Canada Census Workforce File',
+              referenceYear: '2021 Census',
+              decisionImplications: [
+                {
+                  heading: 'Talent Specialization Depth',
+                  insight: `Over ${totalEmployed.toLocaleString()} employed residents operate across detailed managerial, technical, and service categories, providing comprehensive talent availability for commercial operations.`,
+                  impact: 'positive'
+                }
+              ],
+              strategicRecommendations: [
+                'Review the Top 20 Occupations and Top 20 Industries below to determine daytime vs commuter workforce splits.'
+              ],
+              onClose: () => setContributingData(null)
+            });
+          }}
+          onKeyDown={(e) => e.key === 'Enter' && setContributingData(null)}
+          className="glass-panel p-5 rounded-2xl border border-white/10 hover:border-blue-500/80 hover:bg-slate-900 transition-all shadow-lg cursor-pointer group active:scale-[0.98]"
+          title="Click to inspect active municipal labor pool size"
+        >
           <div className="flex items-center justify-between text-slate-300 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Active Labor Pool</span>
+            <span className="text-xs font-medium uppercase tracking-wider group-hover:text-blue-300 transition-colors">Active Labor Pool</span>
             <Building className="w-4 h-4 text-blue-400" />
           </div>
-          <div className="text-3xl font-extrabold text-white">
+          <div className="text-3xl font-extrabold text-white group-hover:text-blue-200 transition-colors">
             {occupations.reduce((acc: number, o: any) => acc + Number(o.employed_count || 0), 0).toLocaleString()}
           </div>
-          <div className="mt-2 text-xs text-slate-300">
-            Employed residents captured in detailed occupational categories
+          <div className="mt-2 text-xs text-slate-300 flex items-center justify-between">
+            <span>Captured in occupational census</span>
+            <span className="text-[10px] text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+              Inspect <ChevronRight className="w-3 h-3" />
+            </span>
           </div>
         </div>
       </div>

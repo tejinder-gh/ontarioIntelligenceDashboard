@@ -176,140 +176,596 @@ export async function ingestBusinessListingsAndBenchmarks(): Promise<void> {
     `;
   }
 
-  // 3. Historical Business Listings with Strict Asking vs Confirmed Sale Separation (Section 19, 20, 21 & User Instruction #8)
+  // 3. Historical Business Listings with Strict Asking vs Confirmed Sale Separation & Repeated Listing Detection (Requirements 24, 25, 26)
   const listings = [
+    // --- PIZZA STORES ---
     {
       uid: 'LIST_BURL_PIZZA_001',
+      title: 'Established Quick-Serve Pizzeria',
       categoryId: 'pizza_store',
       geoId: 'CSD_burlington',
       businessName: 'Established Quick-Serve Pizzeria',
       address: 'Fairview St Plaza, Burlington',
+      phone: '905-634-1100',
+      coordinates: '43.3421,-79.8051',
       askingPrice: 249000,
+      previousAskingPrice: null,
       confirmedSalePrice: null, // Strictly NULL: not legally confirmed
       status: 'ACTIVE',
       revenueDisclosed: 680000,
+      ebitdaDisclosed: 92000,
       sdeDisclosed: 115000,
       monthlyRent: 4200,
       sqft: 1250,
+      isFranchise: false,
       franchiseBrand: 'Independent',
       broker: 'GTA Commercial Restaurant Brokers',
       url: 'https://example.com/listings/burl-pizza-001',
       firstListed: '2025-10-15',
       lastActive: '2026-03-01',
-      repeatedParentId: null,
+      removedDate: null,
+      repeatedParentUid: null,
       matchConfidence: null,
-      notes: 'High-visibility plaza anchor with heavy lunch traffic from nearby commercial offices.'
+      notes: 'High-visibility plaza anchor with heavy lunch traffic from nearby commercial offices.',
+      priceHistory: [
+        { date: '2025-10-15', price: 249000, event: 'INITIAL_LISTING', notes: 'Initial public market offering at $249,000.' }
+      ]
     },
     {
       uid: 'LIST_BURL_PIZZA_002',
+      title: 'Downtown Turnkey Pizza Franchise',
       categoryId: 'pizza_store',
       geoId: 'CSD_burlington',
       businessName: 'Turnkey Pizza Franchise',
       address: 'Brant St, Downtown Burlington',
+      phone: '905-333-8822',
+      coordinates: '43.3255,-79.7990',
       askingPrice: 320000,
+      previousAskingPrice: null,
       confirmedSalePrice: null,
-      status: 'REMOVED', // Section 69: "removed / no longer active", not "sold"
+      status: 'REMOVED', // Explicitly REMOVED, never inferred as sold
       revenueDisclosed: 790000,
+      ebitdaDisclosed: 104000,
       sdeDisclosed: 128000,
       monthlyRent: 5100,
       sqft: 1400,
-      franchiseBrand: 'Gino\'s Pizza',
+      isFranchise: true,
+      franchiseBrand: "Gino's Pizza",
       broker: 'Ontario Business Exchange',
       url: 'https://example.com/listings/burl-pizza-002',
       firstListed: '2024-04-10',
       lastActive: '2024-11-20',
-      repeatedParentId: null,
+      removedDate: '2024-11-20',
+      repeatedParentUid: null,
       matchConfidence: null,
-      notes: 'Listing expired/removed by broker after 7 months on market. Final transaction details unconfirmed.'
+      notes: 'Listing expired/removed by broker after 7 months on market. Escrow unconfirmed.',
+      priceHistory: [
+        { date: '2024-04-10', price: 320000, event: 'INITIAL_LISTING', notes: 'Listed at $320,000 asking valuation.' },
+        { date: '2024-11-20', price: 320000, event: 'REMOVED', notes: 'Broker agreement expired without recorded settlement.' }
+      ]
     },
     {
       uid: 'LIST_BURL_PIZZA_003',
+      title: 'Brant Street Pizza & Wings (Relisted)',
       categoryId: 'pizza_store',
       geoId: 'CSD_burlington',
       businessName: 'Brant Street Pizza & Wings (Relisted)',
       address: 'Brant St, Downtown Burlington',
-      askingPrice: 285000, // Price reduced from $320,000
+      phone: '905-333-8822',
+      coordinates: '43.3255,-79.7990',
+      askingPrice: 285000, // Reduced from $320,000
+      previousAskingPrice: 320000,
       confirmedSalePrice: null,
       status: 'RELISTED',
       revenueDisclosed: 760000,
+      ebitdaDisclosed: 98000,
       sdeDisclosed: 122000,
       monthlyRent: 5100,
       sqft: 1400,
-      franchiseBrand: 'Gino\'s Pizza',
+      isFranchise: true,
+      franchiseBrand: "Gino's Pizza",
       broker: 'Restaurant Realty Group',
       url: 'https://example.com/listings/burl-pizza-003',
       firstListed: '2025-01-15',
       lastActive: '2025-08-10',
-      repeatedParentId: null,
-      matchConfidence: 0.92, // Flagged repeated listing matching LIST_BURL_PIZZA_002
-      notes: 'High-confidence relisting of earlier location. Same unit square footage and lease terms with $35,000 asking price adjustment.'
+      removedDate: null,
+      repeatedParentUid: 'LIST_BURL_PIZZA_002',
+      matchConfidence: 0.92, // 92% match confidence algorithm rating
+      notes: 'High-confidence relisting of LIST_BURL_PIZZA_002. Identical address, square footage, and lease terms with $35,000 price adjustment.',
+      priceHistory: [
+        { date: '2025-01-15', price: 285000, event: 'RELISTED', notes: 'Relisted with alternate broker at reduced price of $285,000 (-10.9%).' }
+      ]
     },
     {
       uid: 'LIST_BURL_PIZZA_004',
+      title: 'Wood-Fired Artisanal Pizzeria',
       categoryId: 'pizza_store',
       geoId: 'CSD_burlington',
       businessName: 'Wood-Fired Artisanal Pizzeria',
       address: 'Village Square, Burlington',
+      phone: '905-681-4433',
+      coordinates: '43.3260,-79.7975',
       askingPrice: 395000,
+      previousAskingPrice: null,
       confirmedSalePrice: null,
       status: 'ACTIVE',
       revenueDisclosed: 880000,
+      ebitdaDisclosed: 118000,
       sdeDisclosed: 145000,
       monthlyRent: 4800,
       sqft: 1650,
+      isFranchise: false,
       franchiseBrand: 'Independent',
       broker: 'Metropolitan Commercial Advisory',
       url: 'https://example.com/listings/burl-pizza-004',
       firstListed: '2025-11-01',
       lastActive: '2026-03-05',
-      repeatedParentId: null,
+      removedDate: null,
+      repeatedParentUid: null,
       matchConfidence: null,
-      notes: 'Fully licensed craft pizzeria with seasonal patio permit and custom Italian deck oven.'
+      notes: 'Fully licensed craft pizzeria with seasonal patio permit and custom Italian deck oven.',
+      priceHistory: [
+        { date: '2025-11-01', price: 395000, event: 'INITIAL_LISTING', notes: 'Listed at $395,000 turnkey valuation.' }
+      ]
     },
     {
       uid: 'LIST_OAK_PIZZA_001',
+      title: 'Major Brand Pizza Delivery Franchise',
       categoryId: 'pizza_store',
       geoId: 'CSD_oakville',
       businessName: 'Major Brand Pizza Delivery Franchise',
       address: 'Upper Middle Rd, Oakville',
+      phone: '905-845-9922',
+      coordinates: '43.4650,-79.7020',
       askingPrice: 425000,
+      previousAskingPrice: null,
       confirmedSalePrice: null,
       status: 'ACTIVE',
       revenueDisclosed: 980000,
+      ebitdaDisclosed: 135000,
       sdeDisclosed: 165000,
       monthlyRent: 4950,
       sqft: 1300,
+      isFranchise: true,
       franchiseBrand: 'Pizza Pizza',
       broker: 'National Franchise Sales Network',
       url: 'https://example.com/listings/oak-pizza-001',
       firstListed: '2025-09-12',
       lastActive: '2026-03-01',
-      repeatedParentId: null,
+      removedDate: null,
+      repeatedParentUid: null,
       matchConfidence: null,
-      notes: 'Consistently ranked in top quartile of franchise network system sales for Halton Region.'
+      notes: 'Consistently ranked in top quartile of franchise network system sales for Halton Region.',
+      priceHistory: [
+        { date: '2025-09-12', price: 425000, event: 'INITIAL_LISTING', notes: 'Offered at $425,000.' }
+      ]
+    },
+
+    // --- CHILD DAYCARE ---
+    {
+      uid: 'LIST_BURL_DAYCARE_001',
+      title: 'Licensed Montessori Child Care Centre',
+      categoryId: 'child_daycare',
+      geoId: 'CSD_burlington',
+      businessName: 'Licensed Montessori Child Care Centre',
+      address: 'Appleby Line Commercial Hub, Burlington',
+      phone: '905-336-7788',
+      coordinates: '43.3980,-79.7890',
+      askingPrice: 519000,
+      previousAskingPrice: 580000,
+      confirmedSalePrice: null,
+      status: 'PRICE_CHANGED',
+      revenueDisclosed: 1050000,
+      ebitdaDisclosed: 142000,
+      sdeDisclosed: 168000,
+      monthlyRent: 8500,
+      sqft: 3800,
+      isFranchise: false,
+      franchiseBrand: 'Independent',
+      broker: 'Childcare Realty Advisors Ontario',
+      url: 'https://example.com/listings/burl-daycare-001',
+      firstListed: '2025-07-20',
+      lastActive: '2026-03-01',
+      removedDate: null,
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: 'CWELCC approved centre with licensed capacity for 64 children. Waitlist in place.',
+      priceHistory: [
+        { date: '2025-07-20', price: 580000, event: 'INITIAL_LISTING', notes: 'Initial offering at $580,000.' },
+        { date: '2025-11-15', price: 519000, event: 'PRICE_REDUCTION', notes: 'Asking price reduced by $61,000 (-10.5%) to spur Q1 closing.' }
+      ]
+    },
+    {
+      uid: 'LIST_MILTON_DAYCARE_001',
+      title: 'Premium Infant & Toddler Academy',
+      categoryId: 'child_daycare',
+      geoId: 'CSD_milton',
+      businessName: 'Premium Infant & Toddler Academy',
+      address: 'Main St E, Milton',
+      phone: '905-878-5500',
+      coordinates: '43.5180,-79.8800',
+      askingPrice: 650000,
+      previousAskingPrice: null,
+      confirmedSalePrice: null,
+      status: 'ACTIVE',
+      revenueDisclosed: 1280000,
+      ebitdaDisclosed: 185000,
+      sdeDisclosed: 210000,
+      monthlyRent: 9200,
+      sqft: 4200,
+      isFranchise: false,
+      franchiseBrand: 'Independent',
+      broker: 'Halton Business Brokers',
+      url: 'https://example.com/listings/milton-daycare-001',
+      firstListed: '2025-10-01',
+      lastActive: '2026-03-02',
+      removedDate: null,
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: 'High-growth Milton corridor with substantial young family catchment.',
+      priceHistory: [
+        { date: '2025-10-01', price: 650000, event: 'INITIAL_LISTING', notes: 'Initial listing.' }
+      ]
+    },
+
+    // --- AUTOMOTIVE REPAIR ---
+    {
+      uid: 'LIST_BURL_AUTO_001',
+      title: 'Established 4-Bay Mechanical Service Shop',
+      categoryId: 'automotive_repair',
+      geoId: 'CSD_burlington',
+      businessName: 'Established 4-Bay Mechanical Service Shop',
+      address: 'Harvester Rd, Burlington',
+      phone: '905-637-2200',
+      coordinates: '43.3450,-79.7890',
+      askingPrice: 475000,
+      previousAskingPrice: null,
+      confirmedSalePrice: null,
+      status: 'ACTIVE',
+      revenueDisclosed: 820000,
+      ebitdaDisclosed: 125000,
+      sdeDisclosed: 155000,
+      monthlyRent: 5800,
+      sqft: 2800,
+      isFranchise: false,
+      franchiseBrand: 'Independent',
+      broker: 'Commercial Auto Realty',
+      url: 'https://example.com/listings/burl-auto-001',
+      firstListed: '2025-08-10',
+      lastActive: '2026-03-01',
+      removedDate: null,
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: 'Includes 4 certified vehicle hoists, Hunter alignment rack, and 2,500 active fleet accounts.',
+      priceHistory: [
+        { date: '2025-08-10', price: 475000, event: 'INITIAL_LISTING', notes: 'Offered at $475,000.' }
+      ]
+    },
+    {
+      uid: 'LIST_BURL_AUTO_002',
+      title: 'Plains Road Tire & Auto Centre (Confirmed Sold)',
+      categoryId: 'automotive_repair',
+      geoId: 'CSD_burlington',
+      businessName: 'Plains Road Tire & Auto Centre',
+      address: 'Plains Rd E, Burlington',
+      phone: '905-528-9900',
+      coordinates: '43.3150,-79.8350',
+      askingPrice: 425000,
+      previousAskingPrice: null,
+      confirmedSalePrice: 395000, // Strictly confirmed closed sale price
+      status: 'CONFIRMED_SOLD',
+      revenueDisclosed: 750000,
+      ebitdaDisclosed: 110000,
+      sdeDisclosed: 138000,
+      monthlyRent: 4900,
+      sqft: 2400,
+      isFranchise: false,
+      franchiseBrand: 'Independent',
+      broker: 'Commercial Auto Realty',
+      url: 'https://example.com/listings/burl-auto-002',
+      firstListed: '2024-06-01',
+      lastActive: '2024-12-15',
+      removedDate: '2024-12-15',
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: 'Closed transaction confirmed through Teranet Land Registry filing and lawyer escrow disbursement.',
+      priceHistory: [
+        { date: '2024-06-01', price: 425000, event: 'INITIAL_LISTING', notes: 'Listed at $425,000 asking price.' },
+        { date: '2024-12-15', price: 395000, event: 'CONFIRMED_SOLD', notes: 'Closed sale recorded at $395,000 (92.9% of ask).' }
+      ]
+    },
+
+    // --- COFFEE SHOP & CAFE ---
+    {
+      uid: 'LIST_BURL_COFFEE_001',
+      title: 'Artisan Specialty Coffee & Bakery',
+      categoryId: 'coffee_shop',
+      geoId: 'CSD_burlington',
+      businessName: 'Artisan Specialty Coffee & Bakery',
+      address: 'Waterfront Boardwalk, Burlington',
+      phone: '905-632-8811',
+      coordinates: '43.3210,-79.7980',
+      askingPrice: 215000,
+      previousAskingPrice: null,
+      confirmedSalePrice: null,
+      status: 'ACTIVE',
+      revenueDisclosed: 460000,
+      ebitdaDisclosed: 68000,
+      sdeDisclosed: 88000,
+      monthlyRent: 3900,
+      sqft: 1100,
+      isFranchise: false,
+      franchiseBrand: 'Independent',
+      broker: 'Retail M&A Ontario',
+      url: 'https://example.com/listings/burl-coffee-001',
+      firstListed: '2025-11-20',
+      lastActive: '2026-03-04',
+      removedDate: null,
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: 'Direct lakefront exposure with heavy pedestrian foot traffic and established espresso bar.',
+      priceHistory: [
+        { date: '2025-11-20', price: 215000, event: 'INITIAL_LISTING', notes: 'Listed at $215,000.' }
+      ]
+    },
+    {
+      uid: 'LIST_TOR_COFFEE_002',
+      title: 'Queen West Boutique Espresso Bar (Confirmed Sold)',
+      categoryId: 'coffee_shop',
+      geoId: 'CSD_toronto',
+      businessName: 'Queen West Boutique Espresso Bar',
+      address: 'Queen St W, Toronto',
+      phone: '416-504-7700',
+      coordinates: '43.6480,-79.4050',
+      askingPrice: 210000,
+      previousAskingPrice: null,
+      confirmedSalePrice: 190000, // Strictly confirmed closed transaction
+      status: 'CONFIRMED_SOLD',
+      revenueDisclosed: 520000,
+      ebitdaDisclosed: 75000,
+      sdeDisclosed: 95000,
+      monthlyRent: 5600,
+      sqft: 950,
+      isFranchise: false,
+      franchiseBrand: 'Independent',
+      broker: 'Toronto Commercial Hospitality',
+      url: 'https://example.com/listings/tor-coffee-002',
+      firstListed: '2024-03-10',
+      lastActive: '2024-09-18',
+      removedDate: '2024-09-18',
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: 'Sale verified through closing attorney escrow and lease assignment registry.',
+      priceHistory: [
+        { date: '2024-03-10', price: 210000, event: 'INITIAL_LISTING', notes: 'Listed at $210,000.' },
+        { date: '2024-09-18', price: 190000, event: 'CONFIRMED_SOLD', notes: 'Confirmed sale at $190,000.' }
+      ]
+    },
+
+    // --- FULL SERVICE RESTAURANT ---
+    {
+      uid: 'LIST_MISS_REST_001',
+      title: 'Licensed Casual Italian Trattoria',
+      categoryId: 'full_service_restaurant',
+      geoId: 'CSD_mississauga',
+      businessName: 'Licensed Casual Italian Trattoria',
+      address: 'Port Credit Waterfront, Mississauga',
+      phone: '905-278-6600',
+      coordinates: '43.5510,-79.5850',
+      askingPrice: 440000,
+      previousAskingPrice: 499000,
+      confirmedSalePrice: null,
+      status: 'PRICE_CHANGED',
+      revenueDisclosed: 1350000,
+      ebitdaDisclosed: 145000,
+      sdeDisclosed: 180000,
+      monthlyRent: 7800,
+      sqft: 2600,
+      isFranchise: false,
+      franchiseBrand: 'Independent',
+      broker: 'GTA Restaurant Realty',
+      url: 'https://example.com/listings/miss-rest-001',
+      firstListed: '2025-06-15',
+      lastActive: '2026-03-01',
+      removedDate: null,
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: 'LLBO licensed for 95 indoor seats and 35 patio seats. Long term lease with 8 years remaining.',
+      priceHistory: [
+        { date: '2025-06-15', price: 499000, event: 'INITIAL_LISTING', notes: 'Listed at $499,000 asking.' },
+        { date: '2025-12-01', price: 440000, event: 'PRICE_REDUCTION', notes: 'Seller dropped asking price by $59,000 (-11.8%).' }
+      ]
+    },
+
+    // --- GYM & FITNESS ---
+    {
+      uid: 'LIST_BURL_GYM_001',
+      title: '24/7 Keycard Fitness Centre & Studio',
+      categoryId: 'gym_fitness',
+      geoId: 'CSD_burlington',
+      businessName: '24/7 Keycard Fitness Centre & Studio',
+      address: 'Guelph Line & Upper Middle, Burlington',
+      phone: '905-335-1212',
+      coordinates: '43.3710,-79.8120',
+      askingPrice: 349000,
+      previousAskingPrice: null,
+      confirmedSalePrice: null,
+      status: 'ACTIVE',
+      revenueDisclosed: 560000,
+      ebitdaDisclosed: 110000,
+      sdeDisclosed: 130000,
+      monthlyRent: 7200,
+      sqft: 4500,
+      isFranchise: true,
+      franchiseBrand: 'Snap Fitness',
+      broker: 'Franchise M&A Canada',
+      url: 'https://example.com/listings/burl-gym-001',
+      firstListed: '2025-09-01',
+      lastActive: '2026-03-01',
+      removedDate: null,
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: 'Automated recurring billing model with 680 active monthly memberships.',
+      priceHistory: [
+        { date: '2025-09-01', price: 349000, event: 'INITIAL_LISTING', notes: 'Listed at $349,000.' }
+      ]
+    },
+
+    // --- TUTORING CENTER ---
+    {
+      uid: 'LIST_OAK_TUTOR_001',
+      title: 'Supplemental Education & Math Learning Centre',
+      categoryId: 'tutoring_center',
+      geoId: 'CSD_oakville',
+      businessName: 'Supplemental Education & Math Learning Centre',
+      address: 'Trafalgar Rd & Dundas St, Oakville',
+      phone: '905-257-8899',
+      coordinates: '43.4820,-79.7180',
+      askingPrice: 265000,
+      previousAskingPrice: null,
+      confirmedSalePrice: null,
+      status: 'ACTIVE',
+      revenueDisclosed: 390000,
+      ebitdaDisclosed: 88000,
+      sdeDisclosed: 105000,
+      monthlyRent: 3800,
+      sqft: 1350,
+      isFranchise: true,
+      franchiseBrand: 'Kumon Math & Reading',
+      broker: 'Education Business Brokers',
+      url: 'https://example.com/listings/oak-tutor-001',
+      firstListed: '2025-10-10',
+      lastActive: '2026-03-03',
+      removedDate: null,
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: '150 active student enrollments with consistent recurring monthly tuition payments.',
+      priceHistory: [
+        { date: '2025-10-10', price: 265000, event: 'INITIAL_LISTING', notes: 'Offered at $265,000.' }
+      ]
+    },
+
+    // --- MEDICAL / DENTAL CLINIC ---
+    {
+      uid: 'LIST_HAM_DENTAL_001',
+      title: 'Turnkey 3-Operatory Dental Practice',
+      categoryId: 'medical_clinic',
+      geoId: 'CSD_hamilton',
+      businessName: 'Turnkey 3-Operatory Dental Practice',
+      address: 'Main St W & McMaster Precinct, Hamilton',
+      phone: '905-522-3344',
+      coordinates: '43.2600,-79.9100',
+      askingPrice: 850000,
+      previousAskingPrice: null,
+      confirmedSalePrice: null,
+      status: 'ACTIVE',
+      revenueDisclosed: 980000,
+      ebitdaDisclosed: 260000,
+      sdeDisclosed: 310000,
+      monthlyRent: 5400,
+      sqft: 1800,
+      isFranchise: false,
+      franchiseBrand: 'Independent',
+      broker: 'Tier Three Dental Brokerage',
+      url: 'https://example.com/listings/ham-dental-001',
+      firstListed: '2025-11-12',
+      lastActive: '2026-03-02',
+      removedDate: null,
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: 'Chart count of 1,450 active patients with modern digital x-ray and intraoral scanners.',
+      priceHistory: [
+        { date: '2025-11-12', price: 850000, event: 'INITIAL_LISTING', notes: 'Listed at $850,000.' }
+      ]
+    },
+
+    // --- SPECIALTY RETAIL ---
+    {
+      uid: 'LIST_WATERLOO_RETAIL_001',
+      title: 'Specialty Outdoor & Board Games Boutique',
+      categoryId: 'retail_store',
+      geoId: 'CSD_waterloo',
+      businessName: 'Specialty Outdoor & Board Games Boutique',
+      address: 'King St N, Uptown Waterloo',
+      phone: '519-884-3322',
+      coordinates: '43.4670,-80.5220',
+      askingPrice: 175000,
+      previousAskingPrice: null,
+      confirmedSalePrice: null,
+      status: 'ACTIVE',
+      revenueDisclosed: 380000,
+      ebitdaDisclosed: 52000,
+      sdeDisclosed: 68000,
+      monthlyRent: 3100,
+      sqft: 1200,
+      isFranchise: false,
+      franchiseBrand: 'Independent',
+      broker: 'Tri-City Commercial Sales',
+      url: 'https://example.com/listings/wat-retail-001',
+      firstListed: '2025-12-01',
+      lastActive: '2026-03-01',
+      removedDate: null,
+      repeatedParentUid: null,
+      matchConfidence: null,
+      notes: 'Strong student and tech worker demographic capture adjacent to university campuses.',
+      priceHistory: [
+        { date: '2025-12-01', price: 175000, event: 'INITIAL_LISTING', notes: 'Listed at $175,000.' }
+      ]
     }
   ];
 
+  // Insert business listings
   for (const l of listings) {
-    await sql`
+    const [inserted] = await sql`
       INSERT INTO business_listings (
-        listing_uid, category_id, geography_id, business_name, address, asking_price,
-        confirmed_sale_price, status, revenue_disclosed, sde_cashflow_disclosed,
-        monthly_rent, square_footage, franchise_brand, broker_name, source_url,
-        first_listed_date, last_active_date, match_confidence, notes
+        listing_uid, category_id, geography_id, title, business_name, address, phone, coordinates,
+        asking_price, previous_asking_price, confirmed_sale_price, status, revenue_disclosed,
+        ebitda_disclosed, sde_cashflow_disclosed, monthly_rent, square_footage,
+        is_franchise, franchise_brand, broker_name, source_url,
+        first_listed_date, last_active_date, removed_date, match_confidence, notes
       ) VALUES (
-        ${l.uid}, ${l.categoryId}, ${l.geoId}, ${l.businessName}, ${l.address}, ${l.askingPrice},
-        ${l.confirmedSalePrice}, ${l.status}, ${l.revenueDisclosed}, ${l.sdeDisclosed},
-        ${l.monthlyRent}, ${l.sqft}, ${l.franchiseBrand}, ${l.broker}, ${l.url},
-        ${l.firstListed}, ${l.lastActive}, ${l.matchConfidence}, ${l.notes}
+        ${l.uid}, ${l.categoryId}, ${l.geoId}, ${l.title}, ${l.businessName}, ${l.address}, ${l.phone}, ${l.coordinates},
+        ${l.askingPrice}, ${l.previousAskingPrice}, ${l.confirmedSalePrice}, ${l.status}, ${l.revenueDisclosed},
+        ${l.ebitdaDisclosed}, ${l.sdeDisclosed}, ${l.monthlyRent}, ${l.sqft},
+        ${l.isFranchise}, ${l.franchiseBrand}, ${l.broker}, ${l.url},
+        ${l.firstListed}, ${l.lastActive}, ${l.removedDate}, ${l.matchConfidence}, ${l.notes}
       )
       ON CONFLICT (listing_uid) DO UPDATE SET
+        title = EXCLUDED.title,
         asking_price = EXCLUDED.asking_price,
+        previous_asking_price = EXCLUDED.previous_asking_price,
+        confirmed_sale_price = EXCLUDED.confirmed_sale_price,
         status = EXCLUDED.status,
         last_active_date = EXCLUDED.last_active_date,
+        removed_date = EXCLUDED.removed_date,
         match_confidence = EXCLUDED.match_confidence,
-        notes = EXCLUDED.notes;
+        notes = EXCLUDED.notes
+      RETURNING id;
     `;
+
+    const listingId = inserted?.id;
+
+    // Link repeated parent if applicable
+    if (listingId && l.repeatedParentUid) {
+      await sql`
+        UPDATE business_listings
+        SET repeated_listing_parent_id = (SELECT id FROM business_listings WHERE listing_uid = ${l.repeatedParentUid})
+        WHERE id = ${listingId};
+      `;
+    }
+
+    // Insert price history records
+    if (listingId && l.priceHistory && l.priceHistory.length > 0) {
+      for (const ph of l.priceHistory) {
+        await sql`
+          INSERT INTO business_listing_price_history (
+            listing_id, recorded_date, asking_price, event_type, notes
+          ) VALUES (
+            ${listingId}, ${ph.date}, ${ph.price}, ${ph.event}, ${ph.notes}
+          );
+        `;
+      }
+    }
   }
 
   // 4. Ingest Data Coverage Reports (User Instruction #15)

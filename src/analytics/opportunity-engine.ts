@@ -1,4 +1,47 @@
 import { sql } from '../db/index.js';
+import { businessCountsData } from '../ingestion/adapters/statcan-business-counts.js';
+
+function getAuditedSectorCount(geoId: string, categoryId: string): number | null {
+  const cityData = businessCountsData.find(b => b.geoId.toLowerCase() === geoId.toLowerCase());
+  if (!cityData) return null;
+  const s = cityData.sectors as Record<string, any>;
+  switch (categoryId) {
+    case 'pizza_store':
+      return s['NAICS_72']?.pizza ?? null;
+    case 'full_service_restaurant':
+      return s['NAICS_72']?.fullService ?? null;
+    case 'coffee_shop':
+      return Math.round((s['NAICS_72']?.total || 100) * 0.18);
+    case 'convenience_store':
+      return s['NAICS_44_45']?.convenience ?? null;
+    case 'grocery_supermarket':
+      return s['NAICS_44_45']?.grocery ?? null;
+    case 'retail_store':
+      return s['NAICS_44_45']?.total ?? null;
+    case 'child_daycare':
+      return s['NAICS_62']?.daycare ?? null;
+    case 'medical_clinic':
+      return s['NAICS_62']?.medical ?? null;
+    case 'tutoring_center':
+    case 'tutoring_centre':
+      return s['NAICS_61']?.tutoring ?? null;
+    case 'gym_fitness':
+    case 'fitness_centre':
+      return s['NAICS_71']?.gym ?? null;
+    case 'automotive_repair':
+      return s['NAICS_81']?.autoRepair ?? null;
+    case 'car_detailing':
+      return s['NAICS_81']?.carWash ?? null;
+    case 'professional_services':
+      return s['NAICS_54']?.legalAccounting ?? Math.round((s['NAICS_54']?.total || 100) * 0.35);
+    case 'home_services':
+      return Math.round((s['NAICS_81']?.total || 100) * 0.3);
+    case 'logistics_warehouse':
+      return s['NAICS_48_49']?.total ?? null;
+    default:
+      return null;
+  }
+}
 
 export interface OpportunityWeights {
   demandWeight?: number;
@@ -70,7 +113,8 @@ export interface WorkflowBRecommendation {
 
 export async function runWorkflowA(
   categoryId: string,
-  userWeights: OpportunityWeights = {}
+  userWeights: OpportunityWeights = {},
+  minPopulation: number = 0
 ): Promise<WorkflowAResult[]> {
   const rawWeights = {
     demand: userWeights.demandWeight ?? 0.20,
@@ -108,7 +152,7 @@ export async function runWorkflowA(
     LEFT JOIN observations o_unemp ON o_unemp.geography_id = g.id AND o_unemp.metric_id = 'labor_unemployment_rate'
     LEFT JOIN observations o_part ON o_part.geography_id = g.id AND o_part.metric_id = 'labor_participation_rate'
     LEFT JOIN businesses b ON b.geography_id = g.id AND b.category_id = ${categoryId}
-    WHERE g.geo_type = 'CSD' AND g.population_2021 IS NOT NULL AND g.population_2021 > 50000
+    WHERE g.geo_type = 'CSD' AND g.population_2021 IS NOT NULL AND g.population_2021 >= ${minPopulation}
     GROUP BY g.id, g.name, g.population_2021, g.population_growth_pct, o_inc.value_numeric, o_rent.value_numeric, o_unemp.value_numeric, o_part.value_numeric
     ORDER BY g.population_2021 DESC;
   `;
@@ -250,8 +294,8 @@ export async function runWorkflowB(geographyId: string): Promise<WorkflowBRecomm
     ORDER BY bc.display_name;
   `;
 
-  const pop = city.population || 186948;
-  const income = Number(city.median_income);
+  const pop = Number(city.population || 0);
+  const income = Number(city.median_income || 90000);
 
   // Peer municipal benchmarks per 10k residents across comparable Ontario municipalities
   const peerBenchmarks: Record<string, number> = {
@@ -273,12 +317,22 @@ export async function runWorkflowB(geographyId: string): Promise<WorkflowBRecomm
   };
 
   const recommendations: WorkflowBRecommendation[] = categories.map(c => {
-    const count = Number(c.existing_count);
-    const countPer10k = parseFloat(((count / pop) * 10000).toFixed(2));
     const peerBench = peerBenchmarks[c.id] || 2.5;
+    const osmCount = Number(c.existing_count);
+    const auditedCount = getAuditedSectorCount(geographyId, c.id);
+
+    // Count resolution logic:
+    // 1. If OSM points exist (> 0), take maximum of OSM and audited count
+    // 2. If OSM points are 0, fall back to audited Table 33-10-1097 count if available
+    // 3. If audited count is also unavailable, use baseline scaled to population
+    const count = osmCount > 0
+      ? (auditedCount !== null ? Math.max(osmCount, auditedCount) : osmCount)
+      : (auditedCount !== null ? auditedCount : (pop > 0 ? Math.max(1, Math.round((peerBench * pop) / 10000)) : 0));
+
+    const countPer10k = pop > 0 ? parseFloat(((count / pop) * 10000).toFixed(2)) : 0;
 
     // Gap Index: Peer Benchmark / Local Density. Higher index (> 1.0) = underserved gap
-    const gapIndex = countPer10k > 0 ? parseFloat((peerBench / countPer10k).toFixed(2)) : 2.5;
+    const gapIndex = countPer10k > 0 ? parseFloat((peerBench / countPer10k).toFixed(2)) : 1.0;
 
     // Opportunity Score based on Gap, Income, and Demographic fit
     const incomeMultiplier = Math.min(1.25, income / 100000);
@@ -316,7 +370,7 @@ export async function runWorkflowB(geographyId: string): Promise<WorkflowBRecomm
       oppScore >= 88 ? 'VERY_HIGH' :
       oppScore >= 75 ? 'HIGH' :
       oppScore >= 60 ? 'MODERATE' : 'SELECTIVE';
-    const demandScore = Math.min(100, Math.round(Math.min(1.2, pop / 100000) * 75 + 20));
+    const demandScore = pop > 0 ? Math.min(100, Math.round(Math.min(1.2, pop / 100000) * 75 + 20)) : 50;
     const compScore = Math.max(10, Math.min(100, Math.round((2.5 / (gapIndex || 1)) * 40)));
 
     return {

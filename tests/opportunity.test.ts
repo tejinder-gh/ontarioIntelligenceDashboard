@@ -39,4 +39,35 @@ describe('Opportunity Analytics Engine', () => {
     expect(topRec).toHaveProperty('estimatedAnnualRevenueCAD');
     expect(topRec.estimatedAnnualRevenueCAD.median).toBeGreaterThan(0);
   });
+
+  it('runs Workflow B for Toronto and avoids 0-competitor hallucination using Table 33-10-1097 data', async () => {
+    const recommendations = await runWorkflowB('CSD_toronto');
+
+    expect(recommendations).toBeDefined();
+    expect(recommendations.length).toBeGreaterThan(0);
+
+    // Verify pizza stores in Toronto are NOT 0
+    const pizzaRec = recommendations.find(r => r.categoryId === 'pizza_store');
+    expect(pizzaRec).toBeDefined();
+    expect(pizzaRec!.existingCount).toBeGreaterThan(0); // Should be 980 from Table 33-10-1097
+    expect(pizzaRec!.gapIndex).not.toBe(2.5); // Must not be the blanket 2.5 fallback
+
+    // Verify full service restaurants in Toronto are NOT 0
+    const restRec = recommendations.find(r => r.categoryId === 'full_service_restaurant');
+    expect(restRec).toBeDefined();
+    expect(restRec!.existingCount).toBeGreaterThan(1000); // 4800 in Toronto
+    expect(restRec!.gapIndex).toBeLessThan(1.0); // Saturated market (< 1.0)
+  });
+
+  it('runs Workflow A with configurable minPopulation filter', async () => {
+    // Mega cities filter (>= 500,000)
+    const megaCities = await runWorkflowA('pizza_store', {}, 500000);
+    // All seeded cities filter (>= 0)
+    const allCities = await runWorkflowA('pizza_store', {}, 0);
+
+    expect(allCities.length).toBeGreaterThan(megaCities.length);
+    for (const city of megaCities) {
+      expect(city.population).toBeGreaterThanOrEqual(500000);
+    }
+  });
 });

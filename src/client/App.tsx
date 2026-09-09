@@ -29,8 +29,10 @@ import {
   Scale,
   Search,
   MapPin,
-  Menu
+  Menu,
+  Bell
 } from 'lucide-react';
+import { AlertSubscriptionModal } from './components/AlertSubscriptionModal.js';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
@@ -41,6 +43,10 @@ export const App: React.FC = () => {
   const [compareData, setCompareData] = useState<any[]>([]);
   const [loadingCompare, setLoadingCompare] = useState<boolean>(false);
   
+  // Alert Subscription Modal State
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState<boolean>(false);
+  const [pendingAlertsCount, setPendingAlertsCount] = useState<number>(0);
+
   // Search within Compare Modal
   const [modalSearchQuery, setModalSearchQuery] = useState('');
   const [modalSearchResults, setModalSearchResults] = useState<any[]>([]);
@@ -66,6 +72,16 @@ export const App: React.FC = () => {
       })
       .catch(() => {});
   }, [selectedCityId]);
+
+  // Fetch pending notification count for alerts badge
+  useEffect(() => {
+    fetch('/api/alerts/notifications/pending')
+      .then(res => res.json())
+      .then(d => {
+        if (d.total !== undefined) setPendingAlertsCount(d.total);
+      })
+      .catch(() => {});
+  }, [isAlertModalOpen]);
 
   // Multi-City Comparison Fetcher
   useEffect(() => {
@@ -195,6 +211,22 @@ export const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Intelligence Alerts Button with Unread Badge */}
+            <button
+              type="button"
+              onClick={() => setIsAlertModalOpen(true)}
+              className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 transition-colors shadow-sm relative"
+              aria-label="Open intelligence alerts and watches"
+            >
+              <Bell className="w-3.5 h-3.5 text-amber-400" />
+              <span>Alerts</span>
+              {pendingAlertsCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-slate-950 font-extrabold">
+                  {pendingAlertsCount}
+                </span>
+              )}
+            </button>
+
             <button
               type="button"
               onClick={() => setIsCompareMode(true)}
@@ -226,7 +258,10 @@ export const App: React.FC = () => {
             />
           )}
           {activeTab === 'city_intelligence' && (
-            <CityIntelligenceView cityId={selectedCityId} />
+            <CityIntelligenceView 
+              cityId={selectedCityId} 
+              onSelectCity={setSelectedCityId} 
+            />
           )}
           {activeTab === 'demographics' && (
             <DemographicsView cityId={selectedCityId} />
@@ -533,6 +568,13 @@ export const App: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Alert Subscription & Watch Modal */}
+      <AlertSubscriptionModal
+        isOpen={isAlertModalOpen}
+        onClose={() => setIsAlertModalOpen(false)}
+        defaultCityId={selectedCityId}
+        defaultCityName={selectedCityName}
+      />
     </div>
   );
 };

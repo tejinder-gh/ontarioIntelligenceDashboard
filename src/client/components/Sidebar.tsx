@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { ActiveTab, GeographySummary } from '../types/index.js';
 import { CitySearch } from './CitySearch.js';
+import { t, getLocale, setLocale, subscribeLocale, SupportedLocale } from '../i18n/index.js';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -36,54 +37,61 @@ interface SidebarProps {
 }
 
 interface NavCategory {
-  title: string;
+  key: string;
+  defaultTitle: string;
   items: Array<{
     id: ActiveTab;
-    label: string;
+    defaultLabel: string;
     icon: React.ReactNode;
-    badge?: string;
+    badgeKey?: string;
+    defaultBadge?: string;
   }>;
 }
 
 const NAV_CATEGORIES: NavCategory[] = [
   {
-    title: 'Executive & Strategy',
+    key: 'executive_strategy',
+    defaultTitle: 'Executive & Strategy',
     items: [
-      { id: 'overview', label: 'Executive Overview', icon: <Building2 className="w-4 h-4" /> },
-      { id: 'city_intelligence', label: 'City Intelligence', icon: <BarChart3 className="w-4 h-4" /> },
-      { id: 'city_rankings', label: 'City Rankings League', icon: <Trophy className="w-4 h-4" /> }
+      { id: 'overview', defaultLabel: 'Executive Overview', icon: <Building2 className="w-4 h-4" /> },
+      { id: 'city_intelligence', defaultLabel: 'City Intelligence', icon: <BarChart3 className="w-4 h-4" /> },
+      { id: 'city_rankings', defaultLabel: 'City Rankings League', icon: <Trophy className="w-4 h-4" /> }
     ]
   },
   {
-    title: 'Market Opportunity & Fit',
+    key: 'market_opportunity',
+    defaultTitle: 'Market Opportunity & Fit',
     items: [
-      { id: 'opportunity_lab', label: 'Opportunity Lab', icon: <Target className="w-4 h-4" />, badge: 'AI Engine' },
-      { id: 'competition', label: 'Competition Analysis', icon: <Compass className="w-4 h-4" /> },
-      { id: 'business_listings', label: 'Sales & Listings', icon: <FileText className="w-4 h-4" /> }
+      { id: 'opportunity_lab', defaultLabel: 'Opportunity Lab', icon: <Target className="w-4 h-4" />, badgeKey: 'ai_engine', defaultBadge: 'AI Engine' },
+      { id: 'competition', defaultLabel: 'Competition Analysis', icon: <Compass className="w-4 h-4" /> },
+      { id: 'business_listings', defaultLabel: 'Sales & Listings', icon: <FileText className="w-4 h-4" /> }
     ]
   },
   {
-    title: 'Household & Economics',
+    key: 'household_economics',
+    defaultTitle: 'Household & Economics',
     items: [
-      { id: 'demographics', label: 'Demographics Lens', icon: <Users className="w-4 h-4" /> },
-      { id: 'financial_profile', label: 'Financial Profile & Wealth', icon: <Wallet className="w-4 h-4" />, badge: 'Multi-City' },
-      { id: 'consumer_spending', label: 'Consumer Spending Habits', icon: <ShoppingBag className="w-4 h-4" /> },
-      { id: 'workforce', label: 'Workforce & Occupations', icon: <Briefcase className="w-4 h-4" /> }
+      { id: 'demographics', defaultLabel: 'Demographics Lens', icon: <Users className="w-4 h-4" /> },
+      { id: 'financial_profile', defaultLabel: 'Financial Profile & Wealth', icon: <Wallet className="w-4 h-4" />, badgeKey: 'multi_city', defaultBadge: 'Multi-City' },
+      { id: 'consumer_spending', defaultLabel: 'Consumer Spending Habits', icon: <ShoppingBag className="w-4 h-4" /> },
+      { id: 'workforce', defaultLabel: 'Workforce & Occupations', icon: <Briefcase className="w-4 h-4" /> }
     ]
   },
   {
-    title: 'Commercial & Municipal',
+    key: 'commercial_municipal',
+    defaultTitle: 'Commercial & Municipal',
     items: [
-      { id: 'business_landscape', label: 'Business Landscape', icon: <Store className="w-4 h-4" /> },
-      { id: 'municipality_finances', label: 'Municipality Finances', icon: <Landmark className="w-4 h-4" /> }
+      { id: 'business_landscape', defaultLabel: 'Business Landscape', icon: <Store className="w-4 h-4" /> },
+      { id: 'municipality_finances', defaultLabel: 'Municipality Finances', icon: <Landmark className="w-4 h-4" /> }
     ]
   },
   {
-    title: 'Analytics & Integrity',
+    key: 'analytics_integrity',
+    defaultTitle: 'Analytics & Integrity',
     items: [
-      { id: 'outliers', label: 'Statistical Outliers', icon: <AlertTriangle className="w-4 h-4" />, badge: 'Z-Score' },
-      { id: 'data_explorer', label: 'SQL Data Explorer', icon: <Database className="w-4 h-4" /> },
-      { id: 'methodology_sources', label: 'Methodology & Audits', icon: <BookOpen className="w-4 h-4" /> }
+      { id: 'outliers', defaultLabel: 'Statistical Outliers', icon: <AlertTriangle className="w-4 h-4" />, badgeKey: 'z_score', defaultBadge: 'Z-Score' },
+      { id: 'data_explorer', defaultLabel: 'SQL Data Explorer', icon: <Database className="w-4 h-4" /> },
+      { id: 'methodology_sources', defaultLabel: 'Methodology & Audits', icon: <BookOpen className="w-4 h-4" /> }
     ]
   }
 ];
@@ -97,6 +105,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCompareMode,
   compareCount = 3
 }) => {
+  const [locale, setCurrLocale] = React.useState<SupportedLocale>(getLocale());
+
+  React.useEffect(() => {
+    return subscribeLocale((newLoc) => setCurrLocale(newLoc));
+  }, []);
+
   return (
     <aside className="w-72 liquid-glass-sidebar flex flex-col shrink-0 h-screen sticky top-0 z-30 select-none">
       {/* Brand Header */}
@@ -107,15 +121,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div>
             <h1 className="text-sm font-extrabold text-white tracking-tight flex items-center gap-1.5">
-              <span>Ontario Intel</span>
+              <span>{t('brand.title', 'Ontario Intel')}</span>
               <span className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-950/90 text-indigo-300 border border-indigo-700/60 uppercase">
                 v2.0
               </span>
             </h1>
             <p className="text-xs text-slate-400 font-normal">
-              Economic & Market Intelligence
+              {t('brand.tagline', 'Economic & Market Intelligence')}
             </p>
           </div>
+        </div>
+
+        {/* Language Switcher */}
+        <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-white/10 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setLocale('en-CA')}
+            className={`px-1.5 py-0.5 rounded transition-colors ${
+              locale === 'en-CA' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            onClick={() => setLocale('fr-CA')}
+            className={`px-1.5 py-0.5 rounded transition-colors ${
+              locale === 'fr-CA' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            FR
+          </button>
         </div>
       </div>
 
@@ -135,7 +171,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-indigo-400" />
-            <span>Multi-City Comparison</span>
+            <span>{t('actions.compare', 'Multi-City Comparison')}</span>
           </div>
           <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-950/90 text-indigo-300 border border-slate-700">
             {compareCount} Active
@@ -149,9 +185,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         className="flex-1 overflow-y-auto px-3 py-3 space-y-5 no-scrollbar"
       >
         {NAV_CATEGORIES.map(category => (
-          <div key={category.title} className="space-y-1">
+          <div key={category.key} className="space-y-1">
             <div className="px-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-              {category.title}
+              {t(`nav.categories.${category.key}`, category.defaultTitle)}
             </div>
             {category.items.map(item => {
               const isActive = activeTab === item.id;
@@ -171,16 +207,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span className={`${isActive ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-200'}`}>
                       {item.icon}
                     </span>
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{t(`nav.tabs.${item.id}`, item.defaultLabel)}</span>
                   </div>
 
-                  {item.badge && (
+                  {item.defaultBadge && (
                     <span className={`text-xs px-2 py-0.5 rounded font-mono font-semibold ${
                       isActive 
                         ? 'bg-indigo-500 text-white' 
                         : 'bg-slate-800/90 text-slate-300 group-hover:text-white border border-slate-700/60'
                     }`}>
-                      {item.badge}
+                      {item.badgeKey ? t(`nav.badges.${item.badgeKey}`, item.defaultBadge) : item.defaultBadge}
                     </span>
                   )}
                 </button>

@@ -1,0 +1,54 @@
+{
+  "brand": {
+    "title": "Ontario Intel",
+    "tagline": "Economic Intelligence"
+  },
+  "nav": {
+    "categories": {
+      "executive_strategy": "Executive & Strategy",
+      "market_opportunity": "Market Opportunity & Fit",
+      "household_economics": "Household & Economics",
+      "commercial_municipal": "Commercial & Municipal",
+      "analytics_integrity": "Analytics & Integrity"
+    },
+    "tabs": {
+      "overview": "Executive Overview",
+      "city_intelligence": "City Intelligence",
+      "demographics": "Demographics Lens",
+      "financial_profile": "Financial Profile & Wealth",
+      "consumer_spending": "Consumer Spending Habits",
+      "workforce": "Workforce & Occupations",
+      "business_landscape": "Business Landscape",
+      "municipality_finances": "Municipality Finances",
+      "city_rankings": "City Rankings League",
+      "opportunity_lab": "Opportunity Lab",
+      "competition": "Competition Analysis",
+      "business_listings": "Sales & Listings",
+      "outliers": "Statistical Outliers",
+      "data_explorer": "SQL Data Explorer",
+      "methodology_sources": "Methodology & Audits"
+    },
+    "badges": {
+      "ai_engine": "AI Engine",
+      "multi_city": "Multi-City",
+      "z_score": "Z-Score"
+    }
+  },
+  "actions": {
+    "compare": "Compare Mode",
+    "export": "Export Data",
+    "search_city": "Search Ontario Municipalities...",
+    "filter": "Filter",
+    "reset": "Reset",
+    "download_dossier": "Download Feasibility Dossier",
+    "preview_sample": "View Free Burlington Sample"
+  },
+  "provenance": {
+    "official_statcan": "Official Statistics Canada",
+    "quennial_census": "2021 Census of Population (98-401-X2021001)",
+    "mmah_fir": "MMAH Financial Information Return",
+    "confidence_high": "High Confidence (Authoritative Census)",
+    "confidence_medium": "Medium Confidence (Modeled/Partial)",
+    "confidence_low": "Low Coverage (Insufficient Records)"
+  }
+}

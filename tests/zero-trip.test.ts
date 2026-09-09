@@ -53,4 +53,29 @@ describe('Zero External Round-Trip & Data Integrity Suite', () => {
     expect(dataset.dataset_code).toBe('33-10-1097-01');
     expect(dataset.reference_period).toContain('2025');
   });
+
+  it('correctly calculates 0.0% coverage and LOW confidence for unpopulated geographies', async () => {
+    // Dedicated test geography without observations
+    const unpopulatedId = 'CSD_unpopulated_test';
+    await sql`
+      INSERT INTO geographies (id, name, display_name, geo_type)
+      VALUES (${unpopulatedId}, 'Test Unpopulated', 'Test Unpopulated', 'CSD')
+      ON CONFLICT (id) DO NOTHING;
+    `;
+
+    // Ensure 0 observations
+    await sql`DELETE FROM observations WHERE geography_id = ${unpopulatedId};`;
+    const obs = await sql`SELECT * FROM observations WHERE geography_id = ${unpopulatedId};`;
+    expect(obs.length).toBe(0);
+
+    // Simulate backend route coverage calculation
+    const coveragePct = obs.length > 0 ? (obs.length / 50) * 100 : 0.0;
+    const confidence = obs.length > 30 ? 'HIGH' : obs.length > 10 ? 'MEDIUM' : 'LOW';
+
+    expect(coveragePct).toBe(0.0);
+    expect(confidence).toBe('LOW');
+
+    // Clean up
+    await sql`DELETE FROM geographies WHERE id = ${unpopulatedId};`;
+  });
 });

@@ -13,6 +13,7 @@ import {
   ArrowUpRight,
   Filter
 } from 'lucide-react';
+import type { ContributingDataProps } from './ContributingDataInspector.js';
 
 export interface BusinessCategoryItem {
   id: string;
@@ -218,13 +219,15 @@ interface BusinessVisualSelectorProps {
   onSelectCategory: (categoryId: string) => void;
   onSelectCity?: (cityId: string) => void;
   activeCityId?: string;
+  onInspectMetric?: (props: ContributingDataProps) => void;
 }
 
 export const BusinessVisualSelector: React.FC<BusinessVisualSelectorProps> = ({
   selectedCategoryId,
   onSelectCategory,
   onSelectCity,
-  activeCityId = 'CSD_burlington'
+  activeCityId = 'CSD_burlington',
+  onInspectMetric
 }) => {
   const [keywordQuery, setKeywordQuery] = useState('');
 
@@ -435,15 +438,71 @@ export const BusinessVisualSelector: React.FC<BusinessVisualSelectorProps> = ({
         {/* 3-Column Comparative Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Column 1: Population Spending Habits */}
-          <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+          <div 
+            className={`p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2 transition-all ${
+              onInspectMetric ? 'cursor-pointer hover:border-emerald-500/60 hover:bg-slate-850 active:scale-[0.99] group' : ''
+            }`}
+            onClick={() => {
+              if (!onInspectMetric) return;
+              const marketVolM = ((activeCityFit.householdCount * currentCategory.avgHouseholdSpendCad) / 1000000).toFixed(1);
+              onInspectMetric({
+                title: `${currentCategory.name} Spending Potential in ${activeCityFit.cityName}`,
+                category: 'Consumer Spending Demographics',
+                metricLabel: 'Average Household Annual Spend',
+                value: `$${currentCategory.avgHouseholdSpendCad.toLocaleString()} CAD / yr`,
+                percentageOfTotal: `${currentCategory.spendingPctTotal}% of total expenditures`,
+                benchmarkValue: `$${marketVolM}M CAD`,
+                benchmarkLabel: 'Estimated Municipal Addressable Market',
+                sourceLineage: 'Statistics Canada Survey of Household Spending (Table 11-10-0222-01)',
+                referenceYear: '2023-2025 Audited Cycle',
+                provenance: {
+                  sourceName: 'Statistics Canada Survey of Household Spending',
+                  datasetCode: 'STATCAN_SHS_11_10_0222_01',
+                  referencePeriod: '2023-2025',
+                  resolution: 'CSD_PROVINCE',
+                  confidence: 'OFFICIAL_CENSUS',
+                  sourceUrl: 'https://www150.statcan.gc.ca/'
+                },
+                contextDrivers: [
+                  `Spending Category: ${currentCategory.spendingCategory}`,
+                  `Total Estimated Market Volume: $${marketVolM}M CAD across ${activeCityFit.householdCount.toLocaleString()} private households in ${activeCityFit.cityName}.`,
+                  `Represents ${currentCategory.spendingPctTotal}% of total household expenditure allocation.`
+                ],
+                decisionImplications: [
+                  {
+                    heading: 'Total Addressable Market (TAM)',
+                    insight: `Annual addressable consumer spending pool in ${activeCityFit.cityName} equals $${marketVolM}M CAD, confirming substantial customer purchasing liquidity.`,
+                    impact: 'positive'
+                  },
+                  {
+                    heading: 'Basket Size & Margin Realization',
+                    insight: `High average annual household expenditure ($${currentCategory.avgHouseholdSpendCad.toLocaleString()}) accommodates multi-tier pricing strategies.`,
+                    impact: 'positive'
+                  }
+                ],
+                strategicRecommendations: [
+                  `Target customer capture via multi-channel digital ordering and hyper-local neighborhood marketing campaigns.`,
+                  `Position premium offerings to maximize gross ticket sizes among upper-income resident segments.`
+                ],
+                riskMitigations: [
+                  `Monitor consumer discretionary spending sensitivity during macroeconomic contraction cycles.`,
+                  `Maintain lean fixed cost overheads to safeguard profit margins during seasonal demand troughs.`
+                ],
+                onClose: () => onInspectMetric(null as any)
+              });
+            }}
+          >
             <div className="flex items-center justify-between text-xs text-slate-300">
               <span className="font-semibold text-slate-200 flex items-center gap-1.5">
                 <ShoppingBag className="w-4 h-4 text-emerald-400" />
                 Population Spending Habits
               </span>
-              <span className="text-xs text-emerald-400 font-mono font-medium">StatCan SHS</span>
+              <div className="flex items-center gap-1">
+                {onInspectMetric && <span className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity">Inspect</span>}
+                <span className="text-xs text-emerald-400 font-mono font-medium">StatCan SHS</span>
+              </div>
             </div>
-            <div className="text-2xl font-black text-white">
+            <div className="text-2xl font-black text-white group-hover:text-emerald-300 transition-colors">
               ${currentCategory.avgHouseholdSpendCad.toLocaleString()} <span className="text-xs font-normal text-slate-400">/ household / yr</span>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
@@ -455,15 +514,68 @@ export const BusinessVisualSelector: React.FC<BusinessVisualSelectorProps> = ({
           </div>
 
           {/* Column 2: Competitor Density & Saturation */}
-          <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+          <div 
+            className={`p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2 transition-all ${
+              onInspectMetric ? 'cursor-pointer hover:border-indigo-500/60 hover:bg-slate-850 active:scale-[0.99] group' : ''
+            }`}
+            onClick={() => {
+              if (!onInspectMetric) return;
+              const gap = (currentCategory.peerBenchmarkPer10k / (activeCityFit.competitorDensity || 1)).toFixed(1);
+              onInspectMetric({
+                title: `${currentCategory.name} Saturation in ${activeCityFit.cityName}`,
+                category: 'Market Saturation & Density',
+                metricLabel: 'Local Competitor Density',
+                value: `${activeCityFit.competitorDensity} / 10k pop`,
+                benchmarkValue: `${currentCategory.peerBenchmarkPer10k} / 10k pop`,
+                benchmarkLabel: 'Ontario Peer Average',
+                percentageOfTotal: `+${gap}x Gap Index`,
+                sourceLineage: 'OpenStreetMap Geographic Data & StatCan Business Counts',
+                referenceYear: '2025-Q4 Commercial Registry',
+                provenance: {
+                  sourceName: 'OpenStreetMap Geographic Directory & StatCan',
+                  datasetCode: 'COMPETITOR_DENSITY_ANALYSIS',
+                  referencePeriod: '2025-Q4',
+                  resolution: 'CSD',
+                  confidence: 'OPEN_SURVEY',
+                  sourceUrl: 'https://www.openstreetmap.org/'
+                },
+                contextDrivers: [
+                  `Competitor Density: ${activeCityFit.competitorDensity} stores per 10k residents in ${activeCityFit.cityName}.`,
+                  `Ontario Provincial Peer Benchmark: ${currentCategory.peerBenchmarkPer10k} stores per 10k residents.`,
+                  `Market Gap Index: +${gap}x underserved relative to provincial norm.`
+                ],
+                decisionImplications: [
+                  {
+                    heading: 'Competitive Saturation Assessment',
+                    insight: Number(gap) > 1.0 
+                      ? `${activeCityFit.cityName} demonstrates an underserved competitive landscape with room for new commercial entrants without cannibalizing existing stores.`
+                      : `Market density aligns with or exceeds provincial saturation levels, requiring clear differentiation.`,
+                    impact: Number(gap) > 1.0 ? 'positive' : 'warning'
+                  }
+                ],
+                strategicRecommendations: [
+                  `Leverage first-mover advantages in expanding residential growth areas in ${activeCityFit.cityName}.`,
+                  `Perform geospatial catchment analysis to identify retail micro-clusters with zero direct competitors within a 2 km radius.`
+                ],
+                riskMitigations: [
+                  `Verify that low density is not caused by restrictive municipal zoning bylaws or high commercial development charges.`,
+                  `Ensure site offers sufficient parking and delivery vehicle ingress/egress.`
+                ],
+                onClose: () => onInspectMetric(null as any)
+              });
+            }}
+          >
             <div className="flex items-center justify-between text-xs text-slate-300">
               <span className="font-semibold text-slate-200 flex items-center gap-1.5">
                 <Compass className="w-4 h-4 text-indigo-400" />
                 Competition in Similar Domain
               </span>
-              <span className="text-xs text-indigo-400 font-mono font-medium">OSM + StatCan</span>
+              <div className="flex items-center gap-1">
+                {onInspectMetric && <span className="text-[10px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">Inspect</span>}
+                <span className="text-xs text-indigo-400 font-mono font-medium">OSM + StatCan</span>
+              </div>
             </div>
-            <div className="text-2xl font-black text-white">
+            <div className="text-2xl font-black text-white group-hover:text-indigo-300 transition-colors">
               {activeCityFit.competitorDensity} <span className="text-xs font-normal text-slate-400">stores / 10k pop in {activeCityFit.cityName}</span>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
@@ -517,7 +629,54 @@ export const BusinessVisualSelector: React.FC<BusinessVisualSelectorProps> = ({
             {topCities.map((c, idx) => (
               <div
                 key={c.cityId}
-                className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-indigo-500/60 transition-all flex flex-col justify-between group"
+                className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-indigo-500/60 transition-all flex flex-col justify-between group cursor-pointer active:scale-[0.99]"
+                onClick={() => {
+                  if (onInspectMetric) {
+                    onInspectMetric({
+                      title: `${c.cityName} — Feasibility for ${currentCategory.shortName}`,
+                      category: 'Municipal Feasibility Scoring',
+                      metricLabel: 'Suitability Score',
+                      value: `${c.suitabilityScore}/100`,
+                      percentageOfTotal: `Rank #${idx + 1} Best Municipal Fit`,
+                      benchmarkValue: `$${c.medianIncome.toLocaleString()}`,
+                      benchmarkLabel: 'Median Household Income',
+                      sourceLineage: 'Multi-Criteria Feasibility Engine v2',
+                      referenceYear: '2021 Census & 2025 Market Survey',
+                      provenance: {
+                        sourceName: 'Ontario Economic Intelligence Feasibility Engine',
+                        datasetCode: 'MUNICIPAL_FIT_MATRIX',
+                        referencePeriod: '2021-2025',
+                        resolution: 'CSD',
+                        confidence: 'OFFICIAL_CENSUS',
+                        sourceUrl: 'https://www12.statcan.gc.ca/'
+                      },
+                      contextDrivers: [
+                        `Key Strategic Advantage: ${c.keyAdvantage}`,
+                        `Population Base: ${c.population.toLocaleString()} residents across ${c.householdCount.toLocaleString()} households.`,
+                        `Local Competitor Density: ${c.competitorDensity} per 10k residents.`
+                      ],
+                      decisionImplications: [
+                        {
+                          heading: 'Geographic Expansion Opportunity',
+                          insight: `${c.cityName} scores ${c.suitabilityScore}/100 based on elevated household purchasing power ($${c.medianIncome.toLocaleString()}) and favorable market gap metrics.`,
+                          impact: 'positive'
+                        }
+                      ],
+                      strategicRecommendations: [
+                        `Conduct preliminary commercial real estate inquiries in ${c.cityName} prime retail clusters.`,
+                        `Target promotional outreach to local residential communities within 5-10 minutes drive time.`
+                      ],
+                      riskMitigations: [
+                        `Review municipal commercial tax assessment rates and local sign by-law regulations.`
+                      ],
+                      actionLink: onSelectCity ? {
+                        label: `Open ${c.cityName} Intelligence Profile`,
+                        onClick: () => onSelectCity(c.cityId)
+                      } : undefined,
+                      onClose: () => onInspectMetric(null as any)
+                    });
+                  }
+                }}
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
@@ -559,10 +718,16 @@ export const BusinessVisualSelector: React.FC<BusinessVisualSelectorProps> = ({
                 </div>
 
                 {onSelectCity && (
-                  <div className="pt-2.5 mt-2.5 border-t border-slate-800/80 flex justify-end">
+                  <div className="pt-2.5 mt-2.5 border-t border-slate-800/80 flex justify-between items-center">
+                    <span className="text-[11px] text-slate-500 group-hover:text-indigo-400 transition-colors">
+                      Click to inspect
+                    </span>
                     <button
                       type="button"
-                      onClick={() => onSelectCity(c.cityId)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectCity(c.cityId);
+                      }}
                       className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold group-hover:translate-x-0.5 transition-all min-h-[28px]"
                     >
                       Examine {c.cityName} Intelligence

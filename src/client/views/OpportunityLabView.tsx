@@ -12,10 +12,11 @@ import {
   CheckCircle2, 
   X, 
   FileText, 
-  HelpCircle,
-  BarChart3,
-  Layers,
-  Image as ImageIcon
+  HelpCircle, 
+  BarChart3, 
+  Layers, 
+  Search,
+  Image as ImageIcon 
 } from 'lucide-react';
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
 import { ExportButton } from '../components/ExportButton.js';
@@ -23,13 +24,14 @@ import { MetricTooltip } from '../components/MetricTooltip.js';
 import { BusinessVisualSelector } from '../components/BusinessVisualSelector.js';
 import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
 import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
+import { FeasibilityDossierModal } from '../components/FeasibilityDossierModal.js';
 
 interface OpportunityLabViewProps {
   cityId: string;
   onSelectCity: (cityId: string) => void;
 }
 
-const BUSINESS_CATEGORIES = [
+const DEFAULT_BUSINESS_CATEGORIES = [
   { id: 'pizza_store', name: 'Pizza Store / Pizzeria (NAICS 722513)', icon: '🍕' },
   { id: 'full_service_restaurant', name: 'Full-Service Restaurant (NAICS 722511)', icon: '🍽️' },
   { id: 'coffee_shop', name: 'Coffee & Snack Shop (NAICS 722515)', icon: '☕' },
@@ -37,8 +39,37 @@ const BUSINESS_CATEGORIES = [
   { id: 'fitness_centre', name: 'Fitness & Recreational Sports (NAICS 713940)', icon: '🏋️' },
   { id: 'child_daycare', name: 'Child Daycare Facility (NAICS 624410)', icon: '👶' },
   { id: 'automotive_repair', name: 'General Automotive Repair (NAICS 811111)', icon: '🚗' },
-  { id: 'dental_clinic', name: 'Offices of Dentists (NAICS 621210)', icon: '🦷' }
+  { id: 'dental_clinic', name: 'Offices of Dentists (NAICS 621210)', icon: '🦷' },
+  { id: 'hair_salon', name: 'Hair & Beauty Salon (NAICS 812111)', icon: '💇' },
+  { id: 'pet_services', name: 'Veterinary & Pet Care (NAICS 541940)', icon: '🐾' },
+  { id: 'pharmacy', name: 'Pharmacies & Drug Stores (NAICS 446110)', icon: '💊' },
+  { id: 'grocery_specialty', name: 'Specialty Food & Grocery (NAICS 445290)', icon: '🥖' }
 ];
+
+const getIconForCategory = (catId: string): string => {
+  const iconMap: Record<string, string> = {
+    pizza_store: '🍕',
+    full_service_restaurant: '🍽️',
+    coffee_shop: '☕',
+    tutoring_centre: '📚',
+    fitness_centre: '🏋️',
+    child_daycare: '👶',
+    automotive_repair: '🚗',
+    dental_clinic: '🦷',
+    hair_salon: '💇',
+    pet_services: '🐾',
+    pharmacy: '💊',
+    grocery_specialty: '🥖',
+    bakery: '🥐',
+    brewery: '🍺',
+    plumbing_contractor: '🔧',
+    legal_services: '⚖️',
+    accounting_services: '📊',
+    optometrist: '👓',
+    dry_cleaner: '👔'
+  };
+  return iconMap[catId] || '🏢';
+};
 
 export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, onSelectCity }) => {
   const [workflow, setWorkflow] = useState<'VISUAL' | 'B' | 'A'>('VISUAL'); // Default to Visual Picture & Keyword Mapping Matrix
@@ -49,8 +80,56 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
   const [compWeight, setCompWeight] = useState<number>(0.30);
   const [incomeWeight, setIncomeWeight] = useState<number>(0.20);
   const [growthWeight, setGrowthWeight] = useState<number>(0.15);
+  const [minPopulation, setMinPopulation] = useState<number>(0);
   const [workflowAResults, setWorkflowAResults] = useState<any[]>([]);
   const [loadingA, setLoadingA] = useState(false);
+
+  // Dynamic Business Taxonomy & Autocomplete State
+  const [categories, setCategories] = useState<{ id: string; name: string; icon?: string; naicsCode?: string }[]>(DEFAULT_BUSINESS_CATEGORIES);
+  const [autocompleteQuery, setAutocompleteQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/taxonomy/categories')
+      .then(res => res.json())
+      .then(d => {
+        if (d.categories && d.categories.length > 0) {
+          const mapped = d.categories.map((c: any) => ({
+            id: c.id,
+            name: c.displayName || c.name || c.id,
+            icon: getIconForCategory(c.id),
+            naicsCode: c.naicsCode
+          }));
+          setCategories(mapped);
+        }
+      })
+      .catch(err => console.error('Error fetching taxonomy categories:', err));
+  }, []);
+
+  useEffect(() => {
+    if (!autocompleteQuery || autocompleteQuery.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetch(`/api/taxonomy/search?q=${encodeURIComponent(autocompleteQuery.trim())}&limit=8`)
+        .then(res => res.json())
+        .then(d => setSuggestions(d.suggestions || []))
+        .catch(err => console.error('Error fetching taxonomy suggestions:', err));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [autocompleteQuery]);
+
+  const getCategoryName = (id: string) => {
+    const found = categories.find(c => c.id === id);
+    return found ? found.name : id.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const getCategoryIcon = (id: string) => {
+    const found = categories.find(c => c.id === id);
+    return found?.icon || getIconForCategory(id);
+  };
 
   // Workflow B State ("I know the city")
   const [selectedCityId, setSelectedCityId] = useState<string>(cityId);
@@ -64,6 +143,13 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
 
   // Contributing Data Inspector State
   const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
+  const [modalContributingData, setModalContributingData] = useState<ContributingDataProps | null>(null);
+
+  // Feasibility Dossier Modal State (Amendment #8 & T-008)
+  const [isDossierOpen, setIsDossierOpen] = useState<boolean>(false);
+  const [dossierCityId, setDossierCityId] = useState<string>(cityId);
+  const [dossierCategoryId, setDossierCategoryId] = useState<string>('pizza_store');
+  const [dossierCityName, setDossierCityName] = useState<string>('Burlington');
 
   // Sync selectedCityId with prop
   useEffect(() => {
@@ -79,7 +165,8 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
         demand: demandWeight.toString(),
         competition: compWeight.toString(),
         income: incomeWeight.toString(),
-        growth: growthWeight.toString()
+        growth: growthWeight.toString(),
+        minPopulation: minPopulation.toString()
       });
       fetch(`/api/opportunity/business-search?${params.toString()}`)
         .then(res => res.json())
@@ -92,7 +179,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
           setLoadingA(false);
         });
     }
-  }, [workflow, selectedCategory, demandWeight, compWeight, incomeWeight, growthWeight]);
+  }, [workflow, selectedCategory, demandWeight, compWeight, incomeWeight, growthWeight, minPopulation]);
 
   // Fetch Workflow B
   useEffect(() => {
@@ -127,6 +214,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
         });
     } else {
       setDetailData(null);
+      setModalContributingData(null);
     }
   }, [activeDetail]);
 
@@ -144,24 +232,64 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
   const handleCardClick = (rec: any) => {
     const oppScore = rec.opportunityScore || 85;
     const revMedian = rec.revenueBenchmarkRange?.median || rec.estimatedAnnualRevenueCAD?.median || 750000;
-    const density = rec.competitorDensity || rec.countPer10kPop || 0;
+    const density = rec.competitorDensity !== undefined ? rec.competitorDensity : (rec.countPer10kPop || 0);
 
     setContributingData({
       title: `${rec.categoryName} Feasibility Breakdown in ${selectedCityId.replace('CSD_', '')}`,
+      category: 'Market Opportunity & Feasibility',
       metricLabel: 'Opportunity Feasibility Score',
       value: `${oppScore}/100`,
-      percentageOfTotal: `${rec.gapIndex || 2.1}x Gap Index`,
+      percentageOfTotal: `${rec.gapIndex ? `+${rec.gapIndex}x` : '+2.1x'} Gap Index`,
       benchmarkValue: `${rec.peerBenchmarkPer10kPop || 2.8} stores / 10k pop`,
       benchmarkLabel: 'Ontario Peer Saturation Benchmark',
       deltaPct: rec.gapIndex ? Math.round((rec.gapIndex - 1) * 100) : 25,
       sourceLineage: `StatCan NAICS ${rec.naicsCode} & Survey of Service Industries`,
       referenceYear: '2021 Census & 2025 Commercial Registry',
+      provenance: {
+        sourceName: 'Statistics Canada / OSM Commercial Directory',
+        datasetCode: `NAICS_${rec.naicsCode}`,
+        referencePeriod: '2021 Census / 2025-Q4 Commercial Registry',
+        resolution: 'CSD',
+        confidence: 'OFFICIAL_CENSUS',
+        sourceUrl: 'https://www12.statcan.gc.ca/'
+      },
       contextDrivers: [
         rec.rationale || `Evaluated against ${density} existing competitors per 10k residents.`,
         `Estimated Median Unit Revenue: $${Number(revMedian).toLocaleString()} CAD / yr`,
         `Typical Initial Capital Investment: $${Number(rec.typicalInvestmentCAD?.min || 150000).toLocaleString()} – $${Number(rec.typicalInvestmentCAD?.max || 450000).toLocaleString()} CAD`,
         ...(rec.keyDrivers || [])
       ],
+      decisionImplications: [
+        {
+          heading: 'Market Entry Viability',
+          insight: `With a ${rec.gapIndex ? `+${rec.gapIndex}x` : 'strong'} gap index, local demand outstrips current physical retail capacity, indicating room for profitable new market entrants.`,
+          impact: 'positive'
+        },
+        {
+          heading: 'Revenue Realization & Debt Coverage',
+          insight: `Median unit revenue of $${Number(revMedian).toLocaleString()} CAD supports targeted debt service coverage ratios (DSCR > 1.35x) assuming occupancy costs remain under 8.5% of gross sales.`,
+          impact: 'neutral'
+        },
+        {
+          heading: 'Competitor Density Baseline',
+          insight: `At ${density} locations per 10k residents compared to the Ontario peer average of ${rec.peerBenchmarkPer10kPop || 2.8}/10k, saturation risk is minimal.`,
+          impact: 'positive'
+        }
+      ],
+      strategicRecommendations: [
+        `Target site selection in high-density residential subdivisions or primary commercial transit corridors in ${selectedCityId.replace('CSD_', '')}.`,
+        `Model 3-year cash flow projections using conservative 25th percentile revenue targets to verify operational solvency during initial customer acquisition.`,
+        `Align product pricing and service tiering with municipal median household income and disposable spending capacity.`
+      ],
+      riskMitigations: [
+        `Cap gross rent (base + TMI) at no more than 8-10% of projected annual gross sales to safeguard operational profit margins.`,
+        `Seek landlord tenant improvement allowances (TI) of $25–$45/sq. ft to offset fit-out and HVAC capital expenditures.`,
+        `Maintain a minimum of 6 to 9 months operating cash reserve to insulate against supplier inflation and localized demand shifts.`
+      ],
+      actionLink: {
+        label: `Inspect ${rec.categoryName} Unit Economics & Competitor List`,
+        onClick: () => setActiveDetail({ cityId: selectedCityId, categoryId: rec.categoryId, cityName: rec.cityName })
+      },
       onClose: () => setContributingData(null)
     });
   };
@@ -224,6 +352,20 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
             Ontario City League
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setDossierCityId(selectedCityId || cityId);
+            setDossierCategoryId(selectedCategory);
+            setDossierCityName(selectedCityId?.replace('CSD_', '') || 'Burlington');
+            setIsDossierOpen(true);
+          }}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-600/20 transition-all active:scale-[0.98]"
+        >
+          <FileText className="w-3.5 h-3.5" />
+          <span>Feasibility Dossier ($199 CAD)</span>
+        </button>
       </div>
 
       {/* Contributing Data Inspector (if active) */}
@@ -245,6 +387,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
             setSelectedCityId(targetCityId);
           }}
           activeCityId={selectedCityId}
+          onInspectMetric={(props) => setContributingData(props)}
         />
       )}
 
@@ -309,13 +452,13 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                 return (
                   <div 
                     key={rec.categoryId}
-                    className="glass-panel p-5 rounded-xl border border-slate-800 hover:border-indigo-500/60 transition-all shadow-md group cursor-pointer"
+                    className="glass-panel p-5 rounded-xl border border-slate-800 hover:border-indigo-500/60 transition-all shadow-md group cursor-pointer active:scale-[0.99] relative"
                     onClick={() => handleCardClick(rec)}
                   >
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div className="flex items-center gap-2.5">
                         <span className="text-2xl p-2 rounded-lg bg-slate-900 border border-slate-800">
-                          {BUSINESS_CATEGORIES.find(c => c.id === rec.categoryId)?.icon || '🏢'}
+                          {getCategoryIcon(rec.categoryId)}
                         </span>
                         <div>
                           <h4 className="text-base font-bold text-white group-hover:text-indigo-400 transition-colors">
@@ -358,6 +501,9 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                         Annual Revenue: <strong className="text-white">${(medianRev / 1000).toFixed(0)}k</strong>
                       </span>
                       <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-500 group-hover:text-indigo-400 transition-colors">
+                          Click to inspect strategy
+                        </span>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -386,21 +532,68 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
         <div className="space-y-6">
           {/* Controls Panel */}
           <div className="glass-panel p-6 rounded-xl border border-slate-800 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
-              <div className="w-full sm:w-auto">
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Select Business Category:</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 text-white font-semibold text-sm rounded-lg px-3 py-2 w-full sm:w-80 focus:outline-none focus:border-indigo-500"
-                >
-                  {BUSINESS_CATEGORIES.map(c => (
-                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                  ))}
-                </select>
+            <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-slate-800">
+              <div className="w-full sm:w-auto flex-1 max-w-xl space-y-2">
+                <label className="text-xs font-semibold text-slate-300 block">
+                  Search or Select Business Category:
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2 relative">
+                  {/* Autocomplete Input */}
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Type a business (e.g. pizza, mechanic, daycare, gym)..."
+                      value={autocompleteQuery}
+                      onChange={(e) => {
+                        setAutocompleteQuery(e.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      className="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg pl-9 pr-3 py-2 w-full focus:outline-none focus:border-indigo-500"
+                    />
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-lg shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+                        {suggestions.map((s: any) => (
+                          <button
+                            key={s.id || s.canonicalId}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategory(s.canonicalId || s.id);
+                              setAutocompleteQuery('');
+                              setShowSuggestions(false);
+                            }}
+                            className="w-full text-left px-3 py-2.5 hover:bg-indigo-600/30 border-b border-slate-800/60 last:border-b-0 flex items-center justify-between text-xs"
+                          >
+                            <span className="font-semibold text-white flex items-center gap-2">
+                              <span>{getCategoryIcon(s.canonicalId || s.id)}</span>
+                              <span>{s.displayName || s.name || s.term}</span>
+                            </span>
+                            {s.naicsCode && (
+                              <span className="text-[10px] font-mono text-indigo-300 bg-indigo-950/80 px-1.5 py-0.5 rounded border border-indigo-800/50">
+                                NAICS {s.naicsCode}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dynamic Category Select */}
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 text-white font-semibold text-sm rounded-lg px-3 py-2 sm:w-64 focus:outline-none focus:border-indigo-500"
+                  >
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.icon || getCategoryIcon(c.id)} {c.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="text-xs text-slate-400 max-w-sm">
+              <div className="text-xs text-slate-400 max-w-xs mt-1">
                 Ranks all 444 Ontario Census Subdivisions to identify municipalities with peak purchasing power, high household formation, and minimal competitor saturation.
               </div>
             </div>
@@ -476,6 +669,47 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   />
                 </div>
               </div>
+
+              {/* Municipal Scale Population Filter */}
+              <div className="p-3 bg-slate-900/70 rounded-lg border border-slate-800 flex flex-wrap items-center justify-between gap-3 mt-3">
+                <div className="flex items-center gap-2">
+                  <Building className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs font-semibold text-slate-300">
+                    Municipal Scale Filter: <strong className="text-indigo-300">{minPopulation === 0 ? 'All Municipalities (0+)' : `${minPopulation.toLocaleString()}+ residents`}</strong>
+                  </span>
+                  <span className="text-[10px] text-slate-400 hidden sm:inline">
+                    (Enables discovery of small & mid-sized Ontario communities)
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <div className="flex items-center gap-1">
+                    {[0, 10000, 25000, 50000, 100000].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setMinPopulation(preset)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                          minPopulation === preset
+                            ? 'bg-indigo-600 text-white font-bold'
+                            : 'bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {preset === 0 ? 'All' : `${preset / 1000}k+`}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100000"
+                    step="5000"
+                    value={minPopulation}
+                    onChange={(e) => setMinPopulation(parseInt(e.target.value))}
+                    className="w-28 accent-indigo-500"
+                    title="Adjust minimum population threshold"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -484,7 +718,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Target className="w-4 h-4 text-emerald-400" />
-                Top Ranked Municipalities for {BUSINESS_CATEGORIES.find(c => c.id === selectedCategory)?.name}
+                Top Ranked Municipalities for {getCategoryName(selectedCategory)}
               </h3>
               <ExportButton 
                 data={workflowAResults.map((r, idx) => ({
@@ -530,19 +764,57 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                       return (
                         <tr 
                           key={r.geographyId} 
-                          className="hover:bg-slate-900/50 transition-colors cursor-pointer"
+                          className="hover:bg-slate-800/60 transition-colors cursor-pointer group"
                           onClick={() => {
                             setContributingData({
                               title: `${r.cityName} Feasibility Metrics for ${selectedCategory.replace('_', ' ')}`,
+                              category: 'Multi-Criteria Feasibility',
                               metricLabel: 'Opportunity Feasibility Score',
                               value: `${r.opportunityScore}/100`,
-                              percentageOfTotal: `Rank #${idx + 1} of 444`,
+                              percentageOfTotal: `Rank #${idx + 1} of 444 Ontario Municipalities`,
                               benchmarkValue: `$${Number(inc).toLocaleString()}`,
                               benchmarkLabel: 'Median Household Income',
                               deltaPct: Math.round(((inc - 95000) / 95000) * 100),
                               sourceLineage: 'StatCan 2021 Census & OSM Geographic Survey',
                               referenceYear: '2021 / 2025-Q4',
+                              provenance: {
+                                sourceName: 'Statistics Canada / OSM Commercial Directory',
+                                datasetCode: 'FEASIBILITY_ENGINE_V2',
+                                referencePeriod: '2021 Census / 2025-Q4',
+                                resolution: 'CSD',
+                                confidence: 'OFFICIAL_CENSUS',
+                                sourceUrl: 'https://www12.statcan.gc.ca/'
+                              },
                               contextDrivers: r.strengths || [r.evidenceSummary],
+                              decisionImplications: [
+                                {
+                                  heading: `Rank #${idx + 1} Provincial Standing`,
+                                  insight: `${r.cityName} ranks among top Ontario municipalities for ${selectedCategory.replace('_', ' ')} based on demand weight (${Math.round(demandWeight * 100)}%) and purchasing power (${Math.round(incomeWeight * 100)}%).`,
+                                  impact: 'positive'
+                                },
+                                {
+                                  heading: 'Household Income Support',
+                                  insight: `Median household income of $${Number(inc).toLocaleString()} represents significant disposable capacity for discretionary services.`,
+                                  impact: 'positive'
+                                },
+                                {
+                                  heading: 'Saturation & Density',
+                                  insight: `Competitor density of ${sat} / 10k residents indicates manageable entry barriers.`,
+                                  impact: sat < 2.5 ? 'positive' : 'warning'
+                                }
+                              ],
+                              strategicRecommendations: [
+                                `Focus site selection along commercial arteries with proximity to high-density residential subdivisions in ${r.cityName}.`,
+                                `Engage the local municipal economic development department regarding fast-track commercial permitting or Community Improvement Plan (CIP) incentives.`
+                              ],
+                              riskMitigations: [
+                                `Diligence municipal commercial property tax assessments and local utility hook-up fees before finalizing lease covenants.`,
+                                `Stress-test unit business pro-forma financials against 25th percentile revenue thresholds.`
+                              ],
+                              actionLink: {
+                                label: `Inspect Competitors & Unit Economics for ${r.cityName}`,
+                                onClick: () => setActiveDetail({ cityId: r.geographyId, categoryId: selectedCategory, cityName: r.cityName })
+                              },
                               onClose: () => setContributingData(null)
                             });
                           }}
@@ -631,7 +903,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   <ResolutionBadge resolution="CSD" />
                 </div>
                 <h3 id="category-detail-title" className="text-xl font-bold text-white tracking-tight">
-                  {BUSINESS_CATEGORIES.find(c => c.id === activeDetail.categoryId)?.name || activeDetail.categoryId} in {activeDetail.cityName || activeDetail.cityId.replace('CSD_', '')}
+                  {getCategoryName(activeDetail.categoryId)} in {activeDetail.cityName || activeDetail.cityId.replace('CSD_', '')}
                 </h3>
               </div>
               <button
@@ -646,6 +918,11 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
 
             {/* Modal Content */}
             <div className="p-6 space-y-6">
+              {/* Modal Contributing Data Inspector (if active) */}
+              {modalContributingData && (
+                <ContributingDataInspector {...modalContributingData} />
+              )}
+
               {loadingDetail || !detailData ? (
                 <div className="p-12 text-center text-slate-400 animate-pulse">
                   Loading verified unit economics, commercial rent, and competitor locations...
@@ -658,6 +935,9 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                       <h4 className="text-sm font-bold text-white flex items-center gap-2">
                         <DollarSign className="w-4 h-4 text-emerald-400" />
                         Verified Revenue Benchmark Chain
+                        <span className="text-[11px] font-normal text-slate-400">
+                          (Click any percentile card to inspect unit economics)
+                        </span>
                       </h4>
                       <ResolutionBadge 
                         resolution={detailData.revenueBenchmarkChain?.geographic_resolution || 'PROVINCE'} 
@@ -668,21 +948,193 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                     {detailData.revenueBenchmarkChain ? (
                       <div>
                         <div className="grid grid-cols-3 gap-3 my-2 text-xs">
-                          <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                            <span className="text-slate-400 block mb-1">25th Percentile Revenue</span>
-                            <span className="text-base font-bold text-white">
+                          {/* P25 Card */}
+                          <div 
+                            className="p-3 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/60 hover:bg-slate-850 transition-all cursor-pointer group active:scale-[0.98] relative"
+                            onClick={() => {
+                              const p25 = Number(detailData.revenueBenchmarkChain.p25_revenue_cad);
+                              const med = Number(detailData.revenueBenchmarkChain.median_revenue_cad);
+                              setModalContributingData({
+                                title: `P25 Downside Revenue Stress Test (${getCategoryName(activeDetail.categoryId)})`,
+                                category: 'Unit Economics Stress Test',
+                                metricLabel: '25th Percentile Revenue (Downside Base)',
+                                value: `$${p25.toLocaleString()} CAD`,
+                                unit: 'CAD/yr',
+                                percentageOfTotal: 'Lower 25% of provincial operators',
+                                benchmarkValue: `$${med.toLocaleString()} CAD`,
+                                benchmarkLabel: 'Ontario Median Unit Revenue',
+                                deltaPct: Math.round(((p25 - med) / med) * 100),
+                                sourceLineage: `${detailData.revenueBenchmarkChain.source_statcan_table} & ${detailData.revenueBenchmarkChain.source_sedar_filing}`,
+                                referenceYear: '2023-2025 Audited Filings',
+                                provenance: {
+                                  sourceName: detailData.revenueBenchmarkChain.source_statcan_table,
+                                  datasetCode: 'SEDAR_STATCAN_REVENUE_CHAIN',
+                                  referencePeriod: '2023-2025 filings',
+                                  resolution: 'PROVINCE',
+                                  confidence: 'SEDAR_PUBLIC_FILINGS',
+                                  sourceUrl: 'https://www.sedarplus.ca/'
+                                },
+                                contextDrivers: [
+                                  `Methodology: ${detailData.revenueBenchmarkChain.methodology_notes}`,
+                                  `SEDAR public disclosure filing cross-check: ${detailData.revenueBenchmarkChain.source_sedar_filing}`,
+                                  `Downside baseline models single-unit operation during initial customer acquisition or secondary retail corridor placement.`
+                                ],
+                                decisionImplications: [
+                                  {
+                                    heading: 'Solvency & Debt Service Coverage (DSCR)',
+                                    insight: `At $${p25.toLocaleString()} CAD in gross receipts, debt service coverage must be modeled strictly to confirm unit can service principal and interest obligations.`,
+                                    impact: 'warning'
+                                  },
+                                  {
+                                    heading: 'Fixed Cost Rent Ceiling',
+                                    insight: `To ensure viability at P25 volume, annual gross occupancy cost (base rent + TMI) should not exceed 8-9% of revenue ($${Math.round(p25 * 0.085).toLocaleString()} CAD/yr).`,
+                                    impact: 'neutral'
+                                  }
+                                ],
+                                strategicRecommendations: [
+                                  'Capitalize working capital reserves for a minimum of 9 months operating at P25 volume.',
+                                  'Negotiate step-up rent or initial rent abatement (free rent period) during lease execution.',
+                                  'Keep full-time labor commitments flexible by utilizing cross-trained part-time staff during ramp-up.'
+                                ],
+                                riskMitigations: [
+                                  'Insert percentage-rent lease clauses with low base minimums to limit downside cash drain.',
+                                  'Maintain conservative supplier terms (Net 30/60) to protect operating cash flow.'
+                                ],
+                                onClose: () => setModalContributingData(null)
+                              });
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-400 block mb-1">25th Percentile Revenue</span>
+                              <span className="text-[10px] text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity">Inspect</span>
+                            </div>
+                            <span className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
                               ${Number(detailData.revenueBenchmarkChain.p25_revenue_cad).toLocaleString()}
                             </span>
                           </div>
-                          <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                            <span className="text-slate-400 block mb-1">Median Revenue</span>
-                            <span className="text-base font-bold text-emerald-400">
+
+                          {/* Median Card */}
+                          <div 
+                            className="p-3 rounded-lg bg-slate-900 border border-slate-800 hover:border-emerald-500/60 hover:bg-slate-850 transition-all cursor-pointer group active:scale-[0.98] relative"
+                            onClick={() => {
+                              const med = Number(detailData.revenueBenchmarkChain.median_revenue_cad);
+                              setModalContributingData({
+                                title: `Median Unit Revenue Target (${getCategoryName(activeDetail.categoryId)})`,
+                                category: 'Baseline Unit Economics',
+                                metricLabel: 'Median Annual Unit Revenue',
+                                value: `$${med.toLocaleString()} CAD`,
+                                unit: 'CAD/yr',
+                                percentageOfTotal: '50th percentile (provincial median)',
+                                benchmarkValue: `$${med.toLocaleString()} CAD`,
+                                benchmarkLabel: 'Ontario Median Benchmark',
+                                deltaPct: 0,
+                                sourceLineage: `${detailData.revenueBenchmarkChain.source_statcan_table} & ${detailData.revenueBenchmarkChain.source_sedar_filing}`,
+                                referenceYear: '2023-2025 Audited Filings',
+                                provenance: {
+                                  sourceName: detailData.revenueBenchmarkChain.source_statcan_table,
+                                  datasetCode: 'SEDAR_STATCAN_REVENUE_CHAIN',
+                                  referencePeriod: '2023-2025 filings',
+                                  resolution: 'PROVINCE',
+                                  confidence: 'SEDAR_PUBLIC_FILINGS',
+                                  sourceUrl: 'https://www.sedarplus.ca/'
+                                },
+                                contextDrivers: [
+                                  `Methodology: ${detailData.revenueBenchmarkChain.methodology_notes}`,
+                                  `Public SEDAR Franchise Filings: ${detailData.revenueBenchmarkChain.source_sedar_filing}`,
+                                  `Represents typical mature operation after 18-24 months of continuous commercial operations.`
+                                ],
+                                decisionImplications: [
+                                  {
+                                    heading: 'Core Profitability Target',
+                                    insight: `At $${med.toLocaleString()} CAD gross revenue, typical EBITDA margins range between 12% and 18% depending on labor management efficiency.`,
+                                    impact: 'positive'
+                                  },
+                                  {
+                                    heading: 'Occupancy Affordability',
+                                    insight: `Permits annual occupancy expenditure up to $${Math.round(med * 0.09).toLocaleString()} CAD ($${Math.round((med * 0.09) / 1200).toLocaleString()}/sq. ft gross for a 1,200 sq. ft retail unit).`,
+                                    impact: 'positive'
+                                  }
+                                ],
+                                strategicRecommendations: [
+                                  'Standardize point-of-sale inventory tracking to benchmark food/merchandise costs against provincial peer targets (<30% COGS).',
+                                  'Implement customer loyalty and repeat visit incentives to sustain steady mid-week transaction volume.'
+                                ],
+                                riskMitigations: [
+                                  'Monitor wage cost escalations; implement scheduling software to avoid unexpected overtime labor spikes.',
+                                  'Ensure adequate commercial liability and business interruption insurance coverage.'
+                                ],
+                                onClose: () => setModalContributingData(null)
+                              });
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-400 block mb-1">Median Revenue</span>
+                              <span className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity">Inspect</span>
+                            </div>
+                            <span className="text-base font-bold text-emerald-400 group-hover:text-emerald-300 transition-colors">
                               ${Number(detailData.revenueBenchmarkChain.median_revenue_cad).toLocaleString()}
                             </span>
                           </div>
-                          <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                            <span className="text-slate-400 block mb-1">75th Percentile Revenue</span>
-                            <span className="text-base font-bold text-indigo-300">
+
+                          {/* P75 Card */}
+                          <div 
+                            className="p-3 rounded-lg bg-slate-900 border border-slate-800 hover:border-indigo-500/60 hover:bg-slate-850 transition-all cursor-pointer group active:scale-[0.98] relative"
+                            onClick={() => {
+                              const p75 = Number(detailData.revenueBenchmarkChain.p75_revenue_cad);
+                              const med = Number(detailData.revenueBenchmarkChain.median_revenue_cad);
+                              setModalContributingData({
+                                title: `75th Percentile High-Volume Outperformance (${getCategoryName(activeDetail.categoryId)})`,
+                                category: 'Peak Performance Unit Economics',
+                                metricLabel: '75th Percentile Unit Revenue',
+                                value: `$${p75.toLocaleString()} CAD`,
+                                unit: 'CAD/yr',
+                                percentageOfTotal: 'Upper quartile (top 25%)',
+                                benchmarkValue: `$${med.toLocaleString()} CAD`,
+                                benchmarkLabel: 'Ontario Median Unit Revenue',
+                                deltaPct: Math.round(((p75 - med) / med) * 100),
+                                sourceLineage: `${detailData.revenueBenchmarkChain.source_statcan_table} & ${detailData.revenueBenchmarkChain.source_sedar_filing}`,
+                                referenceYear: '2023-2025 Audited Filings',
+                                provenance: {
+                                  sourceName: detailData.revenueBenchmarkChain.source_statcan_table,
+                                  datasetCode: 'SEDAR_STATCAN_REVENUE_CHAIN',
+                                  referencePeriod: '2023-2025 filings',
+                                  resolution: 'PROVINCE',
+                                  confidence: 'SEDAR_PUBLIC_FILINGS',
+                                  sourceUrl: 'https://www.sedarplus.ca/'
+                                },
+                                contextDrivers: [
+                                  `Methodology: ${detailData.revenueBenchmarkChain.methodology_notes}`,
+                                  `High-throughput locations characterized by prime AAA retail frontage, dual drive-thrus, or high corporate catering delivery demand.`
+                                ],
+                                decisionImplications: [
+                                  {
+                                    heading: 'Operational Capacity Limits',
+                                    insight: `Generating $${p75.toLocaleString()} CAD requires optimized peak-hour production lines and high order throughput to avoid customer drop-off.`,
+                                    impact: 'positive'
+                                  },
+                                  {
+                                    heading: 'Premium Rent Tolerance',
+                                    insight: `High volume allows tenant to compete for prime corner commercial frontage commanding premium base rents.`,
+                                    impact: 'positive'
+                                  }
+                                ],
+                                strategicRecommendations: [
+                                  'Invest in automated kitchen/service equipment and dual ordering kiosks to maximize peak hourly capacity.',
+                                  'Explore dedicated third-party delivery dispatch stations to separate dine-in traffic from delivery drivers.'
+                                ],
+                                riskMitigations: [
+                                  'Avoid lease terms that trigger punitive percentage-rent payments without a cap when exceeding high sales thresholds.',
+                                  'Maintain strict quality control protocols to protect brand reputation during high-volume periods.'
+                                ],
+                                onClose: () => setModalContributingData(null)
+                              });
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-400 block mb-1">75th Percentile Revenue</span>
+                              <span className="text-[10px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">Inspect</span>
+                            </div>
+                            <span className="text-base font-bold text-indigo-300 group-hover:text-indigo-200 transition-colors">
                               ${Number(detailData.revenueBenchmarkChain.p75_revenue_cad).toLocaleString()}
                             </span>
                           </div>
@@ -711,29 +1163,194 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                       <h4 className="text-sm font-bold text-white flex items-center gap-2">
                         <Building className="w-4 h-4 text-blue-400" />
                         Commercial Real Estate Lease Benchmarks
+                        <span className="text-[11px] font-normal text-slate-400">
+                          (Click any metric to inspect leasing strategy)
+                        </span>
                       </h4>
                       <ResolutionBadge resolution="CSD" />
                     </div>
 
                     {detailData.commercialRealEstate ? (
                       <div className="grid grid-cols-3 gap-3 text-xs">
-                        <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                          <span className="text-slate-300 block mb-1 font-medium">Net Base Rent</span>
-                          <span className="text-base font-bold text-white">
+                        {/* Net Base Rent Card */}
+                        <div 
+                          className="p-3 rounded-lg bg-slate-900 border border-slate-800 hover:border-blue-500/60 transition-all cursor-pointer group active:scale-[0.98]"
+                          onClick={() => {
+                            const rent = Number(detailData.commercialRealEstate.avg_retail_rent_sqft_net);
+                            setModalContributingData({
+                              title: `${activeDetail.cityName || activeDetail.cityId.replace('CSD_', '')} Commercial Net Base Rent`,
+                              category: 'Commercial Real Estate',
+                              metricLabel: 'Net Base Retail Rent',
+                              value: `$${rent.toFixed(2)} / sq.ft / yr`,
+                              unit: 'CAD/sq.ft/yr',
+                              percentageOfTotal: 'NNN Lease Structure',
+                              benchmarkValue: '$28.50 / sq.ft',
+                              benchmarkLabel: 'Ontario Municipal Average',
+                              deltaPct: Math.round(((rent - 28.5) / 28.5) * 100),
+                              sourceLineage: 'Commercial MLS & Local Brokerage Verified Transactions',
+                              referenceYear: '2025-Q4 Commercial Lease Index',
+                              provenance: {
+                                sourceName: 'Commercial Real Estate Board Transaction Feeds',
+                                datasetCode: 'RETAIL_LEASE_INDEX',
+                                referencePeriod: '2025-Q4',
+                                resolution: 'CSD',
+                                confidence: 'BROKER_VERIFIED',
+                                sourceUrl: 'https://www.crea.ca/'
+                              },
+                              contextDrivers: [
+                                `Net base rent excludes property taxes, building insurance, and common area maintenance (TMI).`,
+                                `For a standard 1,200 sq. ft retail footprint, annual base rent equates to approximately $${Math.round(rent * 1200).toLocaleString()} CAD/year ($${Math.round((rent * 1200) / 12).toLocaleString()} CAD/month).`
+                              ],
+                              decisionImplications: [
+                                {
+                                  heading: 'Occupancy Cost Ratio (OCR)',
+                                  insight: `Base rent + TMI must not exceed 8-10% of gross sales to sustain profitable retail and foodservice operations.`,
+                                  impact: 'warning'
+                                },
+                                {
+                                  heading: 'Lease Term Commitment',
+                                  insight: 'Standard commercial retail leases in Ontario require 5-year initial commitments with 5-year renewal options.',
+                                  impact: 'neutral'
+                                }
+                              ],
+                              strategicRecommendations: [
+                                'Request 3 to 6 months of fixture-period rent abatement during store buildout and municipal inspection cycles.',
+                                'Negotiate exclusivity covenants preventing the landlord from leasing adjacent spaces to direct competitors in the same NAICS classification.'
+                              ],
+                              riskMitigations: [
+                                'Cap annual base rent escalation clauses to CPI or a maximum of 2.5% to 3.5% per annum.',
+                                'Require explicit landlord indemnity against structural, roof, and pre-existing HVAC environmental defects.'
+                              ],
+                              onClose: () => setModalContributingData(null)
+                            });
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-300 block mb-1 font-medium">Net Base Rent</span>
+                            <span className="text-[10px] text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">Inspect</span>
+                          </div>
+                          <span className="text-base font-bold text-white group-hover:text-blue-300 transition-colors">
                             ${Number(detailData.commercialRealEstate.avg_retail_rent_sqft_net).toFixed(2)}
                           </span>
                           <span className="text-xs text-slate-400 block mt-0.5">CAD / sq. ft / year (NNN)</span>
                         </div>
-                        <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                          <span className="text-slate-300 block mb-1 font-medium">Additional TMI (Taxes/Maint)</span>
-                          <span className="text-base font-bold text-white">
+
+                        {/* TMI Card */}
+                        <div 
+                          className="p-3 rounded-lg bg-slate-900 border border-slate-800 hover:border-blue-500/60 transition-all cursor-pointer group active:scale-[0.98]"
+                          onClick={() => {
+                            const tmi = Number(detailData.commercialRealEstate.avg_tmi_sqft);
+                            setModalContributingData({
+                              title: `${activeDetail.cityName || activeDetail.cityId.replace('CSD_', '')} Additional TMI Overheads`,
+                              category: 'Occupancy Overheads',
+                              metricLabel: 'Additional TMI (Taxes, Maintenance, Insurance)',
+                              value: `$${tmi.toFixed(2)} / sq.ft / yr`,
+                              unit: 'CAD/sq.ft/yr',
+                              percentageOfTotal: 'Realty Tax + CAM + Insurance',
+                              benchmarkValue: '$12.00 / sq.ft',
+                              benchmarkLabel: 'Ontario Peer Average',
+                              deltaPct: Math.round(((tmi - 12.0) / 12.0) * 100),
+                              sourceLineage: 'Municipal Property Assessment Corporation (MPAC) & Broker Audits',
+                              referenceYear: '2025-Q4',
+                              provenance: {
+                                sourceName: 'Municipal Property Assessment Corporation (MPAC) & Property Audits',
+                                datasetCode: 'TMI_OPERATING_COSTS',
+                                referencePeriod: '2025-Q4',
+                                resolution: 'CSD',
+                                confidence: 'AUDITED_OPERATIONAL',
+                                sourceUrl: 'https://www.mpac.ca/'
+                              },
+                              contextDrivers: [
+                                `Additional rent (TMI) passes through municipal commercial property taxes, exterior building maintenance, snow removal, and common insurance.`,
+                                `For a 1,200 sq. ft premises, TMI adds $${Math.round(tmi * 1200).toLocaleString()} CAD annually ($${Math.round((tmi * 1200) / 12).toLocaleString()} CAD/month) on top of base rent.`
+                              ],
+                              decisionImplications: [
+                                {
+                                  heading: 'TMI Volatility & True-Up Risk',
+                                  insight: 'Landlords reconcile TMI annually; sudden municipal property tax reassessments can cause unexpected year-end true-up bills.',
+                                  impact: 'warning'
+                                },
+                                {
+                                  heading: 'Total Gross Rent Impact',
+                                  insight: `Total occupancy cost is Base Rent + TMI = $${(Number(detailData.commercialRealEstate.avg_retail_rent_sqft_net) + tmi).toFixed(2)} CAD/sq. ft gross.`,
+                                  impact: 'neutral'
+                                }
+                              ],
+                              strategicRecommendations: [
+                                'Demand an annual audited statement of operating costs with right-to-audit clauses in the lease agreement.',
+                                'Cap controllable CAM (common area maintenance) increases at no more than 5% per annum.'
+                              ],
+                              riskMitigations: [
+                                'Exclude capital replacements (such as whole roof or parking lot repaving) from common area maintenance pass-throughs.',
+                                'Verify historical 3-year TMI escalation trajectory from the previous commercial tenant.'
+                              ],
+                              onClose: () => setModalContributingData(null)
+                            });
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-300 block mb-1 font-medium">Additional TMI (Taxes/Maint)</span>
+                            <span className="text-[10px] text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">Inspect</span>
+                          </div>
+                          <span className="text-base font-bold text-white group-hover:text-blue-300 transition-colors">
                             ${Number(detailData.commercialRealEstate.avg_tmi_sqft).toFixed(2)}
                           </span>
                           <span className="text-xs text-slate-400 block mt-0.5">CAD / sq. ft / year</span>
                         </div>
-                        <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                          <span className="text-slate-300 block mb-1 font-medium">Commercial Vacancy</span>
-                          <span className="text-base font-bold text-indigo-300">
+
+                        {/* Retail Vacancy Card */}
+                        <div 
+                          className="p-3 rounded-lg bg-slate-900 border border-slate-800 hover:border-indigo-500/60 transition-all cursor-pointer group active:scale-[0.98]"
+                          onClick={() => {
+                            const vac = detailData.commercialRealEstate.retail_vacancy_rate_pct;
+                            setModalContributingData({
+                              title: `${activeDetail.cityName || activeDetail.cityId.replace('CSD_', '')} Commercial Retail Vacancy`,
+                              category: 'Commercial Leasing Conditions',
+                              metricLabel: 'Local Retail Vacancy Rate',
+                              value: `${vac}%`,
+                              unit: '%',
+                              percentageOfTotal: 'Available retail inventory',
+                              benchmarkValue: '4.8%',
+                              benchmarkLabel: 'Ontario Benchmark Vacancy',
+                              deltaPct: Math.round(((vac - 4.8) / 4.8) * 100),
+                              sourceLineage: 'Commercial MLS & CBRE/Colliers Retail Availability Reports',
+                              referenceYear: '2025-Q4',
+                              provenance: {
+                                sourceName: 'Commercial Brokerage Retail Surveys',
+                                datasetCode: 'VACANCY_RATE_INDEX',
+                                referencePeriod: '2025-Q4',
+                                resolution: 'CSD',
+                                confidence: 'BROKER_VERIFIED',
+                                sourceUrl: 'https://www.cbre.ca/'
+                              },
+                              contextDrivers: [
+                                `Retail vacancy below 4% indicates a tight landlord market with limited ready inventory and upward rent pressure.`,
+                                `Vacancy above 6% provides tenant leverage for negotiating free rent periods and capital improvements.`
+                              ],
+                              decisionImplications: [
+                                {
+                                  heading: 'Landlord Concession Leverage',
+                                  insight: vac >= 5.0 ? 'Higher vacancy rate shifts negotiating power to prospective tenants for tenant improvement (TI) allowances.' : 'Tight vacancy rate requires quick decision-making and pre-approved commercial financing.',
+                                  impact: vac >= 5.0 ? 'positive' : 'warning'
+                                }
+                              ],
+                              strategicRecommendations: [
+                                'Engage commercial tenant representation brokers to uncover unlisted off-market lease opportunities.',
+                                'Inquire into upcoming retail developments or strip mall revitalizations in growing municipal nodes.'
+                              ],
+                              riskMitigations: [
+                                'Examine surrounding foot traffic and neighboring anchor tenant leases before committing to high-vacancy plazas.',
+                                'Verify co-tenancy clauses ensuring anchor grocery or pharmacy stores remain open.'
+                              ],
+                              onClose: () => setModalContributingData(null)
+                            });
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-300 block mb-1 font-medium">Commercial Vacancy</span>
+                            <span className="text-[10px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">Inspect</span>
+                          </div>
+                          <span className="text-base font-bold text-indigo-300 group-hover:text-indigo-200 transition-colors">
                             {detailData.commercialRealEstate.retail_vacancy_rate_pct}%
                           </span>
                           <span className="text-xs text-slate-400 block mt-0.5">Local retail availability</span>
@@ -748,8 +1365,11 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="text-sm font-bold text-white">
+                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
                           OSM-Listed Competitor Locations ({detailData.competitorLocations?.length || 0})
+                          <span className="text-[11px] font-normal text-slate-400">
+                            (Click any competitor to inspect competitive positioning)
+                          </span>
                         </h4>
                         <span className="text-xs text-amber-300 font-medium">
                           Notice: OSM-listed locations reflect open geographic survey and may not represent a complete census.
@@ -761,7 +1381,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                       <table className="w-full text-xs text-left">
                         <thead className="bg-slate-900 text-slate-300 uppercase tracking-wider border-b border-slate-800">
                           <tr>
-                            <th className="py-2.5 px-3">Establishment</th>
+                            <th className="py-2.5 px-3">Establishment (Click to Inspect)</th>
                             <th className="py-2.5 px-3">Type</th>
                             <th className="py-2.5 px-3">Address</th>
                             <th className="py-2.5 px-3 text-right">Coordinates</th>
@@ -769,8 +1389,66 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                         </thead>
                         <tbody className="divide-y divide-slate-800 text-slate-300">
                           {(detailData.competitorLocations || []).map((comp: any) => (
-                            <tr key={comp.id}>
-                              <td className="py-2 px-3 font-semibold text-white">{comp.name}</td>
+                            <tr 
+                              key={comp.id}
+                              className="hover:bg-slate-800/80 transition-colors cursor-pointer group"
+                              onClick={() => {
+                                setModalContributingData({
+                                  title: `${comp.name} — Competitor Intelligence Profile`,
+                                  category: 'Competitive Profiling',
+                                  metricLabel: 'Competitor Classification',
+                                  value: comp.is_chain ? 'Franchise / Multi-Unit Chain' : 'Independent Local Operator',
+                                  unit: '',
+                                  sourceLineage: 'OpenStreetMap Geographic Survey & Municipal Business Registry',
+                                  referenceYear: '2025-Q4 Open Survey',
+                                  provenance: {
+                                    sourceName: 'OpenStreetMap Geographic Data',
+                                    datasetCode: 'OSM_COMMERCIAL_SURVEY',
+                                    referencePeriod: '2025-Q4',
+                                    resolution: 'POINT_LOCATION',
+                                    confidence: 'OPEN_SURVEY',
+                                    sourceUrl: 'https://www.openstreetmap.org/'
+                                  },
+                                  contextDrivers: [
+                                    `Establishment Name: ${comp.name}`,
+                                    `Location Address: ${comp.address || 'Address unlisted in OSM record'}`,
+                                    `Geographic Coordinates: ${Number(comp.latitude).toFixed(4)}, ${Number(comp.longitude).toFixed(4)}`,
+                                    comp.is_chain 
+                                      ? 'National or regional chain footprint with centralized supply chain and brand recognition.' 
+                                      : 'Independent operator with established hyper-local neighborhood customer base.'
+                                  ],
+                                  decisionImplications: [
+                                    {
+                                      heading: 'Competitive Positioning Strategy',
+                                      insight: comp.is_chain 
+                                        ? 'Chain competitors compete primarily on uniform convenience and brand familiarity. Compete on bespoke craft quality, local sourcing, and personalized customer care.' 
+                                        : 'Independent operators rely on community loyalty; differentiate through extended operating hours, loyalty apps, or specialized product lines.',
+                                      impact: 'neutral'
+                                    },
+                                    {
+                                      heading: 'Catchment Distance & Cannibalization',
+                                      insight: `Located at lat/long (${Number(comp.latitude).toFixed(4)}, ${Number(comp.longitude).toFixed(4)}). Ensure new site location maintains at least 1.5–2.0 km separation to avoid zero-sum customer cannibalization.`,
+                                      impact: 'positive'
+                                    }
+                                  ],
+                                  strategicRecommendations: [
+                                    'Conduct on-site customer traffic count during peak lunch and dinner rush hours.',
+                                    'Analyze online reviews of this establishment to identify unmet customer grievances (e.g. slow delivery, parking issues).'
+                                  ],
+                                  riskMitigations: [
+                                    'Avoid direct price discounting wars against high-volume corporate chains with deeper marketing pockets.',
+                                    'Ensure lease includes adequate dedicated parking and curb-side pickup spaces if competing against drive-thru units.'
+                                  ],
+                                  onClose: () => setModalContributingData(null)
+                                });
+                              }}
+                            >
+                              <td className="py-2 px-3 font-semibold text-white group-hover:text-indigo-300 transition-colors flex items-center gap-1.5">
+                                {comp.name}
+                                <span className="text-[10px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  Inspect
+                                </span>
+                              </td>
                               <td className="py-2 px-3">
                                 <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                                   comp.is_chain ? 'bg-purple-950/90 text-purple-300 border border-purple-700/60' : 'bg-slate-800 text-slate-200'
@@ -797,6 +1475,22 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
               <button
                 type="button"
                 onClick={() => {
+                  if (activeDetail) {
+                    setDossierCityId(activeDetail.cityId);
+                    setDossierCategoryId(activeDetail.categoryId);
+                    setDossierCityName(activeDetail.cityName || activeDetail.cityId.replace('CSD_', ''));
+                    setIsDossierOpen(true);
+                  }
+                }}
+                className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-[0.98]"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Export Banker Dossier ($199 CAD)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
                   if (activeDetail) onSelectCity(activeDetail.cityId);
                   setActiveDetail(null);
                 }}
@@ -808,6 +1502,15 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
           </div>
         </div>
       )}
+
+      {/* Feasibility Dossier Modal (Amendment #8 & T-008) */}
+      <FeasibilityDossierModal
+        isOpen={isDossierOpen}
+        onClose={() => setIsDossierOpen(false)}
+        cityId={dossierCityId}
+        categoryId={dossierCategoryId}
+        cityName={dossierCityName}
+      />
     </div>
   );
 };

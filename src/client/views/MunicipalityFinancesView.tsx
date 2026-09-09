@@ -8,7 +8,8 @@ import {
   Truck, 
   Trees, 
   Building,
-  CheckCircle2
+  CheckCircle2,
+  ChevronRight
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from 'recharts';
 import { ResolutionBadge } from '../components/ResolutionBadge.js';
@@ -16,6 +17,7 @@ import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
 import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
 import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
+import { MunicipalPlanningCard } from '../components/MunicipalPlanningCard.js';
 
 interface MunicipalityFinancesViewProps {
   cityId: string;
@@ -53,6 +55,8 @@ export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> =
   const capital = data.capitalBudget || 0;
   const propertyTax = data.propertyTaxRevenue || 0;
   const departments = data.departmentalBreakdown || [];
+  const pop = Number(data.population || 0);
+  const cityName = data.cityName || cityId.replace('CSD_', '');
 
   const handleSelectDepartment = (dept: any) => {
     const raw = departments.find((d: any) => d.account_category === (dept.fullName || dept.account_category || dept.name)) || dept;
@@ -149,44 +153,149 @@ export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> =
         <ContributingDataInspector {...contributingData} />
       )}
 
-      {/* Fiscal Overview KPIs */}
+      {/* Fiscal Overview KPIs (Clickable for Decision Drill-Down) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+        {/* Operating Budget */}
+        <div 
+          role="button"
+          tabIndex={0}
+          onClick={() => setContributingData({
+            title: `${cityName} Municipal Operating Budget Analysis`,
+            category: 'Municipal Fiscal Capacity',
+            metricLabel: 'Total Annual Operating Expenditures',
+            value: operating,
+            unit: 'CAD',
+            benchmarkValue: pop > 0 ? `$${Math.round(operating / pop).toLocaleString()} / resident` : '$— / resident',
+            benchmarkLabel: 'Per-Capita Municipal Spend',
+            sourceLineage: 'Ontario Financial Information Return (FIR Schedule 40)',
+            referenceYear: 'Audited Municipal Year',
+            decisionImplications: [
+              {
+                heading: 'Municipal Service & Infrastructure Maintenance',
+                insight: `An operating budget of $${(operating / 1000000).toFixed(1)}M guarantees high service levels for arterial road maintenance, commercial snow removal, emergency fire response, and public transit connectivity.`,
+                impact: 'positive'
+              }
+            ],
+            strategicRecommendations: [
+              'Track municipal service allocation to verify that commercial tax contributions yield adequate district maintenance and traffic flow.'
+            ],
+            onClose: () => setContributingData(null)
+          })}
+          onKeyDown={(e) => e.key === 'Enter' && setContributingData(null)}
+          className="glass-panel p-5 rounded-2xl border border-white/10 hover:border-indigo-500/80 hover:bg-slate-900 transition-all shadow-lg cursor-pointer group active:scale-[0.98]"
+          title="Click to inspect municipal operating budget implications"
+        >
           <div className="flex items-center justify-between text-slate-300 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Annual Operating Budget</span>
+            <span className="text-xs font-medium uppercase tracking-wider group-hover:text-indigo-300 transition-colors">Annual Operating Budget</span>
             <Landmark className="w-4 h-4 text-indigo-400" />
           </div>
-          <div className="text-3xl font-extrabold text-white">
+          <div className="text-3xl font-extrabold text-white group-hover:text-indigo-200 transition-colors">
             ${(operating / 1000000).toFixed(1)}M
           </div>
-          <div className="mt-2 text-xs text-slate-300">
-            Total annual operating expenditures (${operating.toLocaleString()})
+          <div className="mt-2 text-xs text-slate-300 flex items-center justify-between">
+            <span>${operating.toLocaleString()}</span>
+            <span className="text-[10px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+              Inspect <ChevronRight className="w-3 h-3" />
+            </span>
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+        {/* Capital Budget */}
+        <div 
+          role="button"
+          tabIndex={0}
+          onClick={() => setContributingData({
+            title: `${cityId.replace('CSD_', '')} Capital Infrastructure Investment Plan`,
+            category: 'Capital Infrastructure & Expansion',
+            metricLabel: 'Capital Budget Expenditures',
+            value: capital,
+            unit: 'CAD',
+            benchmarkValue: `${((capital / (operating || 1)) * 100).toFixed(1)}% of Operating`,
+            benchmarkLabel: 'Capital Reinvestment Ratio',
+            sourceLineage: 'Ontario FIR Capital Statements & 10-Year Capital Forecasts',
+            referenceYear: 'Audited Municipal Year',
+            decisionImplications: [
+              {
+                heading: 'Infrastructure Upgrades & Commercial Growth Nodes',
+                insight: `Capital investments of $${(capital / 1000000).toFixed(1)}M indicate active renewal of water/wastewater mains, road corridor widening, and community transit terminal improvements.`,
+                impact: 'positive'
+              },
+              {
+                heading: 'Construction Distruption Awareness',
+                insight: `Review active capital projects to avoid commercial leasing along corridors scheduled for prolonged utility excavations.`,
+                impact: 'warning'
+              }
+            ],
+            strategicRecommendations: [
+              'Inquire with local municipal planning department regarding scheduled streetscaping or underground utility replacements before signing a long-term lease.'
+            ],
+            onClose: () => setContributingData(null)
+          })}
+          onKeyDown={(e) => e.key === 'Enter' && setContributingData(null)}
+          className="glass-panel p-5 rounded-2xl border border-white/10 hover:border-emerald-500/80 hover:bg-slate-900 transition-all shadow-lg cursor-pointer group active:scale-[0.98]"
+          title="Click to inspect capital infrastructure investment"
+        >
           <div className="flex items-center justify-between text-slate-300 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Capital Budget</span>
+            <span className="text-xs font-medium uppercase tracking-wider group-hover:text-emerald-300 transition-colors">Capital Budget</span>
             <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
-          <div className="text-3xl font-extrabold text-white">
+          <div className="text-3xl font-extrabold text-white group-hover:text-emerald-200 transition-colors">
             ${(capital / 1000000).toFixed(1)}M
           </div>
-          <div className="mt-2 text-xs text-slate-300">
-            Capital infrastructure & development projects (${capital.toLocaleString()})
+          <div className="mt-2 text-xs text-slate-300 flex items-center justify-between">
+            <span>Infrastructure & growth (${capital.toLocaleString()})</span>
+            <span className="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+              Inspect <ChevronRight className="w-3 h-3" />
+            </span>
           </div>
         </div>
 
-        <div className="glass-panel p-5 rounded-2xl border border-white/10 shadow-lg">
+        {/* Property Taxation Revenue */}
+        <div 
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            const taxShare = operating > 0 ? ((propertyTax / operating) * 100).toFixed(1) : '0';
+            setContributingData({
+              title: `${cityId.replace('CSD_', '')} Property Taxation Revenue & Commercial Levy Burden`,
+              category: 'Taxation & Fiscal Burden',
+              metricLabel: 'Municipal Taxation Revenue Collected',
+              value: propertyTax,
+              unit: 'CAD',
+              percentageOfTotal: `${taxShare}% of Operating Budget`,
+              benchmarkValue: `${taxShare}% Tax Dependency`,
+              benchmarkLabel: 'Levy Dependency Ratio',
+              sourceLineage: 'Ontario FIR Schedule 20 (Taxation & Assessment)',
+              referenceYear: 'Audited Municipal Year',
+              decisionImplications: [
+                {
+                  heading: 'Tax Predictability & Commercial TMI Impact',
+                  insight: `Property taxes fund ${taxShare}% of municipal services ($${(propertyTax / 1000000).toFixed(1)}M). Commercial property tax assessment multipliers directly dictate the TMI (tax, maintenance, insurance) portion of retail triple-net leases.`,
+                  impact: 'neutral'
+                }
+              ],
+              strategicRecommendations: [
+                'Ensure commercial lease agreements specify exact tenant portion of realty taxes with annual reconciliation transparency.'
+              ],
+              onClose: () => setContributingData(null)
+            });
+          }}
+          onKeyDown={(e) => e.key === 'Enter' && setContributingData(null)}
+          className="glass-panel p-5 rounded-2xl border border-white/10 hover:border-amber-500/80 hover:bg-slate-900 transition-all shadow-lg cursor-pointer group active:scale-[0.98]"
+          title="Click to inspect municipal taxation and commercial levy burden"
+        >
           <div className="flex items-center justify-between text-slate-300 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Property Taxation Revenue</span>
+            <span className="text-xs font-medium uppercase tracking-wider group-hover:text-amber-300 transition-colors">Property Taxation Revenue</span>
             <DollarSign className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-3xl font-extrabold text-white">
+          <div className="text-3xl font-extrabold text-white group-hover:text-amber-200 transition-colors">
             ${(propertyTax / 1000000).toFixed(1)}M
           </div>
-          <div className="mt-2 text-xs text-slate-300">
-            Municipal levy collected ({operating > 0 ? ((propertyTax / operating) * 100).toFixed(1) : 0}% of operating budget)
+          <div className="mt-2 text-xs text-slate-300 flex items-center justify-between">
+            <span>{operating > 0 ? ((propertyTax / operating) * 100).toFixed(1) : 0}% of operating budget</span>
+            <span className="text-[10px] text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+              Inspect <ChevronRight className="w-3 h-3" />
+            </span>
           </div>
         </div>
       </div>
@@ -288,6 +397,13 @@ export const MunicipalityFinancesView: React.FC<MunicipalityFinancesViewProps> =
           </table>
         </div>
       </div>
+
+      {/* Municipal Expansion & Official Plan Intelligence */}
+      <MunicipalPlanningCard 
+        cityId={cityId} 
+        cityName={cityName} 
+        onInspectData={setContributingData} 
+      />
 
       {/* Feature Outliers Section */}
       <FeatureOutliersSection 

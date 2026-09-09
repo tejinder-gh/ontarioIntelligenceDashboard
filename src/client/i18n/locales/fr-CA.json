@@ -1,0 +1,54 @@
+{
+  "brand": {
+    "title": "Intel Ontario",
+    "tagline": "Renseignement économique"
+  },
+  "nav": {
+    "categories": {
+      "executive_strategy": "Direction et Stratégie",
+      "market_opportunity": "Opportunités de marché",
+      "household_economics": "Ménages et Économie",
+      "commercial_municipal": "Commerce et Municipalités",
+      "analytics_integrity": "Analytique et Intégrité"
+    },
+    "tabs": {
+      "overview": "Aperçu exécutif",
+      "city_intelligence": "Renseignement municipal",
+      "demographics": "Profil démographique",
+      "financial_profile": "Profil financier et patrimoine",
+      "consumer_spending": "Dépenses de consommation",
+      "workforce": "Main-d'œuvre et professions",
+      "business_landscape": "Paysage des entreprises",
+      "municipality_finances": "Finances municipales",
+      "city_rankings": "Classement des villes",
+      "opportunity_lab": "Laboratoire d'opportunités",
+      "competition": "Analyse de la concurrence",
+      "business_listings": "Ventes et inscriptions",
+      "outliers": "Anomalies statistiques",
+      "data_explorer": "Explorateur de données SQL",
+      "methodology_sources": "Méthodologie et audits"
+    },
+    "badges": {
+      "ai_engine": "Moteur IA",
+      "multi_city": "Multi-villes",
+      "z_score": "Score-Z"
+    }
+  },
+  "actions": {
+    "compare": "Mode comparatif",
+    "export": "Exporter les données",
+    "search_city": "Rechercher une municipalité ontarienne...",
+    "filter": "Filtrer",
+    "reset": "Réinitialiser",
+    "download_dossier": "Télécharger le dossier de faisabilité",
+    "preview_sample": "Voir l'échantillon gratuit de Burlington"
+  },
+  "provenance": {
+    "official_statcan": "Statistique Canada officiel",
+    "quennial_census": "Recensement de la population 2021 (98-401-X2021001)",
+    "mmah_fir": "Rapport d'information financière MMAH",
+    "confidence_high": "Niveau de confiance élevé (Recensement officiel)",
+    "confidence_medium": "Confiance moyenne (Modélisé/Partiel)",
+    "confidence_low": "Faible couverture (Données insuffisantes)"
+  }
+}

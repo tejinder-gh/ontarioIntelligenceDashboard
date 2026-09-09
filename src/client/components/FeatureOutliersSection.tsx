@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, TrendingUp, CheckCircle2, ChevronRight, Scale, Info } from 'lucide-react';
+import { AlertTriangle, TrendingUp, CheckCircle2, ChevronRight, Scale, Info, Sparkles } from 'lucide-react';
 import { ResolutionBadge } from './ResolutionBadge.js';
+import { ContributingDataInspector, ContributingDataProps } from './ContributingDataInspector.js';
 
 interface OutlierItem {
   geography_id: string;
@@ -26,13 +27,14 @@ export const FeatureOutliersSection: React.FC<FeatureOutliersSectionProps> = ({
   cityId,
   category = 'all',
   title = 'Statistical Outlier & Market Divergence Section',
-  subtitle = 'Dual-method detection using Tukey Interquartile Range (IQR) fences and Gaussian Standard Score (|z| ≥ 2.0) criteria.',
+  subtitle = 'Dual-method detection using Tukey Interquartile Range (IQR) fences and Gaussian Standard Score (|z| ≥ 2.0) criteria. Click any anomaly card to inspect decision implications.',
   onSelectCity
 }) => {
   const [outliers, setOutliers] = useState<OutlierItem[]>([]);
   const [provincialOutliers, setProvincialOutliers] = useState<OutlierItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showProvincial, setShowProvincial] = useState(false);
+  const [contributingData, setContributingData] = useState<ContributingDataProps | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -70,6 +72,55 @@ export const FeatureOutliersSection: React.FC<FeatureOutliersSectionProps> = ({
 
   const displayList = (outliers.length > 0 && !showProvincial) ? outliers : provincialOutliers;
 
+  const handleInspectOutlier = (o: OutlierItem) => {
+    const zNum = typeof o.z_score === 'number' ? o.z_score : parseFloat(String(o.z_score)) || 0;
+    const isPositive = zNum > 0;
+    const formattedVal = o.unit === 'CAD' || o.unit === '$' 
+      ? `$${Number(o.value_numeric).toLocaleString()}` 
+      : `${Number(o.value_numeric).toLocaleString()} ${o.unit}`;
+
+    setContributingData({
+      title: `${o.city_name} — ${o.metric_name} Statistical Anomaly Analysis`,
+      category: 'Statistical Outlier & Anomaly',
+      metricLabel: o.metric_name,
+      value: formattedVal,
+      benchmarkValue: `${o.percentile_rank}th Percentile (z = ${zNum > 0 ? `+${zNum.toFixed(2)}` : zNum.toFixed(2)})`,
+      benchmarkLabel: 'Statistical Standard Score',
+      sourceLineage: 'Audited Statistics Canada Census & Municipal Datasets with Tukey IQR Detection',
+      referenceYear: '2021 Census / 2025 Audited FIR',
+      decisionImplications: [
+        {
+          heading: isPositive ? 'Strong Positive Market Divergence' : 'Significant Negative Market Divergence',
+          insight: isPositive 
+            ? `At ${zNum.toFixed(2)} standard deviations above the Ontario median, ${o.city_name} is an extreme positive outperformer in this category. Represents a top-tier market opportunity with rare commercial conditions.`
+            : `At ${zNum.toFixed(2)} standard deviations below the Ontario median, this metric signals either an underserved structural vacuum or operational headwind requiring custom mitigation.`,
+          impact: isPositive ? 'positive' : 'warning'
+        },
+        {
+          heading: 'Statistical Confidence & Methodology',
+          insight: `Verified through dual criteria: Gaussian Z-Score (|z| ≥ 2.0) and Tukey Interquartile Range [Q1 - 1.5×IQR, Q3 + 1.5×IQR]. Resistant to outlier skewness.`,
+          impact: 'neutral'
+        }
+      ],
+      contextDrivers: [
+        o.outlier_reason,
+        `Percentile Standing: ${o.percentile_rank}% of Ontario Census Subdivisions operate below this observed value.`
+      ],
+      strategicRecommendations: isPositive ? [
+        'Capitalize on this localized outperformance by introducing premium or specialized offerings that capture high consumer willingness to pay.',
+        'Use this municipal advantage in investor decks and franchise expansion proposals to justify faster payback timelines.'
+      ] : [
+        'If low commercial density: capture first-mover advantage before national chains expand into the market void.',
+        'If low income/high unemployment: price aggressively with value-tier packaging and high-volume staples.'
+      ],
+      actionLink: onSelectCity ? {
+        label: `Inspect ${o.city_name} Full Profile`,
+        onClick: () => onSelectCity(o.geography_id)
+      } : undefined,
+      onClose: () => setContributingData(null)
+    });
+  };
+
   return (
     <div className="glass-panel p-5 sm:p-6 rounded-xl border border-rose-900/40 bg-gradient-to-b from-rose-950/20 via-slate-900/40 to-slate-950/80 shadow-xl space-y-4 mt-8">
       {/* Header */}
@@ -106,6 +157,11 @@ export const FeatureOutliersSection: React.FC<FeatureOutliersSectionProps> = ({
         )}
       </div>
 
+      {/* Active Inspector Drill-Down */}
+      {contributingData && (
+        <ContributingDataInspector {...contributingData} />
+      )}
+
       {loading ? (
         <div className="p-8 text-center text-xs text-slate-400 animate-pulse">
           Computing Gaussian Standard Scores and Tukey IQR distributions across 444 municipalities...
@@ -119,11 +175,16 @@ export const FeatureOutliersSection: React.FC<FeatureOutliersSectionProps> = ({
             return (
               <div 
                 key={`${o.geography_id}_${o.metric_id}_${idx}`}
-                className="p-4 rounded-xl bg-slate-900/90 border border-rose-900/50 hover:border-rose-600/80 transition-all shadow-md flex flex-col justify-between"
+                role="button"
+                tabIndex={0}
+                onClick={() => handleInspectOutlier(o)}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleInspectOutlier(o)}
+                className="p-4 rounded-xl bg-slate-900/90 border border-rose-900/50 hover:border-rose-500/80 hover:bg-slate-900 transition-all shadow-md flex flex-col justify-between cursor-pointer group active:scale-[0.98]"
+                title="Click to inspect anomaly decision implications"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <span className="text-xs font-extrabold text-indigo-300 uppercase tracking-wider truncate">
+                    <span className="text-xs font-extrabold text-indigo-300 uppercase tracking-wider truncate group-hover:text-indigo-200 transition-colors">
                       {o.city_name}
                     </span>
                     <span className={`px-2 py-0.5 rounded text-xs font-mono font-semibold shrink-0 ${
@@ -135,7 +196,7 @@ export const FeatureOutliersSection: React.FC<FeatureOutliersSectionProps> = ({
                     </span>
                   </div>
 
-                  <h5 className="text-sm font-bold text-white mb-1 leading-snug">
+                  <h5 className="text-sm font-bold text-white mb-1 leading-snug group-hover:text-rose-200 transition-colors">
                     {o.metric_name}
                   </h5>
 
@@ -153,18 +214,25 @@ export const FeatureOutliersSection: React.FC<FeatureOutliersSectionProps> = ({
                   </p>
                 </div>
 
-                {onSelectCity && (
-                  <div className="pt-2.5 mt-2.5 border-t border-slate-800/80 flex justify-end">
+                <div className="pt-2.5 mt-2.5 border-t border-slate-800/80 flex items-center justify-between">
+                  <span className="text-[10px] text-rose-400 font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" />
+                    Click to drill down
+                  </span>
+                  {onSelectCity && (
                     <button
                       type="button"
-                      onClick={() => onSelectCity(o.geography_id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectCity(o.geography_id);
+                      }}
                       className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold min-h-[28px]"
                     >
-                      Examine Municipality Profile
+                      Examine Profile
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             );
           })}

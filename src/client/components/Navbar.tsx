@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { ActiveTab, GeographySummary } from '../types/index.js';
 import { CitySearch } from './CitySearch.js';
+import { t, getLocale, setLocale, subscribeLocale, SupportedLocale } from '../i18n/index.js';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -56,6 +57,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   isCompareMode,
   onToggleCompareMode
 }) => {
+  const [locale, setCurrLocale] = React.useState<SupportedLocale>(getLocale());
+
+  React.useEffect(() => {
+    return subscribeLocale((newLoc) => setCurrLocale(newLoc));
+  }, []);
+
   return (
     <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80">
       {/* Top Banner */}
@@ -67,13 +74,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
           <div>
             <h1 className="text-base font-bold text-slate-100 tracking-tight flex items-center gap-2">
-              <span>Ontario Economic & Business Intelligence</span>
+              <span>{locale === 'fr-CA' ? 'Intel Économique & Commercial Ontario' : 'Ontario Economic & Business Intelligence'}</span>
               <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-700/60 uppercase tracking-wide">
-                Production Engine
+                v2.0
               </span>
             </h1>
             <p className="text-xs text-slate-300">
-              Authoritative Market Selection & Location Intelligence Platform
+              {locale === 'fr-CA' ? 'Plateforme de sélection de marché et renseignement de localisation' : 'Authoritative Market Selection & Location Intelligence Platform'}
             </p>
           </div>
         </div>
@@ -83,8 +90,30 @@ export const Navbar: React.FC<NavbarProps> = ({
           <CitySearch selectedCityId={selectedCityId} onSelectCity={onSelectCity} />
         </div>
 
-        {/* Right: Actions & Zero-Round-Trip Indicator */}
+        {/* Right: Actions & Language Toggle */}
         <div className="flex items-center gap-2.5">
+          {/* Language Switcher */}
+          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-white/10 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setLocale('en-CA')}
+              className={`px-2 py-1 rounded transition-colors ${
+                locale === 'en-CA' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocale('fr-CA')}
+              className={`px-2 py-1 rounded transition-colors ${
+                locale === 'fr-CA' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              FR
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={onToggleCompareMode}
@@ -95,12 +124,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            Compare Cities
+            {t('actions.compare')}
           </button>
 
           <div 
             title="Local Persistent Operational Store Active (0 unnecessary upstream API round-trips during normal reads)"
-            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900/90 text-emerald-300 border border-emerald-800/60"
+            className="hidden lg:flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium bg-slate-900/90 text-emerald-300 border border-emerald-800/60"
           >
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             <span>DB-First: 0 Round-Trips</span>
@@ -111,21 +140,21 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Navigation Tabs Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <nav className="flex space-x-1 overflow-x-auto no-scrollbar py-1 text-xs">
-          {TABS.map(t => {
-            const isActive = activeTab === t.id;
+          {TABS.map(tab => {
+            const isActive = activeTab === tab.id;
             return (
               <button
-                key={t.id}
+                key={tab.id}
                 type="button"
-                onClick={() => onTabChange(t.id)}
+                onClick={() => onTabChange(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-md font-medium whitespace-nowrap transition-all ${
                   isActive
                     ? 'bg-slate-800 text-indigo-400 border border-slate-700 shadow-sm'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
                 }`}
               >
-                {t.icon}
-                <span>{t.label}</span>
+                {tab.icon}
+                <span>{t(`nav.tabs.${tab.id}`, tab.label)}</span>
               </button>
             );
           })}
