@@ -37,6 +37,8 @@ import {
 } from 'lucide-react';
 import { AlertSubscriptionModal } from './components/AlertSubscriptionModal.js';
 import { CheckoutSuccessModal } from './components/CheckoutSuccessModal.js';
+import { LoginModal } from './components/LoginModal.js';
+import { UserPortalModal } from './components/UserPortalModal.js';
 
 const TAB_TO_SLUG: Record<ActiveTab, string> = {
   overview: 'overview',
@@ -131,6 +133,47 @@ export const App: React.FC = () => {
 
   // Cross-Module Drill-Down State (Requirement 33)
   const [drillDownOptions, setDrillDownOptions] = useState<{ category?: string; community?: string; ageCohort?: string }>({});
+
+  // Auth & Portal State
+  const [authToken, setAuthToken] = useState<string>(localStorage.getItem('auth_token') || '');
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isPortalOpen, setIsPortalOpen] = useState(false);
+
+  // Handle Token Verification from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    
+    if (token) {
+      fetch(`/api/auth/verify?token=${token}`)
+        .then(res => res.json())
+        .then(json => {
+          if (json.success) {
+            setAuthToken(token);
+            localStorage.setItem('auth_token', token);
+            setIsPortalOpen(true);
+            alert('Successfully signed in!');
+          } else {
+            alert(json.error || 'Invalid or expired magic link');
+          }
+        })
+        .catch(err => {
+          console.error('Verify error:', err);
+          alert('Network error verifying token');
+        })
+        .finally(() => {
+          params.delete('token');
+          const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+          window.history.replaceState({}, '', newUrl);
+        });
+    }
+  }, []);
+
+  const handleSignOut = () => {
+    setAuthToken('');
+    localStorage.removeItem('auth_token');
+    setIsPortalOpen(false);
+  };
 
   // Helper to build deep-link URL (Requirement 40)
   const buildUrl = (tab: ActiveTab, cityName: string, options?: { category?: string; community?: string; ageCohort?: string }) => {
@@ -399,6 +442,25 @@ export const App: React.FC = () => {
               <Bell className="w-3.5 h-3.5 text-amber-400" />
               <span>Alerts</span>
             </button>
+
+            {/* User Portal Button */}
+            {authToken ? (
+              <button
+                type="button"
+                onClick={() => setIsPortalOpen(true)}
+                className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 transition-colors"
+              >
+                <span>My Dossiers</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsLoginOpen(true)}
+                className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 transition-colors shadow-sm"
+              >
+                <span>Sign In</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -773,6 +835,18 @@ export const App: React.FC = () => {
       <CheckoutSuccessModal
         isOpen={isCheckoutSuccessOpen}
         onClose={() => setIsCheckoutSuccessOpen(false)}
+      />
+
+      {/* Auth & Portal Modals */}
+      <LoginModal 
+        isOpen={isLoginOpen} 
+        onClose={() => setIsLoginOpen(false)} 
+      />
+      <UserPortalModal 
+        isOpen={isPortalOpen} 
+        onClose={() => setIsPortalOpen(false)} 
+        authToken={authToken} 
+        onSignOut={handleSignOut} 
       />
     </div>
   );
