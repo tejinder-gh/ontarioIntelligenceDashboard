@@ -40,6 +40,9 @@ export const FeasibilityDossierModal: React.FC<FeasibilityDossierModalProps> = (
   const [showCheckoutModal, setShowCheckoutModal] = useState<boolean>(false);
   const [checkoutEmail, setCheckoutEmail] = useState<string>('');
   const [checkoutSubmitted, setCheckoutSubmitted] = useState<boolean>(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutResult, setCheckoutResult] = useState<any>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -60,39 +63,85 @@ export const FeasibilityDossierModal: React.FC<FeasibilityDossierModalProps> = (
       });
   }, [isOpen, cityId, categoryId]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showCheckoutModal) {
+          setShowCheckoutModal(false);
+          setCheckoutSubmitted(false);
+          setCheckoutError(null);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, showCheckoutModal, onClose]);
+
   if (!isOpen) return null;
 
   const handlePrint = () => {
     window.print();
   };
 
-  const handleCheckoutStart = (e: React.FormEvent) => {
+  const handleCheckoutStart = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!checkoutEmail) return;
+    setCheckoutLoading(true);
+    setCheckoutError(null);
 
-    // Track conversion intent (Amendment #8)
-    fetch('/api/alerts/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event_type: 'ECONOMIC_INDICATOR_CHANGE',
-        entity_type: 'business_listing',
-        entity_id: `dossier_checkout_${Date.now()}`,
-        geography_id: cityId,
-        category_id: categoryId,
-        title: `Dossier Checkout Start: ${checkoutEmail}`,
-        description: `Prospect initiated $199 CAD Feasibility Dossier checkout for ${cityName} (${categoryId}).`,
-        metadata: {
+    try {
+      // Track conversion intent
+      fetch('/api/alerts/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_type: 'ECONOMIC_INDICATOR_CHANGE',
+          entity_type: 'business_listing',
+          entity_id: `dossier_checkout_${Date.now()}`,
+          geography_id: cityId,
+          category_id: categoryId,
+          title: `Dossier Checkout Start: ${checkoutEmail}`,
+          description: `Prospect initiated $199 CAD Feasibility Dossier checkout for ${cityName} (${categoryId}).`,
+          metadata: {
+            email: checkoutEmail,
+            cityId,
+            categoryId,
+            priceCad: 199.00,
+            sourceChannel: 'DossierModalPreview'
+          }
+        })
+      }).catch(() => {});
+
+      // Call genuine checkout fulfillment API (T-032)
+      const res = await fetch('/api/checkout/dossier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           email: checkoutEmail,
           cityId,
-          categoryId,
-          priceCad: 199.00,
-          sourceChannel: 'DossierModalPreview'
-        }
-      })
-    }).catch(() => {});
+          categoryId
+        })
+      });
 
-    setCheckoutSubmitted(true);
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to process checkout request');
+      }
+
+      setCheckoutResult(json);
+      setCheckoutSubmitted(true);
+
+      if (json.checkoutUrl) {
+        window.location.href = json.checkoutUrl;
+      }
+    } catch (err: any) {
+      setCheckoutError(err.message || 'An unexpected error occurred during checkout');
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
   const geo = dossierData?.geography;
@@ -104,7 +153,12 @@ export const FeasibilityDossierModal: React.FC<FeasibilityDossierModalProps> = (
   const counts = dossierData?.businessCountsTable33;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 print:p-0 print:bg-white print:static">
+    <div 
+      role="dialog"
+      aria-modal="true"
+      aria-label="Location Feasibility Dossier"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 print:p-0 print:bg-white print:static"
+    >
       <div className="relative w-full max-w-5xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden print:border-0 print:shadow-none print:bg-white print:text-black">
         
         {/* Header Bar - Hidden in Print */}
@@ -528,7 +582,11 @@ export const FeasibilityDossierModal: React.FC<FeasibilityDossierModalProps> = (
               </div>
               <button 
                 type="button" 
-                onClick={() => { setShowCheckoutModal(false); setCheckoutSubmitted(false); }}
+                onClick={() => { 
+                  setShowCheckoutModal(false); 
+                  setCheckoutSubmitted(false);
+                  setCheckoutError(null);
+                }}
                 className="text-slate-400 hover:text-white"
               >
                 <X className="w-4 h-4" />
@@ -536,25 +594,78 @@ export const FeasibilityDossierModal: React.FC<FeasibilityDossierModalProps> = (
             </div>
 
             {checkoutSubmitted ? (
-              <div className="py-6 text-center space-y-3">
+              <div className="py-6 text-center space-y-4">
                 <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto" />
-                <h4 className="text-base font-bold text-white">Order Intent Received</h4>
+                <div>
+                  <h4 className="text-base font-bold text-white">
+                    {checkoutResult?.mode === 'live_stripe' ? 'Redirecting to Secure Payment...' : 'Dossier Access Unlocked'}
+                  </h4>
+                  {checkoutResult?.order && (
+                    <p className="text-[11px] font-mono text-slate-400 mt-1">
+                      Order Reference: #{checkoutResult.order.id} • CAD $199.00
+                    </p>
+                  )}
+                </div>
                 <p className="text-xs text-slate-300">
-                  A verification link and sample dossier have been dispatched to <strong>{checkoutEmail}</strong>. Our commercial team will follow up within 1 business hour.
+                  {checkoutResult?.mode === 'live_stripe' ? (
+                    <span>If you are not redirected automatically, please click below to complete payment via Stripe.</span>
+                  ) : (
+                    <span>
+                      Your commercial feasibility dossier for <strong>{cityName} ({cat?.display_name})</strong> has been generated and validated against Statistics Canada &amp; MMAH records.
+                    </span>
+                  )}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => { setShowCheckoutModal(false); setCheckoutSubmitted(false); }}
-                  className="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold w-full"
-                >
-                  Return to Dossier
-                </button>
+
+                <div className="space-y-2 pt-2">
+                  {checkoutResult?.checkoutUrl ? (
+                    <a
+                      href={checkoutResult.checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold w-full shadow-lg shadow-emerald-600/20"
+                    >
+                      <span>Proceed to Stripe Checkout</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCheckoutModal(false);
+                        setCheckoutSubmitted(false);
+                        setTimeout(() => handlePrint(), 250);
+                      }}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold w-full shadow-lg shadow-emerald-600/20 transition-all active:scale-[0.98]"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Print / Save Lender-Ready PDF Now</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => { 
+                      setShowCheckoutModal(false); 
+                      setCheckoutSubmitted(false);
+                      setCheckoutError(null);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold w-full transition-colors"
+                  >
+                    Return to Dossier Preview
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleCheckoutStart} className="space-y-4">
                 <p className="text-xs text-slate-300">
                   Enter your business email to unlock the unredacted 12-page PDF and editable Excel pro-forma for <strong>{cityName} ({cat?.display_name})</strong>.
                 </p>
+
+                {checkoutError && (
+                  <div className="p-3 rounded-lg bg-rose-950/60 border border-rose-800 text-rose-300 text-xs">
+                    {checkoutError}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">
@@ -587,10 +698,15 @@ export const FeasibilityDossierModal: React.FC<FeasibilityDossierModalProps> = (
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl font-bold text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                  disabled={checkoutLoading}
+                  className="w-full py-2.5 rounded-xl font-bold text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  <Download className="w-4 h-4" />
-                  Proceed to Secure Checkout ($199 CAD)
+                  {checkoutLoading ? (
+                    <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span>{checkoutLoading ? 'Processing Order...' : 'Proceed to Secure Checkout ($199 CAD)'}</span>
                 </button>
 
                 <p className="text-xs text-slate-400 text-center">

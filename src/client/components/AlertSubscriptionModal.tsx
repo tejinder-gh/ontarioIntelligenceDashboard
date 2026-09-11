@@ -61,7 +61,7 @@ export const AlertSubscriptionModal: React.FC<AlertSubscriptionModalProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'create' | 'active'>('create');
   
   // Form State
-  const [email, setEmail] = useState<string>(() => localStorage.getItem('ontario_subscriber_email') || 'investor@ontario-intelligence.ca');
+  const [email, setEmail] = useState<string>(() => localStorage.getItem('ontario_subscriber_email') || '');
   const [watchType, setWatchType] = useState<string>('LISTING_PRICE_DROP');
   const [targetCityId, setTargetCityId] = useState<string>(defaultCityId);
   const [targetCityName, setTargetCityName] = useState<string>(defaultCityName);

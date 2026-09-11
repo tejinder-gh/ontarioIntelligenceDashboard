@@ -22,4 +22,34 @@ describe('Production Health & Liveness Probe', () => {
     expect(json.version).toBe('1.0.0');
     expect(json.timestamp).toBeDefined();
   });
+
+  it('sets security headers and suppresses x-powered-by (T-034)', async () => {
+    const res = await fetch(`${baseUrl}/api/health`);
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    expect(res.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+    expect(res.headers.get('x-powered-by')).toBeNull();
+  });
+
+  it('throttles excessive requests on rate-limited endpoints when tested (T-034)', async () => {
+    const limiterUrl = `${baseUrl}/api/checkout/dossier`;
+    let lastStatus = 200;
+
+    // Send rapid requests with x-test-rate-limit header
+    for (let i = 0; i < 35; i++) {
+      const res = await fetch(limiterUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-test-rate-limit': 'true',
+        },
+        body: JSON.stringify({ email: 'test@example.com', cityId: 'CSD_burlington', categoryId: 'pizza_store' }),
+      });
+      lastStatus = res.status;
+      if (lastStatus === 429) break;
+    }
+
+    expect(lastStatus).toBe(429);
+  });
 });
+

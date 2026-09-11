@@ -53,6 +53,7 @@ export interface LaunchWorkspace {
   name: string;
   municipality: string;
   industry: string;
+  token?: string;
   createdAt: string;
   updatedAt: string;
   checks: LaunchCheckState[];

@@ -1,0 +1,7 @@
+# User-Agent directives for Ontario Economic Intelligence Platform
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /scratch/
+
+Sitemap: https://ontario-economic-intelligence.ca/sitemap.xml

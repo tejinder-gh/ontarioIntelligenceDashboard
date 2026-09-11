@@ -22,31 +22,68 @@ const nonempty = <T extends z.ZodType>(schema: T) => schema.refine(value => Obje
 const uuid = z.uuid();
 const id = (req: Request) => uuid.parse(req.params.id);
 const referenceId = (req: Request) => uuid.parse(req.params.evidenceId);
+
+const extractTokens = (req: Request): string[] => {
+  const header = req.header('x-workspace-token') || req.header('authorization')?.replace(/^Bearer\s+/i, '');
+  if (!header) return [];
+  return header.split(',').map(s => s.trim()).filter(Boolean);
+};
+const extractToken = (req: Request): string | null => {
+  const tokens = extractTokens(req);
+  return tokens.length > 0 ? tokens[0] : null;
+};
+
 const handle = (handler: (req: Request, res: Response) => Promise<unknown>) =>
   (req: Request, res: Response, next: NextFunction) => { void handler(req, res).catch(next); };
 
 export const launchRouter = Router();
 launchRouter.get('/catalog', (_req, res) => res.json({ data: LAUNCH_CATALOG }));
-launchRouter.get('/workspaces', handle(async (_req, res) => res.json({ data: await repo.listWorkspaces() })));
-launchRouter.post('/workspaces', handle(async (req, res) => res.status(201).json(await repo.createWorkspace(metadata.parse(req.body)))));
-launchRouter.get('/workspaces/:id', handle(async (req, res) => res.json(await repo.getWorkspace(id(req)))));
-launchRouter.patch('/workspaces/:id', handle(async (req, res) => res.json(await repo.updateWorkspace(id(req), nonempty(metadata.partial()).parse(req.body)))));
-launchRouter.delete('/workspaces/:id', handle(async (req, res) => { await repo.deleteWorkspace(id(req)); res.status(204).end(); }));
+launchRouter.get('/workspaces', handle(async (req, res) => {
+  const tokens = extractTokens(req);
+  res.json({ data: await repo.listWorkspaces(tokens) });
+}));
+launchRouter.post('/workspaces', handle(async (req, res) => {
+  const clientToken = extractToken(req);
+  res.status(201).json(await repo.createWorkspace(metadata.parse(req.body), clientToken || undefined));
+}));
+launchRouter.get('/workspaces/:id', handle(async (req, res) => {
+  const token = extractToken(req);
+  res.json(await repo.getWorkspace(id(req), token));
+}));
+launchRouter.patch('/workspaces/:id', handle(async (req, res) => {
+  const token = extractToken(req);
+  res.json(await repo.updateWorkspace(id(req), nonempty(metadata.partial()).parse(req.body), token));
+}));
+launchRouter.delete('/workspaces/:id', handle(async (req, res) => {
+  const token = extractToken(req);
+  await repo.deleteWorkspace(id(req), token);
+  res.status(204).end();
+}));
 launchRouter.get('/workspaces/:id/gate', handle(async (req, res) => {
-  const workspace = await repo.getWorkspace(id(req));
+  const token = extractToken(req);
+  const workspace = await repo.getWorkspace(id(req), token);
   return res.json(evaluateLaunchDecision(workspace.checks, workspace.evidence));
 }));
-launchRouter.patch('/workspaces/:id/checks/:checkId', handle(async (req, res) =>
-  res.json(await repo.updateCheck(id(req), checkId.parse(req.params.checkId), nonempty(check).parse(req.body)))));
-launchRouter.post('/workspaces/:id/evidence', handle(async (req, res) =>
-  res.status(201).json(await repo.createEvidence(id(req), evidence.parse(req.body)))));
-launchRouter.patch('/workspaces/:id/evidence/:evidenceId', handle(async (req, res) =>
-  res.json(await repo.updateEvidence(id(req), referenceId(req), nonempty(evidence.partial()).parse(req.body)))));
-launchRouter.delete('/workspaces/:id/evidence/:evidenceId', handle(async (req, res) =>
-  res.json(await repo.deleteEvidence(id(req), referenceId(req)))));
+launchRouter.patch('/workspaces/:id/checks/:checkId', handle(async (req, res) => {
+  const token = extractToken(req);
+  res.json(await repo.updateCheck(id(req), checkId.parse(req.params.checkId), nonempty(check).parse(req.body), token));
+}));
+launchRouter.post('/workspaces/:id/evidence', handle(async (req, res) => {
+  const token = extractToken(req);
+  res.status(201).json(await repo.createEvidence(id(req), evidence.parse(req.body), token));
+}));
+launchRouter.patch('/workspaces/:id/evidence/:evidenceId', handle(async (req, res) => {
+  const token = extractToken(req);
+  res.json(await repo.updateEvidence(id(req), referenceId(req), nonempty(evidence.partial()).parse(req.body), token));
+}));
+launchRouter.delete('/workspaces/:id/evidence/:evidenceId', handle(async (req, res) => {
+  const token = extractToken(req);
+  res.json(await repo.deleteEvidence(id(req), referenceId(req), token));
+}));
 launchRouter.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid launch metadata', fields: error.issues.map(issue => issue.path.join('.')) });
   if (error instanceof repo.LaunchNotFound) return res.status(404).json({ error: error.message });
+  if (error instanceof repo.LaunchForbidden) return res.status(403).json({ error: error.message });
   // Do not echo database errors or submitted metadata into responses or logs.
   return res.status(500).json({ error: 'Launch workspace could not be saved or loaded' });
 });

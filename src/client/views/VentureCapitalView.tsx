@@ -44,7 +44,7 @@ interface VentureCapitalViewProps {
   initialCityId?: string;
 }
 
-export const VentureCapitalView: React.FC<VentureCapitalViewProps> = () => {
+export const VentureCapitalView: React.FC<VentureCapitalViewProps> = ({ initialCityId }) => {
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'firms' | 'deals' | 'matcher' | 'syndication' | 'signals'>('overview');
   
   // Data state
@@ -55,6 +55,7 @@ export const VentureCapitalView: React.FC<VentureCapitalViewProps> = () => {
   const [signals, setSignals] = useState<VCSignal[]>([]);
   const [syndication, setSyndication] = useState<VCSyndicationGraph | null>(null);
   const [loading, setLoading] = useState(true);
+  const [subTabLoading, setSubTabLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Directory filter state
@@ -71,32 +72,83 @@ export const VentureCapitalView: React.FC<VentureCapitalViewProps> = () => {
   const [matches, setMatches] = useState<InvestorFitMatch[]>([]);
   const [matchingLoading, setMatchingLoading] = useState(false);
 
+  // 1. Initial mount: fetch only high-level overview metrics & taxonomy
   useEffect(() => {
-    async function loadData() {
+    let isMounted = true;
+    async function loadOverview() {
       try {
         setLoading(true);
-        const [sumRes, firmsRes, dealsRes, secRes, sigRes, synRes] = await Promise.all([
+        const [sumRes, secRes] = await Promise.all([
           fetchVCSummary(),
-          fetchVCFirms(),
-          fetchVCDeals(),
           fetchVCSectors(),
-          fetchVCSignals(),
-          fetchVCSyndication(),
         ]);
+        if (!isMounted) return;
         setSummary(sumRes);
-        setFirms(firmsRes);
-        setDeals(dealsRes);
         setSectors(secRes);
-        setSignals(sigRes);
-        setSyndication(synRes);
       } catch (err: any) {
+        if (!isMounted) return;
         setError(err.message || 'Failed to load Venture Capital data');
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
-    loadData();
+    loadOverview();
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  // 2. On-demand subtab data loading: fetch large datasets only when user visits the subtab
+  useEffect(() => {
+    let isMounted = true;
+    async function loadSubTabData() {
+      if (activeSubTab === 'firms' && firms.length === 0) {
+        setSubTabLoading(true);
+        try {
+          const res = await fetchVCFirms();
+          if (isMounted) setFirms(res);
+        } catch (err) {
+          console.error('Failed to load VC firms:', err);
+        } finally {
+          if (isMounted) setSubTabLoading(false);
+        }
+      } else if (activeSubTab === 'deals' && deals.length === 0) {
+        setSubTabLoading(true);
+        try {
+          const res = await fetchVCDeals();
+          if (isMounted) setDeals(res);
+        } catch (err) {
+          console.error('Failed to load VC deals:', err);
+        } finally {
+          if (isMounted) setSubTabLoading(false);
+        }
+      } else if (activeSubTab === 'signals' && signals.length === 0) {
+        setSubTabLoading(true);
+        try {
+          const res = await fetchVCSignals();
+          if (isMounted) setSignals(res);
+        } catch (err) {
+          console.error('Failed to load VC signals:', err);
+        } finally {
+          if (isMounted) setSubTabLoading(false);
+        }
+      } else if (activeSubTab === 'syndication' && !syndication) {
+        setSubTabLoading(true);
+        try {
+          const res = await fetchVCSyndication();
+          if (isMounted) setSyndication(res);
+        } catch (err) {
+          console.error('Failed to load VC syndication:', err);
+        } finally {
+          if (isMounted) setSubTabLoading(false);
+        }
+      }
+    }
+    loadSubTabData();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeSubTab, firms.length, deals.length, signals.length, syndication]);
 
   // Run matcher when tab or inputs change
   useEffect(() => {
@@ -234,6 +286,28 @@ export const VentureCapitalView: React.FC<VentureCapitalViewProps> = () => {
           })}
         </div>
       </div>
+
+      {/* Local Context Banner */}
+      {initialCityId && (
+        <div className="flex items-center justify-between rounded-xl border border-indigo-500/30 bg-indigo-950/40 p-3.5 text-xs text-indigo-200">
+          <div className="flex items-center gap-2.5">
+            <MapPin className="h-4 w-4 text-indigo-400 shrink-0" />
+            <span>
+              Local context active for <strong>{initialCityId.replace(/^(CSD_|City of |Town of |Municipality of )/i, '')}</strong>. Showing venture ecosystem telemetry and regional corridor syndication across Ontario.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-tab lazy loading spinner */}
+      {subTabLoading && (
+        <div className="flex items-center justify-center p-8">
+          <div className="flex items-center gap-2.5 text-xs text-slate-400">
+            <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <span>Loading {activeSubTab} data from venture capital graph...</span>
+          </div>
+        </div>
+      )}
 
       {/* SUB-TAB 1: OVERVIEW */}
       {activeSubTab === 'overview' && (

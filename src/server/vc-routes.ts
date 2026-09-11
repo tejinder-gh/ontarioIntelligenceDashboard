@@ -1,16 +1,20 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import { vcIntelligenceService } from '../analytics/vc-intelligence-service.js';
 
 export const vcRouter = Router();
+
+const sanitizeError = (res: Response, logPrefix: string, err: unknown) => {
+  console.error(`[VC API] ${logPrefix}:`, err);
+  res.status(500).json({ success: false, error: 'Internal server error while querying venture capital telemetry' });
+};
 
 // 1. Ecosystem Overview & Macro Telemetry
 vcRouter.get('/summary', async (_req, res) => {
   try {
     const summary = await vcIntelligenceService.getEcosystemSummary();
     res.json({ success: true, data: summary });
-  } catch (err: any) {
-    console.error('Error fetching VC ecosystem summary:', err);
-    res.status(500).json({ success: false, error: err.message });
+  } catch (err: unknown) {
+    sanitizeError(res, 'Error fetching VC ecosystem summary', err);
   }
 });
 
@@ -25,9 +29,8 @@ vcRouter.get('/firms', async (req, res) => {
       query: query as string,
     });
     res.json({ success: true, count: firms.length, data: firms });
-  } catch (err: any) {
-    console.error('Error fetching VC firms:', err);
-    res.status(500).json({ success: false, error: err.message });
+  } catch (err: unknown) {
+    sanitizeError(res, 'Error fetching VC firms', err);
   }
 });
 
@@ -40,9 +43,8 @@ vcRouter.get('/firms/:id', async (req, res) => {
       return;
     }
     res.json({ success: true, data: firm });
-  } catch (err: any) {
-    console.error('Error fetching firm details:', err);
-    res.status(500).json({ success: false, error: err.message });
+  } catch (err: unknown) {
+    sanitizeError(res, 'Error fetching firm details', err);
   }
 });
 
@@ -56,9 +58,8 @@ vcRouter.get('/deals', async (req, res) => {
       country: country as string,
     });
     res.json({ success: true, count: deals.length, data: deals });
-  } catch (err: any) {
-    console.error('Error fetching VC deals:', err);
-    res.status(500).json({ success: false, error: err.message });
+  } catch (err: unknown) {
+    sanitizeError(res, 'Error fetching VC deals', err);
   }
 });
 
@@ -67,9 +68,8 @@ vcRouter.get('/sectors', async (_req, res) => {
   try {
     const sectors = await vcIntelligenceService.getSectors();
     res.json({ success: true, count: sectors.length, data: sectors });
-  } catch (err: any) {
-    console.error('Error fetching VC sectors:', err);
-    res.status(500).json({ success: false, error: err.message });
+  } catch (err: unknown) {
+    sanitizeError(res, 'Error fetching VC sectors', err);
   }
 });
 
@@ -85,9 +85,8 @@ vcRouter.post('/fit-score', async (req, res) => {
       topMatches: matches.slice(0, 10),
       allMatches: matches,
     });
-  } catch (err: any) {
-    console.error('Error calculating investor fit:', err);
-    res.status(500).json({ success: false, error: err.message });
+  } catch (err: unknown) {
+    sanitizeError(res, 'Error calculating investor fit', err);
   }
 });
 
@@ -96,9 +95,8 @@ vcRouter.get('/syndication', async (_req, res) => {
   try {
     const graph = await vcIntelligenceService.getSyndicationGraph();
     res.json({ success: true, data: graph });
-  } catch (err: any) {
-    console.error('Error fetching syndication graph:', err);
-    res.status(500).json({ success: false, error: err.message });
+  } catch (err: unknown) {
+    sanitizeError(res, 'Error fetching syndication graph', err);
   }
 });
 
@@ -107,9 +105,8 @@ vcRouter.get('/signals', async (_req, res) => {
   try {
     const signals = await vcIntelligenceService.getSignals();
     res.json({ success: true, count: signals.length, data: signals });
-  } catch (err: any) {
-    console.error('Error fetching investor signals:', err);
-    res.status(500).json({ success: false, error: err.message });
+  } catch (err: unknown) {
+    sanitizeError(res, 'Error fetching investor signals', err);
   }
 });
 
@@ -118,8 +115,7 @@ vcRouter.get('/regional/:city', async (req, res) => {
   try {
     const regional = await vcIntelligenceService.getRegionalVCSummary(req.params.city);
     res.json({ success: true, data: regional });
-  } catch (err: any) {
-    console.error('Error fetching regional VC summary:', err);
-    res.status(500).json({ success: false, error: err.message });
+  } catch (err: unknown) {
+    sanitizeError(res, 'Error fetching regional VC summary', err);
   }
 });

@@ -157,6 +157,13 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId =
   const [dossierCategoryId, setDossierCategoryId] = useState<string>(selectedCategory || '');
   const [dossierCityName, setDossierCityName] = useState<string>((cityId || 'CSD_burlington').replace('CSD_', ''));
 
+  const openDossier = (city: string, category: string, cityName?: string) => {
+    setDossierCityId(city);
+    setDossierCategoryId(category);
+    setDossierCityName(cityName || city.replace(/^(CSD_|City of |Town of |Municipality of )/i, ''));
+    setIsDossierOpen(true);
+  };
+
   // Sync selectedCityId with prop
   useEffect(() => {
     setSelectedCityId(cityId);
@@ -524,9 +531,18 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId =
                         Annual Revenue: <strong className="text-white">{medianRev ? `$${(medianRev / 1000).toFixed(0)}k` : '—'}</strong>
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-500 group-hover:text-indigo-400 transition-colors">
-                          Click to inspect strategy
-                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDossier(selectedCityId, rec.categoryId, rec.cityName || selectedCityId.replace('CSD_', ''));
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold inline-flex items-center gap-1 transition-all active:scale-[0.98]"
+                          title="Generate $199 Location Feasibility Dossier"
+                        >
+                          <FileText className="w-3 h-3 text-emerald-400" />
+                          <span>Dossier ($199)</span>
+                        </button>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -535,7 +551,7 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId =
                           }}
                           className="text-indigo-400 group-hover:text-indigo-300 font-semibold inline-flex items-center gap-1 hover:underline"
                         >
-                          Deep Dive Competitors
+                          Deep Dive
                           <ChevronRight className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -927,17 +943,31 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId =
                           <td className="py-3 px-4 text-right font-medium">{inc ? `$${Number(inc).toLocaleString()}` : '—'}</td>
                           <td className="py-3 px-4 text-right">{r.competitorCount ?? '—'}</td>
                           <td className="py-3 px-4 text-right">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveDetail({ cityId: r.geographyId, categoryId: selectedCategory, cityName: r.cityName });
-                              }}
-                              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
-                            >
-                              Deep Dive
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDossier(r.geographyId, selectedCategory, r.cityName);
+                                }}
+                                className="px-2 py-0.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold inline-flex items-center gap-1 transition-all active:scale-[0.98]"
+                                title="Export $199 Feasibility Dossier"
+                              >
+                                <FileText className="w-3 h-3 text-emerald-400" />
+                                <span>Dossier</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveDetail({ cityId: r.geographyId, categoryId: selectedCategory, cityName: r.cityName });
+                                }}
+                                className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+                              >
+                                Deep Dive
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

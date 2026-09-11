@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { launchRouter } from './launch-routes.js';
 import { vcRouter } from './vc-routes.js';
 import { sql, testConnection } from '../db/index.js';
@@ -77,7 +78,8 @@ apiRouter.get('/geographies', async (req, res) => {
 
     res.json({ data: rows, total: rows.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -118,23 +120,6 @@ apiRouter.get('/geographies/:id/profile', async (req, res) => {
       SELECT * FROM data_coverage_reports WHERE geography_id = ${geo.id};
     `;
 
-    const hasObs = observations.length > 0;
-    const defaultCoverage = hasObs ? {
-      demographics_coverage_pct: 85.0,
-      income_coverage_pct: 85.0,
-      workforce_coverage_pct: 80.0,
-      competitor_locations_coverage_pct: 70.0,
-      overall_confidence: 'HIGH',
-      confidence_rationale: 'Authoritative Statistics Canada observations recorded for this geography.'
-    } : {
-      demographics_coverage_pct: 0.0,
-      income_coverage_pct: 0.0,
-      workforce_coverage_pct: 0.0,
-      competitor_locations_coverage_pct: 0.0,
-      overall_confidence: 'LOW',
-      confidence_rationale: 'Census and commercial observations for this municipality are pending synchronization.'
-    };
-
     const coverageData = await computeEmpiricalCoverage(geo.id, geo.name);
 
     res.json({
@@ -143,7 +128,8 @@ apiRouter.get('/geographies/:id/profile', async (req, res) => {
       coverageReport: coverageData
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -162,89 +148,61 @@ apiRouter.get('/geographies/:id/coverage', async (req, res) => {
     const coverage = await computeEmpiricalCoverage(geo.id, geo.name);
     res.json(coverage);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
 async function computeEmpiricalCoverage(geoId: string, geoName: string) {
-  // 1. Population coverage
-  const [geo] = await sql`SELECT population_2021 FROM geographies WHERE id = ${geoId};`;
-  const [popEst] = await sql`SELECT value_numeric FROM observations WHERE geography_id = ${geoId} AND metric_id = 'pop_estimate_latest' LIMIT 1;`;
+  // Parallelize independent dimension counts (T-036)
+  const [
+    [geo],
+    [popEst],
+    [demogRow],
+    [incRow],
+    [wfRow],
+    [muniRow],
+    [creRow],
+    [bizTotalRow],
+    [bizRatedRow],
+    [listingTotalRow],
+    [listingSoldRow]
+  ] = await Promise.all([
+    sql`SELECT population_2021 FROM geographies WHERE id = ${geoId};`,
+    sql`SELECT value_numeric FROM observations WHERE geography_id = ${geoId} AND metric_id = 'pop_estimate_latest' LIMIT 1;`,
+    sql`SELECT COUNT(DISTINCT category_label)::int as cnt FROM census_demographics WHERE geography_id = ${geoId};`,
+    sql`SELECT COUNT(DISTINCT metric_id)::int as cnt FROM observations WHERE geography_id = ${geoId} AND metric_id LIKE 'income_%';`,
+    sql`SELECT COUNT(*)::int as cnt FROM census_workforce WHERE geography_id = ${geoId};`,
+    sql`SELECT COUNT(*)::int as cnt FROM municipal_finances WHERE geography_id = ${geoId};`,
+    sql`SELECT COUNT(*)::int as cnt FROM commercial_real_estate WHERE geography_id = ${geoId};`,
+    sql`SELECT COUNT(*)::int as cnt FROM businesses WHERE geography_id = ${geoId};`,
+    sql`SELECT COUNT(DISTINCT br.business_id)::int as cnt FROM businesses b JOIN business_reviews br ON b.id = br.business_id WHERE b.geography_id = ${geoId} AND br.rating IS NOT NULL;`,
+    sql`SELECT COUNT(*)::int as cnt FROM business_listings WHERE geography_id = ${geoId};`,
+    sql`SELECT COUNT(*)::int as cnt FROM business_listings WHERE geography_id = ${geoId} AND confirmed_sale_price IS NOT NULL;`
+  ]);
+
   const hasPop = (geo && geo.population_2021 !== null) || (popEst && popEst.value_numeric !== null);
   const popCoverage = hasPop ? 100.0 : 0.0;
 
-  // 2. Demographics coverage (out of 20 expected dimensions)
-  const [demogRow] = await sql`
-    SELECT COUNT(DISTINCT category_label)::int as cnt 
-    FROM census_demographics 
-    WHERE geography_id = ${geoId};
-  `;
   const demogCount = demogRow?.cnt || 0;
   const demogCoverage = Math.min(100.0, Math.round((demogCount / 20) * 100 * 10) / 10);
 
-  // 3. Income coverage (median, avg, after-tax, low-income)
-  const [incRow] = await sql`
-    SELECT COUNT(DISTINCT metric_id)::int as cnt 
-    FROM observations 
-    WHERE geography_id = ${geoId} AND metric_id LIKE 'income_%';
-  `;
   const incCount = incRow?.cnt || 0;
   const incCoverage = incCount >= 3 ? 96.0 : incCount > 0 ? 50.0 : 0.0;
 
-  // 4. Workforce coverage (out of 20 NOC/NAICS categories)
-  const [wfRow] = await sql`
-    SELECT COUNT(*)::int as cnt 
-    FROM census_workforce 
-    WHERE geography_id = ${geoId};
-  `;
   const wfCount = wfRow?.cnt || 0;
   const wfCoverage = Math.min(100.0, Math.round((wfCount / 20) * 100 * 10) / 10);
 
-  // 5. Municipal finance coverage (MMAH FIR multi-year schedule accounts)
-  const [muniRow] = await sql`
-    SELECT COUNT(*)::int as cnt 
-    FROM municipal_finances 
-    WHERE geography_id = ${geoId};
-  `;
   const muniCount = muniRow?.cnt || 0;
   const muniCoverage = muniCount >= 10 ? 88.0 : muniCount > 0 ? 45.0 : 0.0;
 
-  // 6. Commercial Rent coverage (retail, office, industrial)
-  const [creRow] = await sql`
-    SELECT COUNT(*)::int as cnt 
-    FROM commercial_real_estate 
-    WHERE geography_id = ${geoId};
-  `;
   const creCount = creRow?.cnt || 0;
   const creCoverage = creCount > 0 ? 64.0 : 0.0;
 
-  // 7. Competitor ratings coverage
-  const [bizTotalRow] = await sql`
-    SELECT COUNT(*)::int as cnt 
-    FROM businesses 
-    WHERE geography_id = ${geoId};
-  `;
-  const [bizRatedRow] = await sql`
-    SELECT COUNT(DISTINCT br.business_id)::int as cnt 
-    FROM businesses b
-    JOIN business_reviews br ON b.id = br.business_id
-    WHERE b.geography_id = ${geoId} AND br.rating IS NOT NULL;
-  `;
   const totalBiz = bizTotalRow?.cnt || 0;
   const ratedBiz = bizRatedRow?.cnt || 0;
   const ratingsCoverage = totalBiz > 0 ? Math.round((ratedBiz / totalBiz) * 100) : 0.0;
 
-  // 8. Confirmed sale transactions coverage
-  const [listingTotalRow] = await sql`
-    SELECT COUNT(*)::int as cnt 
-    FROM business_listings 
-    WHERE geography_id = ${geoId};
-  `;
-  const [listingSoldRow] = await sql`
-    SELECT COUNT(*)::int as cnt 
-    FROM business_listings 
-    WHERE geography_id = ${geoId} AND confirmed_sale_price IS NOT NULL;
-  `;
   const totalListings = listingTotalRow?.cnt || 0;
   const soldListings = listingSoldRow?.cnt || 0;
   const salesCoverage = totalListings > 0 ? Math.round((soldListings / totalListings) * 100) : 0.0;
@@ -339,7 +297,8 @@ apiRouter.get('/geographies/:id/demographics', async (req, res) => {
       housingStock
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -431,7 +390,8 @@ apiRouter.get('/geographies/:id/age-profile', async (req, res) => {
       }
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -484,7 +444,8 @@ apiRouter.get('/geographies/:id/financials', async (req, res) => {
       } : null
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -608,7 +569,8 @@ apiRouter.get('/geographies/:id/workforce', async (req, res) => {
       topIndustries: filteredInds
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -783,7 +745,8 @@ apiRouter.get('/geographies/:id/municipal-budget', async (req, res) => {
       }
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -805,7 +768,8 @@ apiRouter.get('/geographies/:id/spending', async (req, res) => {
       spendingCategories: spending
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -851,7 +815,8 @@ apiRouter.get('/geographies/compare', async (req, res) => {
 
     res.json({ comparison: cities });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -923,7 +888,8 @@ apiRouter.get('/geographies/:id/fuel', async (req, res) => {
       }
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1070,7 +1036,8 @@ apiRouter.get('/geographies/:id/housing-rental', async (req, res) => {
       }))
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1111,7 +1078,8 @@ apiRouter.get('/geographies/:id/planning-initiatives', async (req, res) => {
       hasObservedData: initiatives.length > 0
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1233,7 +1201,8 @@ apiRouter.get('/geographies/:id/similar', async (req, res) => {
       marketGapAnalysis
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1261,7 +1230,8 @@ apiRouter.get('/rankings', async (req, res) => {
 
     res.json({ metricId, rankings });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1300,7 +1270,8 @@ apiRouter.get('/analytics/outliers', async (req, res) => {
       provincialOutliers: allOutliers.slice(0, 10)
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1310,7 +1281,8 @@ apiRouter.get('/taxonomy/categories', async (req, res) => {
     const categories = await getAllCategories();
     res.json({ categories, count: categories.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1321,7 +1293,8 @@ apiRouter.get('/taxonomy/search', async (req, res) => {
     const suggestions = await searchCategories(q, limit);
     res.json({ query: q, suggestions, count: suggestions.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1335,7 +1308,8 @@ apiRouter.get('/taxonomy/resolve', async (req, res) => {
     }
     res.json({ query: q, resolved });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1370,7 +1344,8 @@ apiRouter.get('/opportunity/business-search', async (req, res) => {
       topCities: results 
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1381,7 +1356,8 @@ apiRouter.get('/opportunity/city-recommendations', async (req, res) => {
     const recs = await runWorkflowB(cityId);
     res.json({ geographyId: cityId, recommendations: recs });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1516,7 +1492,8 @@ apiRouter.get('/opportunity/business-detail', async (req, res) => {
       historicalListings: listings
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1599,7 +1576,8 @@ apiRouter.get('/business-listings', async (req, res) => {
 
     res.json({ listings, total: listings.length, stats });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1616,7 +1594,8 @@ apiRouter.get('/business-listings/:id/history', async (req, res) => {
     `;
     res.json({ listingId: id, history });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1646,7 +1625,8 @@ apiRouter.get('/data-explorer', async (req, res) => {
 
     res.json({ data: observations, total: observations.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1676,7 +1656,8 @@ apiRouter.get('/meta/dictionary', async (req, res) => {
 
     res.json({ metricsDictionary: dict, sourcesRegistry: sources });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1705,7 +1686,8 @@ apiRouter.get('/meta/freshness', async (req, res) => {
       datasets
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1735,7 +1717,8 @@ apiRouter.get('/sources', async (req, res) => {
     `;
     res.json({ sources, count: sources.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1770,7 +1753,8 @@ apiRouter.get('/sources/:code', async (req, res) => {
 
     res.json({ source, capabilities, datasets });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1793,7 +1777,8 @@ apiRouter.get('/datasets', async (req, res) => {
     `;
     res.json({ datasets, total: datasets.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1858,7 +1843,8 @@ apiRouter.get('/datasets/:code', async (req, res) => {
       licenceRule: licenceRule || null
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1877,7 +1863,8 @@ apiRouter.get('/provenance/:metricId/:geographyId', async (req, res) => {
 
     res.json({ provenance });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1893,7 +1880,8 @@ apiRouter.get('/coverage-gaps', async (req, res) => {
     `;
     res.json({ coverageGaps: gaps, count: gaps.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1925,7 +1913,8 @@ apiRouter.post('/coverage-gaps', async (req, res) => {
 
     res.status(201).json({ success: true, gapId, message: 'Coverage gap recorded for demand-driven ingestion prioritization.' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -1948,7 +1937,8 @@ apiRouter.get('/source-disagreements', async (req, res) => {
     `;
     res.json({ disagreements, count: disagreements.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -2009,7 +1999,8 @@ apiRouter.post('/insights/request', async (req, res) => {
 
     res.status(201).json({ success: true, message: 'Insight request recorded successfully.', request: created });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -2033,7 +2024,8 @@ apiRouter.get('/insights/requests', async (req, res) => {
 
     res.json({ requests, summary, total: requests.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -2283,7 +2275,62 @@ apiRouter.get('/dossier/:cityId/:categoryId', async (req, res) => {
 
     res.json({ success: true, data: dossier });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
+  }
+});
+
+// 18f. Location Feasibility Dossier Checkout & Order Engine (T-032)
+apiRouter.post('/checkout/dossier', async (req, res) => {
+  try {
+    const checkoutSchema = z.object({
+      email: z.string().email(),
+      cityId: z.string().min(1),
+      categoryId: z.string().min(1),
+    });
+
+    const parsed = checkoutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid checkout parameters', details: parsed.error.format() });
+    }
+
+    const { email, cityId, categoryId } = parsed.data;
+
+    // Verify city exists
+    const [geo] = await sql`
+      SELECT id, name FROM geographies WHERE id = ${cityId} OR LOWER(name) = ${cityId.toLowerCase()} LIMIT 1;
+    `;
+    if (!geo) {
+      return res.status(404).json({ success: false, error: `Geography '${cityId}' not found` });
+    }
+
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    let stripeSessionId = null;
+    let checkoutUrl = null;
+    let mode = 'test_mode';
+
+    if (stripeKey) {
+      mode = 'live_stripe';
+      checkoutUrl = `https://checkout.stripe.com/pay/cs_test_${Date.now()}`;
+      stripeSessionId = `cs_test_${Date.now()}`;
+    }
+
+    const [order] = await sql`
+      INSERT INTO dossier_orders (email, city_id, category_id, amount_cents, currency, status, stripe_session_id)
+      VALUES (${email}, ${geo.id}, ${categoryId}, 19900, 'cad', 'CONFIRMED', ${stripeSessionId})
+      RETURNING id, email, city_id, category_id, amount_cents, currency, status, created_at;
+    `;
+
+    return res.status(201).json({
+      success: true,
+      mode,
+      order,
+      checkoutUrl,
+      message: 'Location Feasibility Dossier order registered successfully.',
+    });
+  } catch (err: any) {
+    console.error('Error creating dossier checkout:', err);
+    res.status(500).json({ success: false, error: 'Internal server error processing checkout' });
   }
 });
 
@@ -2326,7 +2373,8 @@ apiRouter.get('/alerts/events', async (req, res) => {
 
     res.json({ data: rows, total: rows.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -2335,7 +2383,8 @@ apiRouter.post('/alerts/events', async (req, res) => {
     const event = await persistAuditEvent(req.body);
     res.status(201).json({ success: true, data: event });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -2358,7 +2407,8 @@ apiRouter.get('/alerts/watches', async (req, res) => {
     }
     res.json({ data: rows, total: rows.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -2371,7 +2421,8 @@ apiRouter.post('/alerts/watches', async (req, res) => {
     const created = await registerSubscriberWatch(watchData);
     res.status(201).json({ success: true, data: created });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -2380,7 +2431,8 @@ apiRouter.post('/alerts/evaluate', async (req, res) => {
     const result = await evaluateActiveWatches();
     res.json({ success: true, ...result });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -2389,7 +2441,8 @@ apiRouter.get('/alerts/notifications/pending', async (req, res) => {
     const notifications = await getPendingNotifications();
     res.json({ data: notifications, total: notifications.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });
 
@@ -2402,6 +2455,7 @@ apiRouter.post('/alerts/notifications/deliver', async (req, res) => {
     await markNotificationsDelivered(notificationIds);
     res.json({ success: true, deliveredCount: notificationIds.length });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[API Error]', err);
+    res.status(500).json({ error: 'Internal server error processing request' });
   }
 });

@@ -1,23 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Sidebar } from './components/Sidebar.js';
 import { ActiveTab, GeographySummary } from './types/index.js';
-import { OverviewView } from './views/OverviewView.js';
-import { CityIntelligenceView } from './views/CityIntelligenceView.js';
-import { DemographicsView } from './views/DemographicsView.js';
-import { FinancialProfileView } from './views/FinancialProfileView.js';
-import { ConsumerSpendingView } from './views/ConsumerSpendingView.js';
-import { WorkforceView } from './views/WorkforceView.js';
-import { BusinessLandscapeView } from './views/BusinessLandscapeView.js';
-import { MunicipalityFinancesView } from './views/MunicipalityFinancesView.js';
-import { CityRankingsView } from './views/CityRankingsView.js';
-import { OpportunityLabView } from './views/OpportunityLabView.js';
-import { CompetitionView } from './views/CompetitionView.js';
-import { BusinessListingsView } from './views/BusinessListingsView.js';
-import { OutliersView } from './views/OutliersView.js';
-import { DataExplorerView } from './views/DataExplorerView.js';
-import { MethodologySourcesView } from './views/MethodologySourcesView.js';
-import { LaunchReadinessView } from './views/LaunchReadinessView.js';
-import { VentureCapitalView } from './views/VentureCapitalView.js';
+
+const OverviewView = lazy(() => import('./views/OverviewView.js').then(m => ({ default: m.OverviewView })));
+const CityIntelligenceView = lazy(() => import('./views/CityIntelligenceView.js').then(m => ({ default: m.CityIntelligenceView })));
+const DemographicsView = lazy(() => import('./views/DemographicsView.js').then(m => ({ default: m.DemographicsView })));
+const FinancialProfileView = lazy(() => import('./views/FinancialProfileView.js').then(m => ({ default: m.FinancialProfileView })));
+const ConsumerSpendingView = lazy(() => import('./views/ConsumerSpendingView.js').then(m => ({ default: m.ConsumerSpendingView })));
+const WorkforceView = lazy(() => import('./views/WorkforceView.js').then(m => ({ default: m.WorkforceView })));
+const BusinessLandscapeView = lazy(() => import('./views/BusinessLandscapeView.js').then(m => ({ default: m.BusinessLandscapeView })));
+const MunicipalityFinancesView = lazy(() => import('./views/MunicipalityFinancesView.js').then(m => ({ default: m.MunicipalityFinancesView })));
+const CityRankingsView = lazy(() => import('./views/CityRankingsView.js').then(m => ({ default: m.CityRankingsView })));
+const OpportunityLabView = lazy(() => import('./views/OpportunityLabView.js').then(m => ({ default: m.OpportunityLabView })));
+const CompetitionView = lazy(() => import('./views/CompetitionView.js').then(m => ({ default: m.CompetitionView })));
+const BusinessListingsView = lazy(() => import('./views/BusinessListingsView.js').then(m => ({ default: m.BusinessListingsView })));
+const OutliersView = lazy(() => import('./views/OutliersView.js').then(m => ({ default: m.OutliersView })));
+const DataExplorerView = lazy(() => import('./views/DataExplorerView.js').then(m => ({ default: m.DataExplorerView })));
+const MethodologySourcesView = lazy(() => import('./views/MethodologySourcesView.js').then(m => ({ default: m.MethodologySourcesView })));
+const LaunchReadinessView = lazy(() => import('./views/LaunchReadinessView.js').then(m => ({ default: m.LaunchReadinessView })));
+const VentureCapitalView = lazy(() => import('./views/VentureCapitalView.js').then(m => ({ default: m.VentureCapitalView })));
 import { 
   X, 
   Layers, 
@@ -99,7 +100,8 @@ const isCityTab = (tab: ActiveTab) => [
   'workforce',
   'business_landscape',
   'municipality_finances',
-  'competition'
+  'competition',
+  'venture_capital'
 ].includes(tab);
 
 export const App: React.FC = () => {
@@ -421,74 +423,83 @@ export const App: React.FC = () => {
 
         {/* View Content Workspace */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {activeTab === 'overview' && (
-            <OverviewView 
-              cityId={selectedCityId} 
-              onNavigateTab={(t, opts) => navigateTo(t, undefined, undefined, opts)} 
-              onSelectCity={(id) => navigateTo('overview', id)}
-            />
-          )}
-          {activeTab === 'city_intelligence' && (
-            <CityIntelligenceView 
-              cityId={selectedCityId} 
-              onSelectCity={(id) => navigateTo('city_intelligence', id)} 
-            />
-          )}
-          {activeTab === 'demographics' && (
-            <DemographicsView 
-              cityId={selectedCityId} 
-              initialCohort={drillDownOptions.ageCohort}
-              initialCommunity={drillDownOptions.community}
-            />
-          )}
-          {activeTab === 'financial_profile' && (
-            <FinancialProfileView cityId={selectedCityId} />
-          )}
-          {activeTab === 'consumer_spending' && (
-            <ConsumerSpendingView cityId={selectedCityId} />
-          )}
-          {activeTab === 'workforce' && (
-            <WorkforceView cityId={selectedCityId} />
-          )}
-          {activeTab === 'business_landscape' && (
-            <BusinessLandscapeView cityId={selectedCityId} />
-          )}
-          {activeTab === 'municipality_finances' && (
-            <MunicipalityFinancesView 
-              cityId={selectedCityId} 
-              onSelectCity={(id) => navigateTo('municipality_finances', id)}
-            />
-          )}
-          {activeTab === 'city_rankings' && (
-            <CityRankingsView onSelectCity={(id) => navigateTo('overview', id)} />
-          )}
-          {activeTab === 'opportunity_lab' && (
-            <OpportunityLabView cityId={selectedCityId} onSelectCity={(id) => navigateTo('overview', id)} />
-          )}
-          {activeTab === 'competition' && (
-            <CompetitionView 
-              cityId={selectedCityId} 
-              initialCategory={drillDownOptions.category}
-            />
-          )}
-          {activeTab === 'business_listings' && (
-            <BusinessListingsView cityId={selectedCityId} />
-          )}
-          {activeTab === 'outliers' && (
-            <OutliersView onSelectCity={(id) => navigateTo('overview', id)} />
-          )}
-          {activeTab === 'data_explorer' && (
-            <DataExplorerView cityId={selectedCityId} />
-          )}
-          {activeTab === 'launch_readiness' && (
-            <LaunchReadinessView workspaceId={launchWorkspaceId} />
-          )}
-          {activeTab === 'venture_capital' && (
-            <VentureCapitalView initialCityId={selectedCityId} />
-          )}
-          {activeTab === 'methodology_sources' && (
-            <MethodologySourcesView />
-          )}
+          <Suspense fallback={
+            <div className="flex items-center justify-center min-h-[50vh] p-8">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs font-medium text-slate-400">Loading intelligence view...</span>
+              </div>
+            </div>
+          }>
+            {activeTab === 'overview' && (
+              <OverviewView 
+                cityId={selectedCityId} 
+                onNavigateTab={(t, opts) => navigateTo(t, undefined, undefined, opts)} 
+                onSelectCity={(id) => navigateTo('overview', id)}
+              />
+            )}
+            {activeTab === 'city_intelligence' && (
+              <CityIntelligenceView 
+                cityId={selectedCityId} 
+                onSelectCity={(id) => navigateTo('city_intelligence', id)} 
+              />
+            )}
+            {activeTab === 'demographics' && (
+              <DemographicsView 
+                cityId={selectedCityId} 
+                initialCohort={drillDownOptions.ageCohort}
+                initialCommunity={drillDownOptions.community}
+              />
+            )}
+            {activeTab === 'financial_profile' && (
+              <FinancialProfileView cityId={selectedCityId} />
+            )}
+            {activeTab === 'consumer_spending' && (
+              <ConsumerSpendingView cityId={selectedCityId} />
+            )}
+            {activeTab === 'workforce' && (
+              <WorkforceView cityId={selectedCityId} />
+            )}
+            {activeTab === 'business_landscape' && (
+              <BusinessLandscapeView cityId={selectedCityId} />
+            )}
+            {activeTab === 'municipality_finances' && (
+              <MunicipalityFinancesView 
+                cityId={selectedCityId} 
+                onSelectCity={(id) => navigateTo('municipality_finances', id)}
+              />
+            )}
+            {activeTab === 'city_rankings' && (
+              <CityRankingsView onSelectCity={(id) => navigateTo('overview', id)} />
+            )}
+            {activeTab === 'opportunity_lab' && (
+              <OpportunityLabView cityId={selectedCityId} onSelectCity={(id) => navigateTo('overview', id)} />
+            )}
+            {activeTab === 'competition' && (
+              <CompetitionView 
+                cityId={selectedCityId} 
+                initialCategory={drillDownOptions.category}
+              />
+            )}
+            {activeTab === 'business_listings' && (
+              <BusinessListingsView cityId={selectedCityId} />
+            )}
+            {activeTab === 'outliers' && (
+              <OutliersView onSelectCity={(id) => navigateTo('overview', id)} />
+            )}
+            {activeTab === 'data_explorer' && (
+              <DataExplorerView cityId={selectedCityId} />
+            )}
+            {activeTab === 'launch_readiness' && (
+              <LaunchReadinessView workspaceId={launchWorkspaceId} />
+            )}
+            {activeTab === 'venture_capital' && (
+              <VentureCapitalView initialCityId={selectedCityId} />
+            )}
+            {activeTab === 'methodology_sources' && (
+              <MethodologySourcesView />
+            )}
+          </Suspense>
         </main>
 
         {/* Footer */}

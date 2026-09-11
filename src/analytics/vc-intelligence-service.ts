@@ -630,7 +630,7 @@ export class VcIntelligenceService {
    * Regional venture capital intelligence for an Ontario municipality
    */
   async getRegionalVCSummary(cityName: string) {
-    const cleanCity = cityName.replace(/^(CSD_|City of |Town of )/i, '').trim();
+    const cleanCity = cityName.replace(/^(CSD_|City of |Town of |Municipality of |Township of )/i, '').trim();
 
     const [deals] = await sql`
       SELECT 
@@ -640,7 +640,7 @@ export class VcIntelligenceService {
       FROM vc.companies c
       LEFT JOIN vc.locations l ON c.headquarters_location_id = l.id
       LEFT JOIN vc.funding_rounds r ON c.id = r.company_id
-      WHERE l.city ILIKE ${'%' + cleanCity + '%'} OR l.state_province = 'ON';
+      WHERE l.city ILIKE ${'%' + cleanCity + '%'} AND (l.state_province = 'ON' OR l.country_code = 'CA');
     `;
 
     const [activeFirms] = await sql`
@@ -650,13 +650,15 @@ export class VcIntelligenceService {
       WHERE l.country_code = 'CA' OR f.name IN ('Inovia Capital', 'Georgian', 'Version One Ventures');
     `;
 
+    const localCompanies = Number(deals?.local_companies || 0);
+
     return {
       city: cityName,
       cleanCity,
-      ventureBackedCompanies: Number(deals?.local_companies || 0),
+      ventureBackedCompanies: localCompanies,
       capitalRaisedUsd: Number(deals?.capital_raised || 0),
       roundCount: Number(deals?.round_count || 0),
-      activeDomesticInvestors: Number(activeFirms?.active_investors || 3),
+      activeDomesticInvestors: localCompanies > 0 ? Number(activeFirms?.active_investors || 3) : 0,
       topHubs: ['Toronto', 'Waterloo', 'Ottawa', 'Montreal'],
     };
   }

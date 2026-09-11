@@ -24,6 +24,7 @@ import { ExportButton } from '../components/ExportButton.js';
 import { MetricTooltip } from '../components/MetricTooltip.js';
 import { ContributingDataInspector, ContributingDataProps } from '../components/ContributingDataInspector.js';
 import { FeatureOutliersSection } from '../components/FeatureOutliersSection.js';
+import { FeasibilityDossierModal } from '../components/FeasibilityDossierModal.js';
 
 interface BusinessListingsViewProps {
   cityId: string;
@@ -48,6 +49,12 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
   const [selectedListingForHistory, setSelectedListingForHistory] = useState<any | null>(null);
   const [historyEvents, setHistoryEvents] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Feasibility Dossier State (T-035)
+  const [isDossierOpen, setIsDossierOpen] = useState(false);
+  const [dossierCityId, setDossierCityId] = useState('CSD_burlington');
+  const [dossierCategoryId, setDossierCategoryId] = useState('pizza_store');
+  const [dossierCityName, setDossierCityName] = useState('Burlington');
 
   // Fetch category taxonomy
   useEffect(() => {
@@ -510,15 +517,31 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
                         )}
                       </td>
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => handleViewHistory(l)}
-                          className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1 mx-auto"
-                          title="View price reduction & listing timeline"
-                        >
-                          <History className="w-3 h-3 text-indigo-400" />
-                          <span>Timeline</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDossierCityId(l.geography_id || cityId);
+                              setDossierCategoryId(l.category_id || 'pizza_store');
+                              setDossierCityName(l.city_name || 'Burlington');
+                              setIsDossierOpen(true);
+                            }}
+                            className="px-2 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-semibold transition-colors flex items-center gap-1"
+                            title="Generate $199 Location Feasibility Dossier for this listing"
+                          >
+                            <FileText className="w-3 h-3 text-emerald-400" />
+                            <span>Dossier</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleViewHistory(l)}
+                            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1"
+                            title="View price reduction & listing timeline"
+                          >
+                            <History className="w-3 h-3 text-indigo-400" />
+                            <span>Timeline</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -601,6 +624,15 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
       <FeatureOutliersSection 
         category="business" 
         cityId={cityId} 
+      />
+
+      {/* Feasibility Dossier Modal (T-035) */}
+      <FeasibilityDossierModal
+        isOpen={isDossierOpen}
+        onClose={() => setIsDossierOpen(false)}
+        cityId={dossierCityId}
+        categoryId={dossierCategoryId}
+        cityName={dossierCityName}
       />
     </div>
   );

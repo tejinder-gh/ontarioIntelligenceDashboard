@@ -176,7 +176,32 @@ describe('Venture Capital & Investor Intelligence Module Suite', () => {
       const json = await res.json();
       expect(json.success).toBe(true);
       expect(json.data.city).toBe('Toronto');
+      expect(json.data.ventureBackedCompanies).toBeGreaterThanOrEqual(10);
+      expect(json.data.capitalRaisedUsd).toBeGreaterThan(1000000000);
       expect(json.data.activeDomesticInvestors).toBeGreaterThanOrEqual(3);
+    });
+
+    it('GET /api/vc/regional/Burlington returns 0 local companies and does not hallucinate provincial totals', async () => {
+      const res = await fetch(`${baseUrl}/api/vc/regional/Burlington`);
+      expect(res.status).toBe(200);
+
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.city).toBe('Burlington');
+      expect(json.data.ventureBackedCompanies).toBe(0);
+      expect(json.data.capitalRaisedUsd).toBe(0);
+      expect(json.data.roundCount).toBe(0);
+      expect(json.data.topHubs).toContain('Toronto');
+    });
+
+    it('GET /api/vc/regional/Moosonee correctly reports 0 venture companies for rural north', async () => {
+      const res = await fetch(`${baseUrl}/api/vc/regional/Moosonee`);
+      expect(res.status).toBe(200);
+
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.ventureBackedCompanies).toBe(0);
+      expect(json.data.capitalRaisedUsd).toBe(0);
     });
   });
 });

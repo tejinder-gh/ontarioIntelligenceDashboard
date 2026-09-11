@@ -87,7 +87,7 @@ def ticket_status(tid: str) -> str:
     if not PROGRESS.exists():
         return "APPROVED"
     for line in PROGRESS.read_text(encoding="utf-8").splitlines():
-        if line.strip().startswith(f"{tid} ") or f"| {tid} " in line or line.startswith(tid):
+        if re.search(rf"\b{tid}\b", line):
             for s in ("ACCEPTED", "IMPLEMENTED", "BLOCKED", "REWORK", "SKIPPED"):
                 if s in line:
                     return s

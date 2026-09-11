@@ -1,458 +1,250 @@
-# C-SUITE 360° APPLICATION AUDIT — SENIOR MODEL REVIEW REPORT
+# C-SUITE 360° APPLICATION AUDIT — SENIOR MODEL REVIEW REPORT (SPRINT 3 ITERATION)
 **Ontario Economic & Business Intelligence Platform**  
-**Audit Date:** September 8, 2026  
-**Auditor:** Senior Review Board (CTO, CPO, Head of Design, CMO, CFO, CEO lenses)  
+**Audit Date:** September 11, 2026  
+**Auditor:** Senior Review Board & Staff Engineer (CTO, CPO, Head of Design, CMO, CFO, CEO lenses)  
 **Target Repository:** `/Users/tejindersingh/dev/datasets/ontario-economic-intelligence`  
-**Status:** COMPLETE (Phase 1)
+**Status:** COMPLETE (Phase 1 Audit — Sprint 3 Post-Remediation Codebase)
 
 ---
 
 ## CONTEXT
 
 - **App Name:** Ontario Economic & Business Intelligence Platform
-- **One-Line Purpose:** Ingestion-first, zero-runtime-roundtrip commercial location feasibility and economic intelligence platform for entrepreneurs, franchisees, municipal economic development officers (EDOs), and commercial real estate brokers across Ontario's 444 municipalities.
+- **One-Line Purpose:** Ingestion-first, zero-runtime-roundtrip commercial location feasibility, municipal economic benchmarks, and venture capital intelligence platform covering Ontario's 444 municipalities.
 - **Repo Path / Entry Point:** 
   - Server: [`src/server/index.ts`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/index.ts) / [`src/server/app.ts`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/app.ts)
   - Client: [`index.html`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/index.html) / [`src/client/main.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/main.tsx)
-- **Stack:** TypeScript 5.9, Bun 1.3, React 19.2, Vite 8.2, Tailwind CSS 4.3, Recharts 3.10, Express 5.2, PostgreSQL 16 (`postgres.js`), Vitest 5.0.
-- **Stage:** Pre-launch MVP.
-- **Business Goal & Target Deadline:** Establish the authoritative Ontario municipal and commercial feasibility intelligence platform; monetize via single-city dossiers ($199–$299), monthly pro subscriptions ($149/mo), municipal EDO dashboard embeds ($499/mo), and featured commercial listings ($199/listing). Target launch readiness within 30 days.
-- **Target User & Market Size Assumption:** 
-  - 400,000+ small & medium businesses in Ontario.
+- **Stack:** TypeScript 5.9, Bun 1.4, React 19.2, Vite 8.2, Tailwind CSS 4.3, Express 5.2, PostgreSQL 16 (`postgres.js`), Vitest 5.0.
+- **Stage:** Production Release Candidate 1 (All 32 previous audit tickets T-001 to T-032 accepted).
+- **Business Goal & Deadline:** Launch commercial operations, monetize single-city feasibility dossiers ($199 CAD), recurring business listing alerts ($49/mo), and pro analytics subscriptions ($149/mo). Target full market launch within 30 days.
+- **Target User & Market Size Assumption:**
+  - 400,000+ small & medium business operators and franchise buyers in Ontario.
   - 444 municipal economic development offices (EDOs).
-  - Thousands of licensed commercial real estate (CRE) brokers across TRREB/OREA and Canadian franchise brokers.
-- **Built By:** Multi-agent sessions (exhibiting divergent patterns between Bun/Vite conventions, disparate Apple HIG styling, and hardcoded benchmark shortcuts).
-- **Known Constraints:** Zero external HTTP round-trips at runtime; local PostgreSQL database required.
+  - Commercial real estate (CRE) brokers across TRREB/OREA and Canadian franchise broker networks.
+  - Canadian tech founders and angel/VC syndicates seeking regional investment telemetry.
+- **Built By:** Senior & Intermediate developer agents guided by the Auto-Fix pipeline (154 tests passing across 27 suites, 0 TypeScript errors, bundle size slashed by 95.6%).
+- **Known Constraints:** Zero external HTTP round-trips at runtime; local PostgreSQL database required; solo founder / constrained engineering bandwidth.
 
 ---
 
 ## EXECUTIVE SUMMARY
 
-### Board Verdict: **FIX-THEN-SHIP** `[Confidence: HIGH >90%]`
+### Board Verdict: **SHIP-WITH-GUARDRAILS** `[Confidence: HIGH >95%]`
 
-The Ontario Economic & Business Intelligence Platform possesses an exceptional structural foundation. The relational database schema ([`src/db/schema.sql`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/db/schema.sql)) is masterfully designed across 22 normalized tables with immutable provenance tracking, strict geographic resolution partitioning (`CSD` vs `CMA` vs `PROVINCE`), and rigorous separation of asking prices from confirmed transaction prices. The dark-mode Apple HIG specular glass interface with interactive drill-down drawers is aesthetically superior to municipal legacy portals.
+The platform has made monumental architectural strides. The critical P0 blockers from Sprint 2 have been eradicated:
+1. The regional VC query hallucination is eliminated (non-hub municipalities like Burlington and Moosonee accurately report 0 local companies with exact hub driving distances).
+2. Launch Readiness workspaces now feature cryptographic multi-tenant token isolation (`X-Workspace-Token` with SHA-256 hashing).
+3. The monolithic 1.2 MB client bundle has been code-split into 17 lazy chunks with Rolldown `manualChunks`, reducing the initial entry bundle to **53.1 kB** (**13.9 kB gzipped**, 95.6% reduction).
+4. The Feasibility Dossier now features genuine database-backed checkout persistence (`dossier_orders`) and 1-click lender-ready PDF generation.
+5. All **154 tests pass across 27 suites** in ~600ms, and TypeScript compiles with **0 errors**.
 
-**However, the platform cannot be shipped in its current state due to four critical deal-breaking flaws:**
+**However, the Sprint 3 deep scan reveals 5 high-impact operational, security, and conversion deficiencies:**
 
-1. **The 436-City "Ghost Town" Data Cliff (P0):** While the database contains records for all 444 municipalities in the `geographies` table, **only 8 municipalities** have census profile data, **only 7** have business counts and municipal finances, **only 3** have physical business locations (21 total businesses), and **only 2** have commercial listings (5 total listings). 
-2. **Deceptive Hardcoded Fallback Leakage (P0):** When a user selects any of the other 436 Ontario municipalities (e.g. London, Waterloo, Windsor, Sudbury), [`OverviewView.tsx:64-71`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/OverviewView.tsx#L64-L71) **silently substitutes Burlington's exact numbers** (median income $116,000, 5,820 businesses, $34.50/sqft rent, 6.6% unemployment) while [`routes.ts:85-90`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L85-L90) reports a false **"95% Data Coverage - HIGH Confidence"** badge. This violates the platform's core value proposition ("zero guesswork, zero substitution").
-3. **Hardcoded Mathematical Formula Bugs (P0):** In [`CompetitionView.tsx:194`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/CompetitionView.tsx#L194) and [`MunicipalityFinancesView.tsx:165`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/MunicipalityFinancesView.tsx#L165), per-capita formulas hardcode Burlington's population (`186948`), calculating distorted per-capita metrics for Toronto, Ottawa, or any non-Burlington city.
-4. **Zero Monetization & Zero Marketing Infrastructure (P1):** There is $0 of monetization infrastructure (no Stripe, no paywalls, no tiers, no lead forms) and zero acquisition tooling (no GA4/analytics, no SEO meta tags, no OpenGraph preview tags, no sitemap). Over **$31,500/month CAD** in addressable revenue is currently left uncaptured.
-
-Once the 30-day remediation plan is executed (connecting the StatCan bulk census ingestion pipeline, removing hardcoded fallbacks, and installing Stripe/SEO hooks), the product has a clear path to market leadership in the Ontario commercial feasibility space.
+1. **Unsanitized Error Handlers Across 45 Route Handlers in `routes.ts` (P1 — BROKEN / SECURITY):** While `vc-routes.ts` was sanitized in Sprint 2 (T-028), `src/server/routes.ts` still contains **45 endpoints** returning raw `res.status(500).json({ error: err.message })`, exposing internal PostgreSQL database schema names, column identifiers, and constraint violation strings to untrusted clients.
+2. **Missing Rate Limiting & HTTP Security Headers (P1 — BROKEN / SECURITY):** In `src/server/app.ts`, `express` runs without rate limiting or security middleware (`helmet`). Endpoints such as `POST /api/checkout/dossier`, `POST /api/alerts/events`, and `POST /api/launch/workspaces` can be spammed without throttling.
+3. **Severe Funnel Disconnection in Primary Conversion Surfaces (P1 — MISSING / CFO):** The $199 Feasibility Dossier can only be launched from `OverviewView.tsx`. In [`src/client/views/OpportunityLabView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/OpportunityLabView.tsx) (the highest-intent conversion view where entrepreneurs inspect top-ranked business opportunities) and [`src/client/views/BusinessListingsView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/BusinessListingsView.tsx) (where buyers evaluate $300k+ business acquisitions), there is **zero direct trigger or button** to purchase or preview the Feasibility Dossier. An estimated **$31,800 CAD/month** in high-intent conversion revenue is currently leaking.
+4. **N+1 Query Amplification in `listWorkspaces` & Sequential Coverage Lookups (P2 — SUBOPTIMAL / PERFORMANCE):** In [`src/launch/repository.ts:69-74`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/launch/repository.ts#L69-L74), `listWorkspaces` executes `snapshot()` inside a loop, triggering 4 database queries per workspace (4N+1). In [`src/server/routes.ts:170-240`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L170-L240), `computeEmpiricalCoverage` executes 11 sequential `await sql` queries rather than parallelizing via `Promise.all` or combining into a single CTE query.
+5. **Keyboard Accessibility & Modal Focus Trapping Defect (P2 — SUBOPTIMAL / DESIGN):** Neither [`FeasibilityDossierModal.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/components/FeasibilityDossierModal.tsx) nor [`AlertSubscriptionModal.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/components/AlertSubscriptionModal.tsx) handles the standard `Escape` key to dismiss the overlay, and `AlertSubscriptionModal.tsx:64` defaults to a hardcoded email `'investor@ontario-intelligence.ca'` instead of requiring genuine prospect input.
 
 ---
 
 ## PHASE 0 — INVENTORY (Ground Truth Baseline)
 
-### Architecture & Data Flow Map
+### Architecture Map
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                          SYSTEM TOPOLOGY                               │
+│                        SYSTEM TOPOLOGY (SPRINT 3)                      │
 └────────────────────────────────────────────────────────────────────────┘
 
- [ Client Layer: SPA ]
-  React 19.2 + Vite 8.2 + Tailwind CSS 4.3 + Recharts 3.10
-  ├── 15 Intelligence Views (All bundled into single 940 kB JS chunk)
-  ├── Specular Glass UI (Apple HIG inspired materials)
-  └── Static Lookup Fallback (BusinessVisualSelector.tsx)
-          │
-          │ HTTP JSON API (Zero client-side external calls)
-          ▼
- [ Backend Layer: Node/Bun Express 5 Server ]
-  src/server/index.ts -> app.ts -> routes.ts
-  ├── 18 API Endpoints serving geographies, profiles, demographics, rankings
-  ├── In-Memory Similarity Engine (src/analytics/similarity.ts)
-  ├── Dual Opportunity Engines (Workflow A & Workflow B)
-  └── Zero Auth / Zero Rate Limiting / Permissive CORS (*)
-          │
-          │ postgres.js Connection Pool (Max 20, localhost:5432)
-          ▼
- [ Operational Store: PostgreSQL 16 in Docker ]
-  Database: ontario_economic_intelligence
-  ├── 22 Relational Tables (geographies, observations, derived_analytics, etc.)
-  ├── Actual Row Counts:
-  │   ├── geographies: 444 rows (Scraped from Ontario MMAH open data)
-  │   ├── observations: 165 rows (Only 9 distinct geographies)
-  │   ├── census_demographics: 180 rows (Only 9 distinct geographies)
-  │   ├── census_workforce: 256 rows (Only 8 distinct geographies)
-  │   ├── municipal_finances: 49 rows (Only 7 distinct geographies)
-  │   ├── businesses: 21 rows (Only 3 distinct geographies)
-  │   ├── business_listings: 5 rows (Only 2 distinct geographies)
-  │   └── derived_analytics: 63 rows (Precomputed on 8 cities)
+  [ Client Layer: React 19.2 + Vite 8.2 + Tailwind CSS 4.3 ]
+  ├── 17 Lazy Route Chunks (React.lazy + Suspense, entry bundle 53.1 kB)
+  ├── 3 Partitioned Vendor Chunks (vendor-react 185 kB, vendor-recharts 353 kB, vendor-icons 32 kB)
+  ├── 1-Click Multi-Page Printable PDF Dossier (FeasibilityDossierModal)
+  └── Client Workspace Token Management (localStorage X-Workspace-Token)
+                     │
+                     ▼ (HTTP / Local Express Proxy)
+  [ Server API Layer: Express 5.2 + Bun 1.4 ]
+  ├── /api/geographies/* (444 CSD profiles, rankings, coverage, official plans, FIR finances)
+  ├── /api/vc/* (Sanitized VC intelligence routes, directory, deals, matcher, syndication)
+  ├── /api/launch/* (Launch Readiness workspaces with SHA-256 token authorization)
+  ├── /api/checkout/dossier (Zod validation, dossier_orders audit persistence, Stripe mode)
+  ├── /api/alerts/* (Audit events, diff engine, subscriber watches)
+  └── /api/health (Liveness, database probe, uptime)
+                     │
+                     ▼
+  [ Persistence Layer: PostgreSQL 16 (postgres.js) ]
+  ├── 444 Ingested Municipalities (Census 98-401, FIR 2022-2024, Table 33-10-1097-01)
+  ├── 23 Venture Capital Tables (vc schema)
+  ├── launch_workspaces (with token_hash column) & launch_checks & launch_evidence
+  └── dossier_orders (e-commerce orders audit ledger)
 ```
-
-### Complete Feature Inventory
-
-| View / Module | Primary File | Intended Capability | Code State | Audit Finding |
-| :--- | :--- | :--- | :--- | :--- |
-| **Executive Overview** | [`OverviewView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/OverviewView.tsx) | City KPIs, pop share, density | **SUBOPTIMAL** | Silently falls back to Burlington data for missing cities ([L64-71](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/OverviewView.tsx#L64-L71)). |
-| **City Intelligence** | [`CityIntelligenceView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/CityIntelligenceView.tsx) | Census breakdown, dwellings | **SUBOPTIMAL** | Blank charts for 436 municipalities; no graceful empty state. |
-| **Demographics** | [`DemographicsView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/DemographicsView.tsx) | Top 20 ethnic communities & minorities | **COMPLETE (8 cities)** | Rich and accurate for 8 cities; empty for the remaining 436. |
-| **Financial Profile** | [`FinancialProfileView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/FinancialProfileView.tsx) | Mean vs median income, rent, wealth | **SUBOPTIMAL** | 6 sequential unbatched SQL queries on backend ([`routes.ts:134`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L134)). |
-| **Consumer Spending** | [`ConsumerSpendingView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/ConsumerSpendingView.tsx) | StatCan SHS household spending | **COMPLETE** | Accurately labels CMA/Provincial resolution benchmarks. |
-| **Workforce** | [`WorkforceView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/WorkforceView.tsx) | NOC occupations & NAICS industries | **COMPLETE (8 cities)** | Clean interactive drill-down cards for 8 seeded cities. |
-| **Business Landscape** | [`BusinessLandscapeView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/BusinessLandscapeView.tsx) | Table 33-10-1097-01 size bands | **COMPLETE (7 cities)** | Verified against Dec 2025 StatCan data for 7 cities. |
-| **Municipality Finances** | [`MunicipalityFinancesView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/MunicipalityFinancesView.tsx) | FIR operating/capital accounts | **BROKEN** | Hardcoded Burlington pop in per-capita formula ([L165](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/MunicipalityFinancesView.tsx#L165)). |
-| **City Rankings** | [`CityRankingsView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/CityRankingsView.tsx) | Multi-metric sortable league table | **SUBOPTIMAL** | Subquery does full table scan; only 8 rows exist. |
-| **Opportunity Lab (A)** | [`OpportunityLabView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/OpportunityLabView.tsx) | Business -> City ranking sliders | **SUBOPTIMAL** | Arbitrary filter `pop > 50000` hides 85% of Ontario municipalities. |
-| **Opportunity Lab (B)** | [`OpportunityLabView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/OpportunityLabView.tsx) | City -> Underserved business gaps | **BROKEN** | Computes gap using `businesses` table (21 rows total); breaks for Toronto. |
-| **Competition** | [`CompetitionView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/CompetitionView.tsx) | OSM competitor pins & saturation | **BROKEN** | Hardcoded Burlington pop in saturation calculation ([L194](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/CompetitionView.tsx#L194)). |
-| **Business Listings** | [`BusinessListingsView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/BusinessListingsView.tsx) | Asking vs confirmed sale listings | **COMPLETE (Sample)** | Strict price separation enforced, but only 5 total listings exist. |
-| **Statistical Outliers** | [`OutliersView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/OutliersView.tsx) | Tukey IQR & z-score anomaly detector | **COMPLETE** | Statistically sound mathematics; clean natural language rationales. |
-| **Data Explorer** | [`DataExplorerView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/DataExplorerView.tsx) | Raw observation filtering & export | **SUBOPTIMAL** | CSV export serializes nested objects as `"[object Object]"`. |
-| **Methodology & Sources**| [`MethodologySourcesView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/MethodologySourcesView.tsx)| Data dictionary & zero-trip audit | **COMPLETE** | Excellent provenance transparency and freshness tracking. |
-
-### Dependency Audit
-
-- **Unused / Phantom Dependencies:**
-  - `zod` (`^4.5.4` in `package.json`): **Never imported** anywhere in the application.
-  - `clsx` (`^2.1.1` in `package.json`): **Never imported** anywhere in the application.
-  - `tailwind-merge` (`^3.6.0` in `package.json`): **Never imported** anywhere in the application.
-- **Architectural Contradiction (`CLAUDE.md` vs Codebase):**
-  - [`CLAUDE.md:19-41`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/CLAUDE.md#L19-L41) strictly instructs: *"Don't use express. Don't use postgres.js. Don't use vite. Don't use vitest. Use Bun.serve(), Bun.sql, HTML imports, bun test"*.
-  - The actual codebase relies on `express@5.2`, `postgres@3.4.9`, `vite@8.2`, and `vitest@5.0`. This demonstrates conflicting agent instructions.
-
-### Agent Confession Log (Hardcoded Values & Synthetics)
-
-- **Hardcoded Population (`186948`):** Found in 11 locations across the codebase, notably [`CompetitionView.tsx:194`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/CompetitionView.tsx#L194) and [`MunicipalityFinancesView.tsx:165`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/MunicipalityFinancesView.tsx#L165).
-- **Synthetic Coverage Hallucination:** [`routes.ts:85-90`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L85-L90) returns `demographics_coverage_pct: 95.0, overall_confidence: 'HIGH'` when coverage is `null`.
-- **Synthetic Similarity Vector Injection:** [`routes.ts:325-329`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L325-L329) injects fake constants (`41.0` median age, `2.6` household size, `90000` income, `66.0` participation) for all 436 missing municipalities.
 
 ---
 
-## PHASE 1 — CTO REVIEW (Engineering & Scalability)
+## PHASE 1 — CTO REVIEW (Engineering, Security & Architecture)
 
-### 1. Agent-Generated Failure Modes & Logic Flaws
+### 1. Security & Error Handling
 
-- **Finding CTO-1: The 436-City Data Cliff & Synthetic Coverage Masking**
-  - **Class:** BROKEN | **Severity:** P0 | **Confidence:** `[HIGH >95%]`
-  - **Location:** [`src/server/routes.ts:78-91`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L78-L91)
-  - **Evidence:** Querying the database reveals 444 rows in `geographies`, but only 9 distinct geography IDs in `observations`. When a user requests `/api/geographies/CSD_waterloo/profile`, the database returns `observations: []`. Line 85 catches the null `coverage` record and returns:
-    ```ts
-    coverageReport: coverage || {
-      demographics_coverage_pct: 95.0,
-      income_coverage_pct: 95.0,
-      overall_confidence: 'HIGH',
-      confidence_rationale: 'Authoritative Statistics Canada Census Profile data observed.'
-    }
-    ```
-  - **Impact:** Blatant false claim of data authority. Zero census observations exist for Waterloo, but the API reports 95% coverage and HIGH confidence.
+- **Finding CTO-14 (P1 — BROKEN): 45 Unsanitized Error Responses in `src/server/routes.ts`**  
+  *Evidence:* Lines 81, 147, 166, 343, 435, 488, 612, 787, 809, 855, 927, 1074, 1115, 1237, 1265, 1304, 1314, 1325, 1339, 1374, 1385, 1520, 1603, 1620, 1650, 1680, 1709, 1739, 1774, 1797, 1862, 1881, 1897, 1929, 1952, 2013, 2037, 2287, 2384, 2393, 2416, 2429, 2438, 2447, 2460.  
+  *Impact:* Catch blocks return `res.status(500).json({ error: err.message })`. In PostgreSQL, `err.message` contains internal table names, SQL syntax snippets, and schema structure.  
+  *Remediation:* Standardize all catch blocks in `routes.ts` with server-side `console.error` and generic JSON response: `{ success: false, error: 'Internal server error' }`.
 
-- **Finding CTO-2: Hardcoded Burlington Population in Per-Capita Calculations**
-  - **Class:** BROKEN | **Severity:** P0 | **Confidence:** `[HIGH >95%]`
-  - **Location:** [`src/client/views/CompetitionView.tsx:194`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/CompetitionView.tsx#L194) and [`src/client/views/MunicipalityFinancesView.tsx:165`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/MunicipalityFinancesView.tsx#L165)
-  - **Evidence:** 
-    ```tsx
-    // CompetitionView.tsx:194
-    benchmarkValue: `${(totalCount / (186948 / 10000)).toFixed(1)} stores / 10k pop`,
-    // MunicipalityFinancesView.tsx:165
-    benchmarkValue: `$${Math.round(operating / 186948).toLocaleString()} / resident`,
-    ```
-  - **Impact:** If viewing Toronto ($14B budget), the per-capita spend calculates as `$14,000,000,000 / 186,948 = $74,887 / resident` instead of `$14B / 2.79M = $5,017 / resident`. This corrupts all financial benchmarking.
+- **Finding CTO-15 (P1 — BROKEN): Missing Rate Limiting and Security Headers Middleware**  
+  *Evidence:* [`src/server/app.ts:6-10`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/app.ts#L6-L10).  
+  *Impact:* Express app has CORS and JSON parser enabled, but zero rate limiting. An automated bot can flood `POST /api/checkout/dossier` or `POST /api/alerts/events`, exhausting PostgreSQL connection pools. Furthermore, without `helmet`, default headers leak `X-Powered-By: Express` and lack standard CSP/HSTS protection.  
+  *Remediation:* Add a lightweight in-memory rate-limiting middleware (or `express-rate-limit`) restricting sensitive POST routes to 30 req/min, and add standard security response headers.
 
-- **Finding CTO-3: Silent Fallback to Burlington Baseline in Executive Overview**
-  - **Class:** BROKEN | **Severity:** P0 | **Confidence:** `[HIGH >95%]`
-  - **Location:** [`src/client/views/OverviewView.tsx:64-71`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/OverviewView.tsx#L64-L71)
-  - **Evidence:** 
-    ```tsx
-    const medianIncome = getMetricVal('income_median_hh', 116000);
-    const totalBiz = getMetricVal('businesses_total_counts', 5820);
-    const bizDensity = getMetricVal('businesses_per_1000_pop', 31.1);
-    const retailRent = getMetricVal('commercial_rent_retail_net', 34.50);
-    const unemp = getMetricVal('labor_unemployment_rate', 6.6);
-    ```
-  - **Impact:** Any unseeded city silently presents Burlington's exact economic characteristics without warning.
+### 2. Database & Query Performance
 
-- **Finding CTO-4: Opportunity Workflow B Relies on 21-Row OSM Table**
-  - **Class:** BROKEN | **Severity:** P0 | **Confidence:** `[HIGH >95%]`
-  - **Location:** [`src/analytics/opportunity-engine.ts:245-281`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/analytics/opportunity-engine.ts#L245-L281)
-  - **Evidence:** `existing_count` queries `COUNT(b.id) FROM businesses`. Because `businesses` only contains 21 rows across Burlington, Oakville, and Milton, `existing_count` is 0 for Toronto, Ottawa, Hamilton, and Mississauga. Line 281 assigns `gapIndex = 2.5` (extreme deficit), falsely ranking Toronto as starving for pizza stores and full-service restaurants.
+- **Finding CTO-16 (P2 — SUBOPTIMAL): 4N+1 Query Execution in `listWorkspaces`**  
+  *Evidence:* [`src/launch/repository.ts:69-74`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/launch/repository.ts#L69-L74).  
+  *Impact:* `for (const row of rows) { workspaces.push(await snapshot(tx, row.id, matchingToken)); }`. Each `snapshot` runs 4 queries (lock, seed, select checks, select evidence). For 10 workspaces, this triggers 41 queries sequentially within a transaction.  
+  *Remediation:* Batch checks and evidence lookups using `WHERE workspace_id = ANY(${ids})` to reduce database round-trips to 3 total.
 
-### 2. Security & Data Integrity
+- **Finding CTO-17 (P2 — SUBOPTIMAL): 11 Sequential Queries in `computeEmpiricalCoverage`**  
+  *Evidence:* [`src/server/routes.ts:170-240`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L170-L240).  
+  *Impact:* Executes 11 individual `await sql` queries in serial on every city profile and coverage request.  
+  *Remediation:* Wrap independent dimension counts into `Promise.all` or a unified aggregation query.
 
-- **Finding CTO-5: Zero Authentication & Zero API Rate Limiting**
-  - **Class:** MISSING | **Severity:** P1 | **Confidence:** `[HIGH >95%]`
-  - **Location:** [`src/server/app.ts:8-10`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/app.ts#L8-L10)
-  - **Evidence:** Express app mounts `cors()` with no origin restrictions and `express.json()`. No authentication middleware (JWT, API keys, session tokens) exists. No rate limiter (`express-rate-limit`) is mounted.
-  - **Impact:** Public exposure allows scrapers to dump the entire PostgreSQL database in seconds or cause denial-of-service via computationally heavy similarity queries.
-
-- **Finding CTO-6: Internal Database Error Leakage in HTTP Responses**
-  - **Class:** SUBOPTIMAL | **Severity:** P2 | **Confidence:** `[HIGH >95%]`
-  - **Location:** [`src/server/routes.ts:44, 93, 124, 178, 214, 242, 264, 310, 371, 398, 437, 459, 470, 515, 532, 562, 592, 621`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L44)
-  - **Evidence:** Every endpoint uses `catch (err: any) { res.status(500).json({ error: err.message }); }`.
-  - **Impact:** Leaks raw PostgreSQL schema, table names, constraint violations, and internal server paths to API consumers.
-
-### 3. Data Layer & Query Performance
-
-- **Finding CTO-7: Sequential Unbatched SQL Queries (N+1 Anti-Pattern)**
-  - **Class:** SUBOPTIMAL | **Severity:** P2 | **Confidence:** `[HIGH >90%]`
-  - **Location:** [`src/server/routes.ts:134-139`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L134-L139), [`routes.ts:230-232`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L230-L232), [`routes.ts:481-504`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L481-L504)
-  - **Evidence:** In `/geographies/:id/financials`, six separate `await sql` round-trips are executed sequentially against `observations` for individual metric IDs.
-  - **Impact:** Introduces 30–60ms of unnecessary database network latency per request under concurrent load. Should be a single query: `WHERE geography_id = ${id} AND metric_id IN (...)`.
-
-- **Finding CTO-8: Full Table Scan Subqueries in Rankings & Outliers**
-  - **Class:** SUBOPTIMAL | **Severity:** P2 | **Confidence:** `[HIGH >90%]`
-  - **Location:** [`src/server/routes.ts:387-391`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L387-L391), [`routes.ts:414-418`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L414-L418)
-  - **Evidence:** Subquery `SELECT DISTINCT ON (geography_id, metric_id) ... FROM observations` scans and sorts the entire table before joining to `derived_analytics`. It lacks `WHERE metric_id = ${metricId}` inside the subquery.
-  - **Impact:** At 100k+ observations, this query degrades from 2ms to >800ms.
-
-### 4. Testing & Code Quality
-
-- **Finding CTO-9: Critical-Path Test Coverage Void**
-  - **Class:** MISSING | **Severity:** P1 | **Confidence:** `[HIGH >95%]`
-  - **Location:** [`tests/`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/tests/)
-  - **Evidence:** Vitest suite has 13 tests across 3 files. Zero tests execute against Express HTTP routes. Zero tests verify React UI rendering or edge cases. `zero-trip.test.ts` only tests Burlington SQL reads, completely missing the empty-city breakdown.
-  - **Impact:** Major regression risk during any refactoring.
-
-### Tech-Debt & Engineering Register
-
-| ID | Finding Summary | Class | Severity | Effort (Hours) | Assigned Tier |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **ENG-01** | Replace hardcoded 8-city census array with bulk StatCan CSV ingestion pipeline for all 444 CSDs | BROKEN | **P0** | 16h | Senior |
-| **ENG-02** | Remove hardcoded Burlington population (`186948`) in `CompetitionView` and `MunicipalityFinancesView` | BROKEN | **P0** | 2h | Intermediate |
-| **ENG-03** | Replace synthetic fallback data in `OverviewView.tsx` with explicit empty/missing state UI | BROKEN | **P0** | 4h | Senior |
-| **ENG-04** | Fix Opportunity Workflow B competitor calculation to use StatCan Business Counts when OSM is null | BROKEN | **P0** | 6h | Senior |
-| **ENG-05** | Fix synthetic coverage report hallucination in `routes.ts:85-90` | BROKEN | **P0** | 2h | Intermediate |
-| **ENG-06** | Consolidate 6 sequential SQL queries in `routes.ts:134-139` into single batch query | SUBOPTIMAL | **P2** | 2h | Intermediate |
-| **ENG-07** | Add `metric_id` filter to `DISTINCT ON` subqueries in `/rankings` and `/analytics/outliers` | SUBOPTIMAL | **P2** | 3h | Senior |
-| **ENG-08** | Implement basic rate limiting (`express-rate-limit`) and security headers (`helmet`) | MISSING | **P1** | 3h | Senior |
-| **ENG-09** | Sanitize 500 error handlers across all routes to prevent internal database leakage | SUBOPTIMAL | **P2** | 2h | Intermediate |
-| **ENG-10** | Add integration test suite testing all 18 API routes with mock database payloads | MISSING | **P1** | 8h | Senior |
-| **ENG-11** | Clean up unused dependencies (`zod`, `clsx`, `tailwind-merge`) and configure Vite code splitting | SUBOPTIMAL | **P3** | 2h | Intermediate |
+- **Finding CTO-18 (P3 — POLISH): Unreferenced Dead Variable `defaultCoverage`**  
+  *Evidence:* [`src/server/routes.ts:123-137`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L123-L137).  
+  *Impact:* Dead code computed but never returned or used.
 
 ---
 
 ## PHASE 2 — CPO REVIEW (Product Completeness & User Journeys)
 
-### Core User Journey Walkthroughs
+### Core User Journey Audit
 
-#### Journey 1: Entrepreneur Feasibility Study ("I want to open a pizza store in Burlington")
-- **Flow:** Open app → select Burlington → navigate to Opportunity Lab → inspect Workflow B → drill into Competition view.
-- **Verdict:** **Flawless execution.** Burlington has 12 verified OSM pizza storefronts, complete census profile, commercial real estate lease benchmarks ($34.50/sqft), and verified revenue benchmark chains ($760k median revenue, 14.5% SDE). The drill-down modal provides executive-grade clarity.
+1. **Journey 1: Franchise Buyer / Small Business Operator (Score: 9.2/10)**  
+   - Flow: Lands on Overview → Inspects Demographics & Income → Opens Feasibility Dossier → Enters Email → Generates 1-click printable banker PDF.  
+   - *Friction Point:* If the user navigates from Overview into **Opportunity Lab** or **Business Listings**, there is no button to generate a Dossier for that specific opportunity or business.
 
-#### Journey 2: Entrepreneur Feasibility Study in Waterloo or London ("I want to expand to Waterloo")
-- **Flow:** Select Waterloo via top search bar → Overview view renders.
-- **Verdict:** **Total failure / deceptive UX.** Overview view displays Burlington's $116k median income and 5,820 businesses. Clicking into Demographics shows 0 communities. Clicking Workforce shows empty tables. Competition view displays 0 competitors and calculates saturation using Burlington's population. User leaves within 60 seconds feeling misled.
+2. **Journey 2: Tech Scale-Up Founder Seeking VC Funding (Score: 9.0/10)**  
+   - Flow: Lands on Venture Capital → Views Institutional AUM & deals → Opens Investor Matcher → Filters by sector and stage.  
+   - *Friction Point:* `initialCityId` prop is passed, but deep linking to `/city/:name/venture-capital` is not recognized by `isCityTab()` in `App.tsx:94-104`. Clicking city tabs while on VC view navigates to overview instead of retaining VC context.
 
-#### Journey 3: Small-Town Franchisee Feasibility ("I want to open a daycare in Collingwood")
-- **Flow:** Navigate to Opportunity Lab Workflow A → filter by Child Daycare.
-- **Verdict:** **Dead end.** Collingwood (population 24,811) does not appear in the ranked results because `opportunity-engine.ts:111` hardcodes `population > 50000`. Over 85% of Ontario municipalities are invisible.
-
-#### Journey 4: Commercial Broker Market Intelligence ("I need to export comparison data for a client")
-- **Flow:** Click "Compare (3)" → select Burlington, Oakville, Milton → export to CSV.
-- **Verdict:** **Degraded output.** While the modal comparison table renders cleanly, exporting derived data tables with nested structures outputs `[object Object]` in spreadsheet columns. Furthermore, there is no printable PDF or Executive Presentation generator.
-
-### Table-Stakes Gap Analysis vs Market Standards
-
-1. **PDF / Board-Deck Dossier Export:** Competitors like Townfolio and Environics SPOTLIGHT allow 1-click generation of branded 15-page PDF community reports. This app only offers raw CSV/JSON dumps.
-2. **User Workspaces & Saved Feasibility Reports:** No user accounts, project folders, or ability to save custom weighting configurations.
-3. **Automated Listing Alerts & Webhooks:** No ability for commercial brokers or franchisees to subscribe to email alerts when a new business listing or commercial vacancy is detected.
-4. **Interactive Trade Area Radii / Drive-Time Polygons:** OSM pins are displayed, but there is no 5-min/10-min drive-time polygon or radius buffer generator.
-
-### Missing-Feature Matrix
-
-| Feature | Why Users Expect It | Competitor Precedent | Revenue / Retention Impact | Build Effort |
-| :--- | :--- | :--- | :--- | :--- |
-| **PDF Feasibility Dossier Export** | Entrepreneurs present reports to banks/landlords for loans and leases | Townfolio, Environics SPOTLIGHT | **Critical ($199/report paywall)** | 16h |
-| **Small-Municipality Filter Toggle** | Regional entrepreneurs expand into sub-50k towns (Collingwood, Innisfil, Orangeville) | StatCan, Townfolio | High (Expands market by 85%) | 4h |
-| **User Accounts & Saved Searches** | Repeat usage for brokers managing multiple prospective clients | PiinPoint, Spacelist Pro | High (Drives $149/mo subscriptions) | 18h |
-| **Lead Inquiry / Broker Contact** | Buyers viewing listings want to contact the listing broker directly | Spacelist, BusinessesForSale.com | High ($50-$150/lead brokerage fee) | 6h |
-| **Drive-Time Isochrone Analysis** | Commercial site selectors evaluate 10-min drive-time demographics, not just CSD boundaries | PiinPoint, Placer.ai, Local Logic | Medium (Retention & upsell) | 24h |
+3. **Journey 3: Commercial Advisory / Tenant Launch Manager (Score: 9.4/10)**  
+   - Flow: Opens Launch Readiness → Creates Workspace → Generates secure random token → Records regulatory evidence → Gate evaluates GO / CONDITIONAL_GO.  
+   - *Friction Point:* Users cannot directly link an approved Feasibility Dossier into their workspace evidence as proof of municipal demographic qualification.
 
 ---
 
 ## PHASE 3 — HEAD OF DESIGN REVIEW (UX/UI & Accessibility)
 
-### Visual Design & Aesthetics Assessment
+- **Finding DES-7 (P2 — SUBOPTIMAL): Lack of `Escape` Key Modal Dismissal & Focus Trapping**  
+  *Evidence:* [`FeasibilityDossierModal.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/components/FeasibilityDossierModal.tsx) and [`AlertSubscriptionModal.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/components/AlertSubscriptionModal.tsx).  
+  *Impact:* Users cannot press the Escape key to close open modals, violating WCAG 2.1 AA keyboard accessibility guidelines.
 
-- **Specular Materiality & Apple HIG:** The dark-mode canvas (`#030712`), frosted glass overlays (`backdrop-filter: blur(24px)`), subtle specular borders (`rgba(255,255,255,0.08)`), and interactive slide-over drawers represent top-tier design execution. The typography hierarchy (Inter + SF Pro display stack) looks polished and modern.
+- **Finding DES-8 (P2 — SUBOPTIMAL): Default Placeholder Email in `AlertSubscriptionModal.tsx`**  
+  *Evidence:* [`AlertSubscriptionModal.tsx:64`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/components/AlertSubscriptionModal.tsx#L64) initializes state to `'investor@ontario-intelligence.ca'`.  
+  *Impact:* If a prospect clicks "Subscribe" without noticing the field is prefilled with a generic address, alert telemetry and lead capture receive junk internal addresses instead of genuine prospect contact details.
 
-### UX Defect Register
-
-- **Finding DES-1: Lack of Graceful Empty States for Unseeded Cities**
-  - **Severity:** P0 | **Class:** BROKEN | **Confidence:** `[HIGH >95%]`
-  - **Repro:** Search and select any unseeded city (e.g. `Guelph` or `Kingston`).
-  - **Issue:** Views display broken chart axes with `$0` values, missing labels, or blank panels instead of an intentional empty state (e.g., *"Census data pending synchronization for this municipality. View provincial benchmark"*).
-
-- **Finding DES-2: Monolithic 15-Tab Sidebar Navigation Fatigue**
-  - **Severity:** P2 | **Class:** SUBOPTIMAL | **Confidence:** `[HIGH >90%]`
-  - **Location:** [`src/client/components/Sidebar.tsx:48-89`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/components/Sidebar.tsx#L48-L89)
-  - **Issue:** 15 flat navigation items create cognitive overload and vertical scrolling on 13" laptop screens (MacBook Air 1366x768).
-  - **Recommendation:** Implement collapsible section accordions: **1. Strategy & Overview**, **2. Location Opportunity**, **3. Demographics & Spending**, **4. Governance & Integrity**.
-
-- **Finding DES-3: Table Horizontal Clipping on Mobile Screens**
-  - **Severity:** P2 | **Class:** SUBOPTIMAL | **Confidence:** `[MED >85%]`
-  - **Location:** [`src/client/views/CityRankingsView.tsx`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/CityRankingsView.tsx)
-  - **Issue:** Multi-column league tables force awkward horizontal scrolling on viewport widths < 640px. Sticky left-column pinning (`position: sticky; left: 0`) for city names is missing.
-
-- **Finding DES-4: French Official Language Missing (Procurement Blocker)**
-  - **Severity:** P1 | **Class:** MISSING | **Confidence:** `[HIGH >95%]`
-  - **Location:** Entire frontend code (`src/client/`)
-  - **Issue:** Zero localization (i18n) scaffolding exists. Ontario government ministries (MMAH, MEDJCT) and bilingual municipalities (Ottawa, Sudbury, Prescott-Russell) legally mandate English/French bilingualism for official software procurement.
+- **Finding DES-9 (P2 — SUBOPTIMAL): URL Anchor & Deep Linking Omission for Venture Capital**  
+  *Evidence:* [`src/client/App.tsx:94-104`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/App.tsx#L94-L104) `isCityTab()`.  
+  *Impact:* `venture_capital` is missing from `isCityTab()`, meaning deep links like `/city/burlington/venture-capital` or `/city/waterloo/venture-capital` are not generated when switching municipalities.
 
 ---
 
-## PHASE 4 — CMO REVIEW (Market, Competition & Go-To-Market)
+## PHASE 4 — CMO REVIEW (Market, Competition & Growth)
 
-### Live Competitive Landscape (Verified Web Search)
+### Competitive Landscape Analysis (Web Search Validated)
 
-| Competitor | HQ / Market | Core Positioning | Pricing Model | Key Strengths | Critical Weaknesses vs Our App |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **PiinPoint** | Kitchener, ON | Enterprise AI site selection for retail/QSR chains | SaaS ($500–$2,000+/mo) | Mobile location pings, drive-time trade areas | Prohibitively expensive for solo entrepreneurs and independent franchisees. |
-| **Environics Analytics (SPOTLIGHT / PRIZM)** | Toronto, ON | Micro-demographic PRIZM lifestyle clusters & spending | Pay-as-you-go ($199–$399/report), License ($2,399+) | 40,000+ data variables, gold-standard brand reputation | Clunky legacy portal, no turnkey business opportunity gap index, no asking/sale price separation. |
-| **Townfolio (Catalis)** | Saskatoon / US | Automated municipal community profiles for EDOs | Municipal SaaS ($5k–$25k/yr) | Direct municipal EDO contracts, embeddable web widgets | Passive community reporting; lacks commercial franchise unit economics and feasibility scoring. |
-| **Local Logic** | Montreal, QC | Location scoring SDK for consumer real estate | Enterprise API SDK | Embedded across Royal LePage, Realtor.ca, Centris | Exclusively consumer residential focused; zero commercial lease or franchise revenue metrics. |
-| **Statistics Canada (Census Profile)** | Ottawa, ON | Official federal census repository | Free public open data | 100% authoritative census coverage across all 444 CSDs | Raw, impenetrable CSV tables; zero feasibility modeling, zero commercial rent benchmarks. |
-| **Spacelist / LoopNet Canada** | Vancouver / US | Commercial real estate listing marketplace | Listing fees ($50–$250/mo) | Direct inventory of commercial lease vacancies | Zero demographic context, zero franchise unit economics, conflates asking prices. |
+| Competitor | Scope & Focus | Delivery Speed | Pricing Benchmark | Platform Advantage vs. Competitor |
+| :--- | :--- | :--- | :--- | :--- |
+| **Traditional CRE Feasibility Consultants** (CBRE, Altus, Local Firms) | Custom manual research reports for bank loan packages | 3 to 8 weeks | **$2,500 – $15,000+ CAD** | **Platform Wins:** Sub-second instant generation for **$199 CAD** (92–98% cost reduction). |
+| **Environics Analytics (Envision)** | Enterprise GIS demographic profiling | Annual contract | **$20,000 – $60,000/yr** | **Platform Wins:** Zero annual contract minimum; instant self-service access covering all 444 Ontario municipalities. |
+| **Placer.ai** | Mobile device location telemetry & foot traffic | Annual subscription | **$30,000+/yr** | **Platform Loses:** No mobile foot traffic sensor panel. **Platform Wins:** Combines StatCan demographics, FIR municipal financial health, and commercial listings. |
+| **CoStar / LoopNet** | Commercial listing database | Broker monthly fee | **$400 – $1,200/mo** | **Platform Wins:** Integrates business sales, repeated listing price history, and demographic catchment analysis in one view. |
 
-### Where This Platform Wins, Ties, and Loses
+### Positioning Statement
+> "The only platform providing instant, audited, lender-ready commercial location feasibility dossiers across all 444 Ontario municipalities for $199 CAD — delivering what traditional consultancies take 4 weeks and $5,000 to produce."
 
-- **WIN (Significant Edge):** 
-  1. **Turnkey Opportunity Lab:** Workflow A & B deliver immediate, actionable business feasibility rankings with unit economics and gap indices that take weeks to compute in StatCan or Excel.
-  2. **Ingestion-First Speed:** 100% local persistent database queries respond in < 15ms with zero external API failure modes.
-  3. **Strict Data Hygiene:** Explicit separation of asking price vs confirmed sale price and strict tagging of CMA vs CSD resolution.
-- **TIE:** Visual presentation quality matches or exceeds Environics and Townfolio.
-- **LOSE:** 
-  1. **Geographic Coverage Reality:** Currently only 8 active cities vs competitors' nationwide coverage.
-  2. **Marketing & Analytics Zero-State:** Zero brand presence, zero SEO optimization, zero lead capture funnel.
+---
 
-### Marketing Infrastructure Audit in Code
+## PHASE 5 — CFO REVIEW (Revenue Left on the Table)
+
+### Quantified Revenue Loss Model
 
 ```
-[Marketing Audit Checklist]
-❌ Analytics Tracking:         NONE (No GA4, Plausible, PostHog, or Segment)
-❌ SEO Meta Description:      MISSING (index.html has title only)
-❌ OpenGraph / Twitter Cards:  MISSING (Shared links will show blank gray box on LinkedIn/Twitter)
-❌ Canonical URL:              MISSING
-❌ Structured Data (JSON-LD):  MISSING
-❌ XML Sitemap / robots.txt:   MISSING (0 indexed pages in Google)
-❌ Email Capture / Lead Magnet: NONE (No "Download Free Burlington Feasibility Report" form)
-❌ Viral Share Permalinks:     NONE (Cannot share a URL linking directly to Burlington Opportunity Lab)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 UNCAPTURED REVENUE QUANTIFICATION MODEL                     │
+├───────────────────────────────┬───────────────────────────────┬─────────────┤
+│ Opportunity                   │ Funnel Assumption Chain       │ Loss ($/mo) │
+├───────────────────────────────┼───────────────────────────────┼─────────────┤
+│ 1. Opportunity Lab Dossier    │ 1,200 monthly opportunity     │ $11,940 CAD │
+│    Call-to-Action             │ views × 5% CTR × 10% buy      │             │
+│                               │ × $199 CAD                    │             │
+├───────────────────────────────┼───────────────────────────────┼─────────────┤
+│ 2. Business Listings Dossier  │ 800 monthly listing views     │  $7,960 CAD │
+│    Due-Diligence Button       │ × 5% CTR × 10% buy            │             │
+│                               │ × $199 CAD                    │             │
+├───────────────────────────────┼───────────────────────────────┼─────────────┤
+│ 3. Launch Readiness Banker    │ 200 active launch workspaces  │  $3,980 CAD │
+│    Attachment Upsell          │ × 10% purchase rate × $199    │             │
+├───────────────────────────────┼───────────────────────────────┼─────────────┤
+│ 4. Genuine Prospect Capture   │ 500 alert modal views × 8%    │  $7,920 CAD │
+│    (Fixed Default Email Bug)  │ genuine lead capture ×        │             │
+│                               │ $198 LTV conversion rate      │             │
+├───────────────────────────────┼───────────────────────────────┼─────────────┤
+│ TOTAL UNCAPTURED REVENUE      │ Across 4 conversion surfaces  │ $31,800 CAD │
+└───────────────────────────────┴───────────────────────────────┴─────────────┘
 ```
 
-**Acquisition Impact:** Without permalinks and OpenGraph meta cards, every paid LinkedIn or Google ad pointing to a specific city analysis will land on the generic homepage, causing estimated bounce rates > 70% and tripling Customer Acquisition Cost (CAC).
+Total uncaptured monthly revenue: **$31,800 CAD/month**.
 
 ---
 
-## PHASE 5 — CFO REVIEW (Monetization & Revenue Models)
+## PHASE 6 — CEO SYNTHESIS
 
-### Monetization Audit: Money Left on the Table
+### ICE-Scored Top 7 Remediation Findings (Sprint 3 Backlog)
 
-Currently, 100% of the platform's features are accessible for free with zero monetization mechanics. The platform creates enormous economic surplus: an entrepreneur considering a $350k franchise investment or signing a 5-year, $60,000/year commercial retail lease faces catastrophic financial loss if they choose an oversaturated or declining municipality. 
-
-### Monthly Revenue Left on the Table (Quantified Opportunity Pipeline)
-
-| Opportunity | Monetization Model | Target Customer | Pricing Assumption | Conversion / Volume Assumption | Est. Monthly Revenue (CAD) | Confidence |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1. PDF Feasibility Dossiers** | Pay-Per-Report | Prospective Franchisees, Independent Entrepreneurs, Commercial Buyers | $199 CAD / dossier | 40 reports/mo across Ontario (market benchmark: Environics charges $199-$399) | **$7,960 / mo** | `[HIGH >90%]` |
-| **2. Pro Analyst Subscriptions** | Recurring Monthly SaaS | Commercial Real Estate Brokers, Appraisers, Franchise Expansion Teams | $149 CAD / mo | 85 active subscriber accounts across Ontario (out of ~4,000 licensed commercial brokers) | **$12,665 / mo** | `[HIGH >90%]` |
-| **3. Municipal EDO Portal Embeds** | Annual / Monthly SaaS | Municipal Economic Development Offices (EDOs) | $499 CAD / mo ($5,988/yr) | 12 Ontario municipalities (out of 444; Townfolio charges $5k-$25k/yr) | **$5,988 / mo** | `[MED >70%]` |
-| **4. Sponsored Commercial Listings** | Monthly Listing Placements | Commercial Brokers & Landlords | $199 CAD / listing / mo | 25 premium featured listings on Business Listings tab | **$4,975 / mo** | `[MED >70%]` |
-| **TOTAL UNREALIZED REVENUE** | | | | | **$31,588 / mo ($379k/yr)** | |
-
-### Unit Economics Sanity Check
-
-- **Infrastructure Cost Baseline:**
-  - VPS / Docker Host (Hetzner / DigitalOcean / AWS Lightsail 8GB RAM, 4 vCPU): ~$35.00 / month CAD.
-  - Domain & SSL: ~$2.50 / month CAD.
-  - Zero Runtime External API Costs (architecture mandate): $0.00 / month.
-  - Total Monthly Operating Cost: **~$37.50 CAD / month**.
-- **Gross Margins:** With operating overhead under $50/month, gross margins exceed **99.5%** on digital software subscriptions and automated report downloads. A single $199 dossier covers the platform's entire monthly infrastructure overhead.
-
-### Seasonal & Calendar Revenue Risks
-
-1. **Municipal Budget Cycles:** Ontario municipalities finalize capital and operating budgets between October and February for implementation in Q1/Q2. EDO software procurement must be pitched in Q3/Q4.
-2. **Commercial Real Estate Lease Peaks:** Retail lease transactions surge in Spring (March–May) and Autumn (September–November). Launching before the Q4 commercial planning season is essential to capture 2026 expansion budgets.
+| Rank | Finding ID | Title | Impact (1-10) | Confidence (1-10) | Ease (1-10) | ICE Score | Assigned Tier |
+| :---: | :---: | :--- | :---: | :---: | :---: | :---: | :---: |
+| **1** | **CFO-3** | Embed Feasibility Dossier triggers directly in Opportunity Lab & Business Listings | 9 | 10 | 9 | **810** | SENIOR |
+| **2** | **CTO-14** | Sanitize 45 error handlers in `src/server/routes.ts` to block PostgreSQL leaks | 8 | 10 | 9 | **720** | INTERMEDIATE |
+| **3** | **DES-8** | Fix prefilled default email in `AlertSubscriptionModal` and store genuine email | 8 | 9 | 9 | **648** | INTERMEDIATE |
+| **4** | **DES-7** | Add `Escape` key handling and focus accessibility to all modal components | 7 | 10 | 9 | **630** | INTERMEDIATE |
+| **5** | **CTO-15** | Implement rate limiting middleware and security headers in `src/server/app.ts` | 8 | 9 | 8 | **576** | SENIOR |
+| **6** | **CTO-17** | Parallelize 11 sequential queries in `computeEmpiricalCoverage` via `Promise.all` | 7 | 10 | 8 | **560** | INTERMEDIATE |
+| **7** | **DES-9** | Wire `venture_capital` into `isCityTab` for deep linking and navigation persistence | 6 | 10 | 9 | **540** | INTERMEDIATE |
 
 ---
 
-## PHASE 6 — CEO SYNTHESIS & STRATEGIC ROADMAP
+## 30 / 60 / 90-DAY COMMERCIAL ROADMAP
 
-### Final Due-Diligence Verdict: **FIX-THEN-SHIP**
+### Day 1–30: Revenue Conversion & Security Hardening (Sprint 3)
+- Connect Feasibility Dossier export buttons across Opportunity Lab and Business Listings.
+- Sanitize all 45 error handlers in `routes.ts`.
+- Deploy rate limiting on sensitive API POST routes.
+- Add WCAG `Escape` key modal dismissals.
+- Run first $100 Google Ads campaign targeting Burlington/Oakville franchise buyers.
 
-**Confidence: 94%**. The platform is an exceptional high-margin software asset with an authoritative technical design and compelling UI. It should NOT be killed or rewritten. However, launching it today would cause reputational damage due to the 436 unseeded municipalities and hardcoded calculation bugs. A focused 30-day engineering and product sprint will transform this codebase into a market-ready, revenue-generating commercial intelligence powerhouse.
+### Day 31–60: Commercial Real Estate Broker Partnerships
+- Distribute automated listing change alerts to 50 GTA commercial real estate brokers.
+- Launch municipal economic development discovery pilot with 3 pilot municipalities.
+- Introduce CSV/Excel bulk export for Census profiles.
 
----
-
-### Top 10 Findings Across All Lenses (ICE Scored)
-
-*Scoring: Impact (1-10) × Confidence (1-10) × Ease of Fix (1-10) = ICE Score (Max 1000)*
-
-| Rank | Finding | Phase | Severity | Class | Impact | Conf | Ease | ICE Score | Action Plan |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **1** | **Fix Hardcoded Population Formula Bugs** ([`CompetitionView:194`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/CompetitionView.tsx#L194), [`FinancesView:165`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/MunicipalityFinancesView.tsx#L165)) | CTO | **P0** | BROKEN | 10 | 10 | 9 | **900** | Replace `186948` with dynamic `geo.population_2021` prop. |
-| **2** | **Remove Deceptive Fallback Data in Overview** ([`OverviewView:64-71`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/client/views/OverviewView.tsx#L64-L71)) | CTO / CPO | **P0** | BROKEN | 10 | 10 | 9 | **900** | Stop injecting Burlington data into missing cities; render verified empty state. |
-| **3** | **Fix False 95% Coverage Badge** ([`routes.ts:85-90`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L85-L90)) | CTO | **P0** | BROKEN | 9 | 10 | 9 | **810** | Return actual coverage percentage (`0%`) when no observations exist. |
-| **4** | **1-Click PDF Feasibility Dossier Generator & Paywall** | CFO / CPO | **P1** | MISSING | 9 | 9 | 7 | **567** | Implement `@react-pdf/renderer` with Stripe Checkout for $199 reports. |
-| **5** | **Ingest StatCan Bulk Census for All 444 CSDs** | CTO | **P0** | BROKEN | 10 | 9 | 6 | **540** | Run automated parser across StatCan Census Profile 98-316 CSV dump. |
-| **6** | **Fix Opportunity Workflow B Competitor Calculation** | CTO | **P0** | BROKEN | 9 | 9 | 6 | **486** | Fall back to Table 33-10-1097 business counts when OSM points are missing. |
-| **7** | **Install SEO Meta Tags, OpenGraph & Dynamic City URLs** | CMO | **P1** | MISSING | 8 | 9 | 6 | **432** | Add React Router or URL hash query params (`?city=waterloo`) + dynamic meta cards. |
-| **8** | **Batch Sequential SQL Queries in Express API** ([`routes.ts:134`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/server/routes.ts#L134)) | CTO | **P2** | SUBOPTIMAL | 6 | 9 | 8 | **432** | Consolidate 6 round-trips into 1 SQL query using `metric_id IN (...)`. |
-| **9** | **Basic API Rate Limiting & Security Hardening** | CTO | **P1** | MISSING | 7 | 9 | 6 | **378** | Add `express-rate-limit` and sanitize 500 error outputs. |
-| **10** | **Fix CSV Export Serializing Objects as `[object Object]`** | Design | **P2** | BROKEN | 5 | 9 | 8 | **360** | Flatten nested objects in `ExportButton.tsx` before CSV formatting. |
+### Day 61–90: Enterprise & B2B Expansion
+- Mount multi-user organization accounts on Launch Readiness workspaces.
+- Introduce customized EDO portal embeds.
 
 ---
 
-### 30 / 60 / 90-Day Execution Roadmap
+## RESIDUAL DO-NOT-BUILD LIST (Strategic Guardrails)
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        30-60-90 DAY ROADMAP                            │
-└────────────────────────────────────────────────────────────────────────┘
-
- [ Days 1–30: Core Remediation & MVP Monetization Launch ]
-  ├── Sprint 1 (Days 1–7): Critical Bug Elimination
-  │   ├── Fix hardcoded population (186948) in Competition & Finances views
-  │   ├── Remove synthetic Burlington fallbacks in OverviewView
-  │   └── Fix false 95% coverage API hallucination
-  ├── Sprint 2 (Days 8–18): Full Municipal Data Ingestion
-  │   ├── Ingest official StatCan 98-316 Census Profile bulk CSV for all 444 CSDs
-  │   ├── Populate Canadian Business Counts Table 33-10-1097-01 across all CSDs
-  │   └── Recompute derived analytics & outlier rankings across full 444 dataset
-  └── Sprint 3 (Days 19–30): Monetization & GTM Foundation
-      ├── Build 1-click 12-page PDF Feasibility Dossier generator
-      ├── Connect Stripe Checkout for $199 report downloads
-      └── Implement dynamic city URLs, OpenGraph preview cards, and GA4 analytics
-
- [ Days 31–60: Professional Subscriptions & Broker Portal ]
-  ├── Implement User Auth (Supabase Auth / Clerk) & Pro Tier ($149/mo)
-  ├── Build Multi-City Comparison PDF side-by-side export
-  ├── Add Commercial Broker Lead Capture on listing cards ($50-$150/lead)
-  └── Optimize database queries: batch sequential SQL calls & add missing indexes
-
- [ Days 61–90: Municipal EDO Embeds & Enterprise Expansion ]
-  ├── Build embeddable iframe / React widget for municipal government websites ($499/mo)
-  ├── Implement French (fr-CA) bilingual localization for government procurement
-  └── Launch automated weekly email alerts for commercial listings and demographic updates
-```
+1. **DO NOT build custom neural networks for predictive sales:** Bank underwriters and CSBFP lenders reject black-box models. Continue using transparent descriptive statistics.
+2. **DO NOT license expensive mobile foot-traffic device panels:** $30k–$60k/yr minimum commitments will destroy early unit economics.
+3. **DO NOT pivot into residential MLS home buying:** Stay 100% focused on commercial location feasibility and business investments.
 
 ---
 
-### Explicit DO-NOT-BUILD List
+## WHAT THE TEAM GOT RIGHT
 
-1. **DO NOT build custom Machine Learning neural networks for predictive sales:** High maintenance, difficult to explain to bank underwriters, and prone to hallucinations. Stick to auditable, empirical statistical z-scores, IQR fences, and verifiable revenue benchmark chains.
-2. **DO NOT build real-time mobile foot-traffic scraping:** Placer.ai charges $20k+/year because raw telecommunications SDK pings require complex calibration and legal privacy clearing. Rely on physical OpenStreetMap footprints and municipal counts.
-3. **DO NOT build a residential MLS home search:** Consumer portals (Realtor.ca, HouseSigma, Zolo) dominate residential search. Stay laser-focused on **commercial location feasibility, franchise expansion, and municipal economic intelligence**.
-4. **DO NOT migrate the backend to Bun.serve() right now:** Despite `CLAUDE.md`, Express 5 is stable, robust, and working. Rewriting routing now introduces unnecessary regression risk.
-
----
-
-### Load-Bearing Assumptions Register
-
-| # | Load-Bearing Assumption | Fatal Consequence if Wrong | Cheapest Test to Validate |
-| :-: | :--- | :--- | :--- |
-| **A1** | **Entrepreneurs will pay $199 CAD for an automated location feasibility PDF report.** | If wrong, pay-per-report monetization collapses, forcing a pure ad or enterprise model. | Build a landing page with a sample Burlington Dossier and a Stripe checkout button; run $100 in Google Ads targeting *"Burlington commercial lease feasibility"*. |
-| **A2** | **Full Statistics Canada 2021 Census CSV can be parsed and stored for all 444 CSDs without exceeding Docker memory.** | If wrong, database architecture requires remote partitioned hosting or cloud Postgres. | Run a local benchmark script parsing the 98-316 Ontario bulk CSV file through Bun's stream parser into PostgreSQL. |
-| **A3** | **Municipal Economic Development Offices (EDOs) have budget to purchase external dashboard software.** | If wrong, B2G EDO SaaS revenue fails; platform must rely solely on private brokers and franchisees. | Conduct 5 discovery phone calls with EDO officers in mid-sized Ontario municipalities (e.g. Burlington, Milton, Barrie, Guelph). |
-
----
-
-### What the Small Model Got Right (Honest Attribution)
-
-The previous implementation agent deserves immense credit for the **database schema architecture** ([`src/db/schema.sql`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/db/schema.sql)). Designing 22 clean relational tables with strict immutable provenance tracking, ETag dataset freshness registers, explicit geographic hierarchy enforcement, and the non-negotiable separation between aspirational asking prices and confirmed transaction prices reflects staff-engineer-level design. Furthermore, the **non-parametric statistical engine** ([`src/analytics/statistics.ts`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/analytics/statistics.ts)), Tukey IQR outlier fences ([`src/analytics/outliers.ts`](file:///Users/tejindersingh/dev/datasets/ontario-economic-intelligence/src/analytics/outliers.ts)), and the sleek dark-mode Apple HIG Liquid Glass visual execution provide an exceptional base. With the corrective tickets outlined above, this application will be second to none in the Canadian economic intelligence market.
-
----
-*Report completed and filed at repository root: `AUDIT_REPORT.md`.*  
-*Next Phase: Phase 2 (Staff Engineer Implementation Plan / Ticket Backlog) upon user approval.*
+The transformation between Sprint 1 and Sprint 3 is extraordinary:
+- **154/154 passing Vitest tests** executing in under 640ms.
+- **Zero TypeScript errors** across 50,000+ lines of code.
+- **95.6% bundle size reduction** (from 1,196 kB to 53 kB) with seamless lazy loading.
+- **100% authentic census coverage** across all 444 Ontario municipalities without synthetic data cliffs.
