@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:3001/api`
 
-All endpoints query the local persistent PostgreSQL operational store (`ontario_economic_intelligence`) with **zero external HTTP round trips** at runtime.
+The API is served by the local application and its PostgreSQL operational store (`ontario_economic_intelligence`). This describes API data access only; it is not a deployment-wide claim about all browser assets, infrastructure, or network traffic.
 
 ---
 
@@ -154,10 +154,10 @@ Detects statistical outliers using non-parametric Tukey IQR fences ($Q_1 - 1.5 \
 
 ---
 
-## 5. Location Feasibility Dossier & Commercial Monetization
+## 5. Location Feasibility Dossier Preview
 
 ### `GET /api/dossier/:cityId/:categoryId`
-Generates a complete, lender-ready **$199 CAD Location Feasibility Dossier** combining:
+Returns a read-only feasibility-dossier data preview combining:
 * Executive Summary & Feasibility Score
 * 2021 Census Demographic & Income Profile
 * Canadian Business Counts Table 33-10-1097-01 Distribution by Employee Band
@@ -166,35 +166,40 @@ Generates a complete, lender-ready **$199 CAD Location Feasibility Dossier** com
 * Competitive Saturation & Gap Index
 * Official Statistics Canada & MMAH Citations
 
+The response can be viewed or printed by the client. It is not a paid product delivery or a lending determination.
+
+### `POST /api/checkout/dossier`
+Checkout is currently unavailable and returns `503 Service Unavailable`:
+```json
+{
+  "success": false,
+  "error": "Dossier checkout is currently unavailable."
+}
+```
+
 ---
 
-## 6. Alerts & Diff Change Detection Ledger
-
-### `GET /api/alerts/events`
-Returns temporal change detection events (price changes, relistings, budget revisions).
-* **Query Parameters**:
-  * `limit` (default: 50)
-  * `eventType` (optional: `PRICE_DROP`, `RELISTED`, `BUDGET_REVISED`, `DATASET_UPDATED`)
+## 6. Alert Registration
 
 ### `POST /api/alerts/watches`
-Registers an automated subscriber watch for notifications when listings drop in price or match target geography/radius.
+Registers an alert-interest record. Public alert queue inspection, evaluation, and delivery are not available.
 * **Request Body**:
   ```json
   {
-    "subscriberEmail": "analyst@example.com",
-    "geographyId": "CSD_burlington",
-    "categoryId": "pizza_store",
-    "watchType": "PRICE_DROP",
-    "thresholdPct": 5.0,
-    "radiusKm": 25.0
+    "subscriber_email": "analyst@example.com",
+    "subscriber_name": "Example Analyst",
+    "watch_type": "LISTING_WATCH",
+    "geography_id": "CSD_burlington",
+    "category_id": "pizza_store",
+    "radius_km": 25,
+    "threshold_pct": 5
   }
   ```
-
-### `GET /api/alerts/watches`
-Lists active subscriber watches.
-
-### `GET /api/alerts/notifications/pending`
-Returns pending notifications evaluated in a single pass against the change detection ledger.
+* **Allowed `watch_type` values**: `LISTING_WATCH`, `INDICATOR_WATCH`, `BUDGET_WATCH`.
+* **Response `(201 Created)`**:
+  ```json
+  { "success": true }
+  ```
 
 ---
 
@@ -204,7 +209,7 @@ Returns pending notifications evaluated in a single pass against the change dete
 Returns canonical metric definitions, units, calculation formulas, and known statistical limitations.
 
 ### `GET /api/meta/freshness`
-Returns system operational health, total database observations, and confirms zero external API round trips (`externalApiCallCount: 0`).
+Returns system operational health, total database observations, and the server's instrumented external API-call counter. That counter does not prove a deployment or browser makes no network requests.
 
 ### `GET /api/sources`
 Returns the authorized registry of all 26 upstream data sources, official catalogue codes, and update frequencies.

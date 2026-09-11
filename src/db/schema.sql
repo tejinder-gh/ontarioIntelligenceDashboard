@@ -803,3 +803,17 @@ CREATE TABLE IF NOT EXISTS launch_evidence (
 );
 CREATE INDEX IF NOT EXISTS idx_launch_evidence_check ON launch_evidence(workspace_id, check_id);
 
+
+-- 31. Dossier Orders (T-046)
+CREATE TABLE IF NOT EXISTS dossier_orders (
+    id SERIAL PRIMARY KEY,
+    stripe_session_id VARCHAR(255) UNIQUE NOT NULL,
+    customer_email VARCHAR(255) NOT NULL,
+    city_id VARCHAR(64) NOT NULL REFERENCES geographies(id),
+    category_id VARCHAR(64) NOT NULL REFERENCES business_categories(id),
+    amount_total_cad INTEGER NOT NULL,
+    payment_status VARCHAR(64) NOT NULL,
+    fulfilled_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);

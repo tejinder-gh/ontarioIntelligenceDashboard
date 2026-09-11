@@ -10,7 +10,7 @@ async function startServer() {
     process.exit(1);
   }
 
-  const server = app.listen(PORT, '::', () => {
+  const server = app.listen(PORT, '127.0.0.1', () => {
     console.log(`================================================================`);
     console.log(`  Ontario Economic Intelligence Server running on port ${PORT}`);
     console.log(`  Database Read Path: Persistent PostgreSQL (localhost:5432)`);

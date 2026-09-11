@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'bun:test';
 import { app } from '../src/server/app.js';
+import { healthHandler } from '../src/server/routes.js';
 
 describe('Production Health & Liveness Probe', () => {
   let server: any;
@@ -31,6 +32,33 @@ describe('Production Health & Liveness Probe', () => {
     expect(res.headers.get('x-powered-by')).toBeNull();
   });
 
+  it('returns a generic response when the health dependency throws (T-043)', async () => {
+    let statusCode: number | undefined;
+    let payload: Record<string, unknown> | undefined;
+    const response = {
+      status(code: number) {
+        statusCode = code;
+        return this;
+      },
+      json(body: Record<string, unknown>) {
+        payload = body;
+        return this;
+      },
+    };
+
+    await healthHandler(
+      {} as Parameters<typeof healthHandler>[0],
+      response as unknown as Parameters<typeof healthHandler>[1],
+      async () => {
+        throw new Error('postgresql://secret-user:secret-password@internal-host');
+      },
+    );
+
+    expect(statusCode).toBe(503);
+    expect(payload).toEqual({ status: 'unhealthy', error: 'Health check unavailable' });
+    expect(JSON.stringify(payload)).not.toContain('secret-password');
+  });
+
   it('throttles excessive requests on rate-limited endpoints when tested (T-034)', async () => {
     const limiterUrl = `${baseUrl}/api/checkout/dossier`;
     let lastStatus = 200;
@@ -52,4 +80,3 @@ describe('Production Health & Liveness Probe', () => {
     expect(lastStatus).toBe(429);
   });
 });
-

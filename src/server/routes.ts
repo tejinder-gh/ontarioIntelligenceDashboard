@@ -1,18 +1,11 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { launchRouter } from './launch-routes.js';
 import { vcRouter } from './vc-routes.js';
 import { sql, testConnection } from '../db/index.js';
 import { runWorkflowA, runWorkflowB } from '../analytics/opportunity-engine.js';
 import { computeCitySimilarity, type SimilarityWeights } from '../analytics/similarity.js';
-import { persistAuditEvent } from '../alerts/diff-engine.js';
-import { 
-  registerSubscriberWatch, 
-  evaluateActiveWatches, 
-  getPendingNotifications, 
-  markNotificationsDelivered 
-} from '../alerts/watch-evaluator.js';
-import type { SubscriberWatch } from '../alerts/types.js';
+import { registerSubscriberWatch } from '../alerts/watch-evaluator.js';
 import { getAllCategories, searchCategories, resolveCategory } from '../analytics/taxonomy-service.js';
 import { businessCountsData } from '../ingestion/adapters/statcan-business-counts.js';
 import { 
@@ -27,20 +20,29 @@ apiRouter.use('/launch', launchRouter);
 apiRouter.use('/vc', vcRouter);
 
 // 0. Production Health & Liveness Probe (Cloud / Kubernetes readiness)
-apiRouter.get('/health', async (req, res) => {
+export async function healthHandler(
+  _req: Request,
+  res: Response,
+  connectionCheck: () => Promise<boolean> = testConnection,
+) {
   try {
-    const dbOk = await testConnection();
-    res.status(dbOk ? 200 : 503).json({
+    const dbOk = await connectionCheck();
+    return res.status(dbOk ? 200 : 503).json({
       status: dbOk ? 'healthy' : 'degraded',
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
       database: dbOk ? 'connected' : 'disconnected',
       version: '1.0.0'
     });
-  } catch (err: any) {
-    res.status(503).json({ status: 'unhealthy', error: err.message });
+  } catch {
+    return res.status(503).json({
+      status: 'unhealthy',
+      error: 'Health check unavailable',
+    });
   }
-});
+}
+
+apiRouter.get('/health', (req, res) => healthHandler(req, res));
 
 // Track external API calls (User Instruction #74 & Section 83)
 let externalApiCallCount = 0;
@@ -2280,181 +2282,94 @@ apiRouter.get('/dossier/:cityId/:categoryId', async (req, res) => {
   }
 });
 
-// 18f. Location Feasibility Dossier Checkout & Order Engine (T-032)
+// 18f. Location Feasibility Dossier Checkout (T-041)
+// Paid checkout remains disabled until a payment provider and webhook are approved.
+import Stripe from 'stripe';
+const stripeSecret = process.env.STRIPE_SECRET_KEY || 'sk_test_12345';
+const stripe = new Stripe(stripeSecret, { apiVersion: '2026-08-26.dahlia' as any });
+
+const checkoutSchema = z.object({
+  cityId: z.string().startsWith('CSD_').min(5),
+  categoryId: z.string().min(2),
+});
+
 apiRouter.post('/checkout/dossier', async (req, res) => {
   try {
-    const checkoutSchema = z.object({
-      email: z.string().email(),
-      cityId: z.string().min(1),
-      categoryId: z.string().min(1),
-    });
-
-    const parsed = checkoutSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: 'Invalid checkout parameters', details: parsed.error.format() });
+    const parseResult = checkoutSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: 'Invalid cityId or categoryId' });
     }
 
-    const { email, cityId, categoryId } = parsed.data;
+    const { cityId, categoryId } = parseResult.data;
 
     // Verify city exists
-    const [geo] = await sql`
-      SELECT id, name FROM geographies WHERE id = ${cityId} OR LOWER(name) = ${cityId.toLowerCase()} LIMIT 1;
-    `;
-    if (!geo) {
-      return res.status(404).json({ success: false, error: `Geography '${cityId}' not found` });
+    const [city] = await sql`SELECT id FROM geographies WHERE id = ${cityId}`;
+    if (!city) {
+      return res.status(400).json({ error: 'Invalid cityId: City not found' });
     }
 
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    let stripeSessionId = null;
-    let checkoutUrl = null;
-    let mode = 'test_mode';
-
-    if (stripeKey) {
-      mode = 'live_stripe';
-      checkoutUrl = `https://checkout.stripe.com/pay/cs_test_${Date.now()}`;
-      stripeSessionId = `cs_test_${Date.now()}`;
+    // Verify category exists
+    const [category] = await sql`SELECT id FROM business_categories WHERE id = ${categoryId}`;
+    if (!category) {
+      return res.status(400).json({ error: 'Invalid categoryId: Category not found' });
     }
 
-    const [order] = await sql`
-      INSERT INTO dossier_orders (email, city_id, category_id, amount_cents, currency, status, stripe_session_id)
-      VALUES (${email}, ${geo.id}, ${categoryId}, 19900, 'cad', 'CONFIRMED', ${stripeSessionId})
-      RETURNING id, email, city_id, category_id, amount_cents, currency, status, created_at;
-    `;
-
-    return res.status(201).json({
-      success: true,
-      mode,
-      order,
-      checkoutUrl,
-      message: 'Location Feasibility Dossier order registered successfully.',
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'cad',
+            product_data: {
+              name: 'Location Feasibility Dossier',
+              description: `Comprehensive data package for ${categoryId.replace(/_/g, ' ')} in ${cityId.replace('CSD_', '')}`,
+            },
+            unit_amount: 19900, // $199.00 CAD
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${req.headers.origin || 'http://localhost:3001'}/?success=true`,
+      cancel_url: `${req.headers.origin || 'http://localhost:3001'}/?canceled=true`,
+      metadata: {
+        cityId,
+        categoryId,
+      },
     });
+
+    return res.json({ success: true, url: session.url });
   } catch (err: any) {
-    console.error('Error creating dossier checkout:', err);
-    res.status(500).json({ success: false, error: 'Internal server error processing checkout' });
+    console.error('[Stripe Checkout Error]', err);
+    return res.status(500).json({ error: 'Failed to create checkout session' });
   }
 });
 
-// 19. Audit Events & Alerts API (Phase 2 Amendment #6 & T-006)
-apiRouter.get('/alerts/events', async (req, res) => {
-  try {
-    const eventType = req.query.eventType as string;
-    const geographyId = req.query.geographyId as string;
-    const limit = Math.min(parseInt(req.query.limit as string || '100', 10), 500);
-
-    let rows;
-    if (eventType && geographyId) {
-      rows = await sql`
-        SELECT * FROM audit_events
-        WHERE event_type = ${eventType} AND geography_id = ${geographyId}
-        ORDER BY occurred_at DESC
-        LIMIT ${limit};
-      `;
-    } else if (eventType) {
-      rows = await sql`
-        SELECT * FROM audit_events
-        WHERE event_type = ${eventType}
-        ORDER BY occurred_at DESC
-        LIMIT ${limit};
-      `;
-    } else if (geographyId) {
-      rows = await sql`
-        SELECT * FROM audit_events
-        WHERE geography_id = ${geographyId}
-        ORDER BY occurred_at DESC
-        LIMIT ${limit};
-      `;
-    } else {
-      rows = await sql`
-        SELECT * FROM audit_events
-        ORDER BY occurred_at DESC
-        LIMIT ${limit};
-      `;
-    }
-
-    res.json({ data: rows, total: rows.length });
-  } catch (err: any) {
-    console.error('[API Error]', err);
-    res.status(500).json({ error: 'Internal server error processing request' });
-  }
-});
-
-apiRouter.post('/alerts/events', async (req, res) => {
-  try {
-    const event = await persistAuditEvent(req.body);
-    res.status(201).json({ success: true, data: event });
-  } catch (err: any) {
-    console.error('[API Error]', err);
-    res.status(500).json({ error: 'Internal server error processing request' });
-  }
-});
-
-apiRouter.get('/alerts/watches', async (req, res) => {
-  try {
-    const email = req.query.email as string;
-    let rows;
-    if (email) {
-      rows = await sql`
-        SELECT * FROM subscriber_watches
-        WHERE subscriber_email = ${email}
-        ORDER BY created_at DESC;
-      `;
-    } else {
-      rows = await sql`
-        SELECT * FROM subscriber_watches
-        ORDER BY created_at DESC
-        LIMIT 100;
-      `;
-    }
-    res.json({ data: rows, total: rows.length });
-  } catch (err: any) {
-    console.error('[API Error]', err);
-    res.status(500).json({ error: 'Internal server error processing request' });
-  }
-});
+// 19. Public Alert Registration
+// Queue inspection, evaluation, and delivery require an operator identity model and are
+// deliberately not exposed until one exists.
+const alertText = (max: number) => z.string().trim().min(1).max(max)
+  .refine(value => !/[\u0000-\u001f\u007f]/.test(value), 'Control characters are not allowed');
+const publicWatchRegistration = z.object({
+  subscriber_email: z.email().max(254),
+  subscriber_name: alertText(120).optional(),
+  watch_type: z.enum(['LISTING_WATCH', 'INDICATOR_WATCH', 'BUDGET_WATCH']),
+  geography_id: alertText(100).optional(),
+  radius_km: z.number().finite().min(0).max(500).optional(),
+  category_id: alertText(100).optional(),
+  metric_id: alertText(100).optional(),
+  threshold_pct: z.number().finite().min(0).max(100).optional()
+}).strict();
 
 apiRouter.post('/alerts/watches', async (req, res) => {
   try {
-    const watchData: SubscriberWatch = req.body;
-    if (!watchData.subscriber_email || !watchData.watch_type) {
-      return res.status(400).json({ error: 'subscriber_email and watch_type are required' });
+    const watchData = publicWatchRegistration.parse(req.body);
+    await registerSubscriberWatch({ ...watchData, notification_channel: 'EMAIL', is_active: true });
+    res.status(201).json({ success: true });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid alert registration' });
     }
-    const created = await registerSubscriberWatch(watchData);
-    res.status(201).json({ success: true, data: created });
-  } catch (err: any) {
-    console.error('[API Error]', err);
-    res.status(500).json({ error: 'Internal server error processing request' });
-  }
-});
-
-apiRouter.post('/alerts/evaluate', async (req, res) => {
-  try {
-    const result = await evaluateActiveWatches();
-    res.json({ success: true, ...result });
-  } catch (err: any) {
-    console.error('[API Error]', err);
-    res.status(500).json({ error: 'Internal server error processing request' });
-  }
-});
-
-apiRouter.get('/alerts/notifications/pending', async (req, res) => {
-  try {
-    const notifications = await getPendingNotifications();
-    res.json({ data: notifications, total: notifications.length });
-  } catch (err: any) {
-    console.error('[API Error]', err);
-    res.status(500).json({ error: 'Internal server error processing request' });
-  }
-});
-
-apiRouter.post('/alerts/notifications/deliver', async (req, res) => {
-  try {
-    const { notificationIds } = req.body;
-    if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
-      return res.status(400).json({ error: 'notificationIds must be a non-empty array' });
-    }
-    await markNotificationsDelivered(notificationIds);
-    res.json({ success: true, deliveredCount: notificationIds.length });
-  } catch (err: any) {
     console.error('[API Error]', err);
     res.status(500).json({ error: 'Internal server error processing request' });
   }

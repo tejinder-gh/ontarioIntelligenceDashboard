@@ -16,6 +16,11 @@ app.use((req, res, next) => {
 });
 
 app.use(cors());
+
+// Stripe Webhook needs raw body
+import { handleStripeWebhook } from './stripe-webhook.js';
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+
 app.use(express.json());
 
 // In-memory sliding-window IP rate limiter for sensitive endpoints (T-034)
@@ -73,7 +78,7 @@ const sensitivePostLimiter = createRateLimiter({
 });
 
 app.post('/api/checkout/dossier', sensitivePostLimiter);
-app.post('/api/alerts/events', sensitivePostLimiter);
+app.post('/api/alerts/watches', sensitivePostLimiter);
 
 // Request logging & persistence audit
 app.use((req, res, next) => {

@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { readFile } from 'node:fs/promises';
 import { sql } from '../src/db/index.js';
+import { app } from '../src/server/app.js';
 import { 
   detectListingDiff, 
   detectIndicatorDiff, 
@@ -18,8 +20,16 @@ import {
 describe('T-006 Alert & Diff Change Detection Ledger Suite', () => {
   const testListingId = `test_listing_${Date.now()}`;
   const testEmail = `investor_${Date.now()}@example.com`;
+  const publicTestEmail = `public_${Date.now()}@example.com`;
+  let server: ReturnType<typeof app.listen>;
+  let baseUrl: string;
 
   beforeAll(async () => {
+    await new Promise<void>((resolve, reject) => {
+      server = app.listen(0, '127.0.0.1', resolve);
+      server.once('error', reject);
+    });
+    baseUrl = `http://localhost:${(server.address() as { port: number }).port}`;
     // Seed a baseline test listing in Burlington
     await sql`
       INSERT INTO business_listings (
@@ -33,7 +43,10 @@ describe('T-006 Alert & Diff Change Detection Ledger Suite', () => {
   });
 
   afterAll(async () => {
+    server.close();
     // Clean up test rows
+    await sql`DELETE FROM watch_notifications WHERE subscriber_email = ${publicTestEmail};`;
+    await sql`DELETE FROM subscriber_watches WHERE subscriber_email = ${publicTestEmail};`;
     await sql`DELETE FROM watch_notifications WHERE subscriber_email = ${testEmail};`;
     await sql`DELETE FROM subscriber_watches WHERE subscriber_email = ${testEmail};`;
     await sql`DELETE FROM audit_events WHERE entity_id LIKE ${`%${testListingId}%`};`;
@@ -158,5 +171,102 @@ describe('T-006 Alert & Diff Change Detection Ledger Suite', () => {
       SELECT delivered FROM watch_notifications WHERE id = ${notifications[0].id};
     `;
     expect(updated.delivered).toBe(true);
+  });
+
+  it('T-039 AC1 & AC4: public callers cannot inspect or operate alert queues', async () => {
+    const [notification] = await sql<{ id: number }[]>`
+      SELECT id FROM watch_notifications WHERE subscriber_email = ${testEmail} ORDER BY id DESC LIMIT 1;
+    `;
+    await sql`UPDATE watch_notifications SET delivered = FALSE, delivered_at = NULL WHERE id = ${notification.id};`;
+
+    const blockedRequests = [
+      fetch(`${baseUrl}/api/alerts/events`),
+      fetch(`${baseUrl}/api/alerts/watches?email=${encodeURIComponent(testEmail)}`),
+      fetch(`${baseUrl}/api/alerts/evaluate`, { method: 'POST' }),
+      fetch(`${baseUrl}/api/alerts/notifications/pending`),
+      fetch(`${baseUrl}/api/alerts/notifications/deliver`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationIds: [notification.id] })
+      })
+    ];
+
+    const responses = await Promise.all(blockedRequests);
+    for (const response of responses) {
+      expect(response.status).toBe(404);
+      expect(await response.text()).not.toContain(testEmail);
+    }
+
+    const [after] = await sql<{ delivered: boolean }[]>`
+      SELECT delivered FROM watch_notifications WHERE id = ${notification.id};
+    `;
+    expect(after.delivered).toBe(false);
+  });
+
+  it('T-039 AC2: public watch registration validates bounded supported input and returns no subscriber record', async () => {
+    const valid = {
+      subscriber_email: publicTestEmail,
+      subscriber_name: 'Public Test',
+      watch_type: 'LISTING_WATCH',
+      geography_id: 'CSD_burlington',
+      radius_km: 30,
+      category_id: 'pizza_store'
+    };
+    const created = await fetch(`${baseUrl}/api/alerts/watches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(valid)
+    });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toEqual({ success: true });
+
+    for (const invalid of [
+      { ...valid, subscriber_email: 'not-an-email' },
+      { ...valid, watch_type: 'UNKNOWN_WATCH' },
+      { ...valid, radius_km: 501 },
+      { ...valid, notification_channel: 'WEBHOOK' }
+    ]) {
+      const response = await fetch(`${baseUrl}/api/alerts/watches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(invalid)
+      });
+      expect(response.status).toBe(400);
+    }
+  });
+
+  it('T-039 AC3: public alert registration is rate-limited', async () => {
+    let status = 0;
+    for (let index = 0; index < 31; index++) {
+      const response = await fetch(`${baseUrl}/api/alerts/watches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-test-rate-limit': 'true' },
+        body: JSON.stringify({ subscriber_email: 'invalid', watch_type: 'LISTING_WATCH' })
+      });
+      status = response.status;
+      if (status === 429) break;
+    }
+    expect(status).toBe(429);
+  });
+
+});
+
+describe('T-040 Alert Operator UI Removal', () => {
+  it('AC1-AC3: client alert UI has no operator requests, delivery claims, or browser email storage', async () => {
+    const [modalSource, appSource] = await Promise.all([
+      readFile(new URL('../src/client/components/AlertSubscriptionModal.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('../src/client/App.tsx', import.meta.url), 'utf8')
+    ]);
+    const clientSource = `${modalSource}\n${appSource}`;
+
+    expect(clientSource).not.toContain('/api/alerts/notifications/pending');
+    expect(clientSource).not.toContain('/api/alerts/evaluate');
+    expect(clientSource).not.toContain('/api/alerts/notifications/deliver');
+    expect(clientSource).not.toContain('Run Evaluator Now');
+    expect(clientSource).not.toContain('Subscribe to automated change-detection events');
+    expect(clientSource).not.toContain("We'll alert");
+    expect(clientSource).not.toContain("localStorage.setItem('ontario_subscriber_email'");
+    expect(modalSource).toContain("event.key === 'Escape' && isOpen");
+    expect(modalSource).toContain('Alert subscriptions are not available yet.');
   });
 });

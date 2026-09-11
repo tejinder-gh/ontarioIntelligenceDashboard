@@ -36,6 +36,7 @@ import {
   Bell
 } from 'lucide-react';
 import { AlertSubscriptionModal } from './components/AlertSubscriptionModal.js';
+import { CheckoutSuccessModal } from './components/CheckoutSuccessModal.js';
 
 const TAB_TO_SLUG: Record<ActiveTab, string> = {
   overview: 'overview',
@@ -113,9 +114,11 @@ export const App: React.FC = () => {
   const [compareData, setCompareData] = useState<any[]>([]);
   const [loadingCompare, setLoadingCompare] = useState<boolean>(false);
   
-  // Alert Subscription Modal State
+  // Checkout success modal
+  const [isCheckoutSuccessOpen, setIsCheckoutSuccessOpen] = useState<boolean>(false);
+
+  // Alert availability notice state
   const [isAlertModalOpen, setIsAlertModalOpen] = useState<boolean>(false);
-  const [pendingAlertsCount, setPendingAlertsCount] = useState<number>(0);
 
   // Search within Compare Modal
   const [modalSearchQuery, setModalSearchQuery] = useState('');
@@ -234,6 +237,18 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Check for checkout success param
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success') === 'true') {
+      setIsCheckoutSuccessOpen(true);
+      // Remove success param from URL without refreshing
+      params.delete('success');
+      const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
+
   // Sync city name if ID changes externally
   useEffect(() => {
     fetch(`/api/geographies?q=${selectedCityId.replace('CSD_', '')}`)
@@ -246,16 +261,6 @@ export const App: React.FC = () => {
       })
       .catch(() => {});
   }, [selectedCityId]);
-
-  // Fetch pending notification count for alerts badge
-  useEffect(() => {
-    fetch('/api/alerts/notifications/pending')
-      .then(res => res.json())
-      .then(d => {
-        if (d.total !== undefined) setPendingAlertsCount(d.total);
-      })
-      .catch(() => {});
-  }, [isAlertModalOpen]);
 
   // Multi-City Comparison Fetcher
   useEffect(() => {
@@ -384,20 +389,15 @@ export const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Intelligence Alerts Button with Unread Badge */}
+            {/* Alert availability notice */}
             <button
               type="button"
               onClick={() => setIsAlertModalOpen(true)}
               className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 transition-colors shadow-sm relative"
-              aria-label="Open intelligence alerts and watches"
+              aria-label="View intelligence alert availability"
             >
               <Bell className="w-3.5 h-3.5 text-amber-400" />
               <span>Alerts</span>
-              {pendingAlertsCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-slate-950 font-extrabold">
-                  {pendingAlertsCount}
-                </span>
-              )}
             </button>
 
             <button
@@ -763,12 +763,16 @@ export const App: React.FC = () => {
           </div>
         </div>
       )}
-      {/* Alert Subscription & Watch Modal */}
+      {/* Alert availability notice */}
       <AlertSubscriptionModal
         isOpen={isAlertModalOpen}
         onClose={() => setIsAlertModalOpen(false)}
-        defaultCityId={selectedCityId}
-        defaultCityName={selectedCityName}
+      />
+
+      {/* Checkout Success notice */}
+      <CheckoutSuccessModal
+        isOpen={isCheckoutSuccessOpen}
+        onClose={() => setIsCheckoutSuccessOpen(false)}
       />
     </div>
   );

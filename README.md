@@ -16,7 +16,7 @@ When entrepreneurs and investors seek answers to critical commercial questions:
 Most web tools either make fragile runtime web-scraping calls, hallucinate numbers, or silently substitute provincial averages as municipal numbers.
 
 This platform operates on an **Ingestion-First, Database-First Architecture**:
-1. **Zero Runtime Upstream Round Trips**: 100% of dashboard views, comparative charts, and simulation workflows query a local persistent PostgreSQL relational operational store (`ontario_economic_intelligence`) running on Docker.
+1. **Local-data dashboard paths**: Core dashboard views, comparison charts, and simulations query the platform's persistent PostgreSQL store (`ontario_economic_intelligence`). This describes application data access, not a deployment-wide guarantee of zero network traffic.
 2. **Audited Data Sources**: Ingests official Statistics Canada tables (including the latest **Table 33-10-1097-01** released March 4, 2026 with Dec 2025 reference), Ontario Financial Information Returns (FIR), and OpenStreetMap geographic features.
 3. **Strict Geographic Resolution Enforcement**: Explicitly labels data at `CSD` (Census Subdivision), `CMA` (Census Metropolitan Area), or `PROVINCE` resolution. Provincial or CMA benchmarks are never conflated with municipal observations.
 4. **Strict Transactional Pricing Separation**: Commercial business listings strictly separate aspirational `asking_price` from `confirmed_sale_price` (kept NULL unless officially verified via registry/escrow), with automated repeated listing detection confidence.
@@ -53,7 +53,7 @@ The system utilizes a 3-layer data architecture:
  ├── Dual-Workflow Opportunity Engine:
  │   ├── Workflow A: "I know the business" -> Ranks Ontario cities for business type
  │   └── Workflow B: "I know the city" -> Ranks business categories with gap index
- └── Precomputed analytics served with zero external round-trips
+ └── Precomputed analytics queried from the platform database
 ```
 
 ---
@@ -75,7 +75,7 @@ The system utilizes a 3-layer data architecture:
 
 ## 🚀 Key Features & 15 Intelligence Views
 
-1. **Overview View (`OverviewView`)**: Executive municipal dashboard, Core KPIs (Population, 5-yr growth, Ontario population share, median income, business counts, density), 8-dimension empirical data coverage card, and 1-click **$199 Location Feasibility Dossier** generator.
+1. **Overview View (`OverviewView`)**: Executive municipal dashboard, Core KPIs (Population, 5-yr growth, Ontario population share, median income, business counts, density), 8-dimension empirical data coverage card, and a read-only location-feasibility data preview that can be printed or saved locally.
 2. **City Intelligence View (`CityIntelligenceView`)**: Comprehensive census demographics, population density, occupancy rates, structural dwelling types, household sizes, and municipal planning growth corridor cards.
 3. **Demographics View (`DemographicsView`)**: 9 statutory Census age cohorts (youth, working age, seniors), housing stock composition, and Top 20 ethnocultural communities with provincial benchmarks.
 4. **Financial Profile View (`FinancialProfileView`)**: Mean vs. Median household income delta, skewness analysis, monthly tenant rent vs. owner payments, and strictly labeled SFS net worth benchmarks.
@@ -89,17 +89,17 @@ The system utilizes a 3-layer data architecture:
     * **Workflow B**: "I know the city" (e.g. Burlington) — Dynamic NAICS business recommendations, gap indices, audited Table 33-10-1097 counts, verified revenue benchmark chains, and competitor maps.
     * **Visual Domain Matrix**: Dynamic keyword search, category synonyms, and image-rich domain tiles.
 11. **Competition View (`CompetitionView`)**: OpenStreetMap-listed commercial competitors with exact lat/long coordinates, chain vs. independent ratios, and unconfigured review provider notice.
-12. **Business Listings View (`BusinessListingsView`)**: Commercial listings with strict separation of asking vs confirmed sale price, price drops, relistings, days on market, and automated subscriber watch creation.
+12. **Business Listings View (`BusinessListingsView`)**: Commercial listings with strict separation of asking vs confirmed sale price, price drops, relistings, and days on market.
 13. **Outliers View (`OutliersView`)**: Non-parametric Tukey IQR fences and Gaussian z-scores (|z| ≥ 2.0) identifying extreme divergences with natural language explanations.
 14. **Data Explorer View (`DataExplorerView`)**: SQL queryable observation store with multi-attribute filtering, search, confidence badges, and 1-click CSV/JSON export.
-15. **Methodology & Sources View (`MethodologySourcesView`)**: Complete Data Dictionary, Source Capabilities Registry, freshness metadata, and live Zero-Round-Trip verification counter.
+15. **Methodology & Sources View (`MethodologySourcesView`)**: Complete Data Dictionary, Source Capabilities Registry, freshness metadata, and an external-call diagnostic counter.
 
 ---
 
 ## 🏛️ Major Engines & Commercial Features
 
-* **$199 CAD Location Feasibility Dossier Generator**: Generates comprehensive lender-ready commercial feasibility PDF reports combining 2021 Census profiles, Canadian Business Counts, municipal finances, and commercial real estate rent baselines (`GET /api/dossier/:cityId/:categoryId`).
-* **Alert & Diff Change Detection Ledger**: Automated temporal tracking of listing price drops, relistings, and municipal budget updates (`audit_events` and `subscriber_watches`).
+* **Location Feasibility Dossier Preview**: Returns a read-only feasibility-data preview that can be printed or saved locally (`GET /api/dossier/:cityId/:categoryId`). Dossier checkout is currently unavailable.
+* **Alert Registration**: `POST /api/alerts/watches` records validated alert interest. Public event browsing, evaluator execution, and notification delivery are not available.
 * **Empirical Data Coverage Engine**: Real-time evaluation of data completeness across 8 authentic dimensions with explicit confidence levels (HIGH / MEDIUM / LOW), completely eliminating synthetic fallbacks (`GET /api/geographies/:id/coverage`).
 * **Comparable Peer Cities Engine**: Multi-dimensional Euclidean distance similarity calculation across population, growth, median income, density, and age cohort distributions (`GET /api/geographies/:id/similar`).
 * **Dynamic Business Category Taxonomy**: NAICS 2022 taxonomy service supporting colloquial synonym autocomplete (e.g. `pizza`, `pizzeria`, `daycare`, `gym`) mapped to canonical sector definitions (`GET /api/taxonomy/...`).
@@ -109,11 +109,11 @@ The system utilizes a 3-layer data architecture:
 ## 🛠️ Technology Stack
 
 * **Backend Runtime**: [Bun 1.3](https://bun.sh/) (native TypeScript, high performance)
-* **Database**: [PostgreSQL 16](https://www.postgresql.org/) (33 normalized relational tables, zero external HTTP round-trips)
+* **Database**: [PostgreSQL 16](https://www.postgresql.org/) (33 normalized relational tables)
 * **API Framework**: [Express 5.2](https://expressjs.com/) with health probes, graceful shutdown, and CORS
 * **Frontend Framework**: [React 19.2](https://react.dev/) + [Vite 8.2](https://vitejs.dev/) (Rolldown engine) + [Tailwind CSS 4.3](https://tailwindcss.com/)
 * **Visualization**: [Recharts 3.10](https://recharts.org/) + [Lucide Icons](https://lucide.dev/)
-* **Testing**: [Vitest](https://vitest.dev/) / `bun test` (99 tests across 23 test suites)
+* **Testing**: [Vitest](https://vitest.dev/) / `bun test`
 * **Design System**: Dark-mode Apple HIG specular glass materials, accessible inputs, and bilingual (en-CA / fr-CA) scaffolding
 
 ---
@@ -202,7 +202,7 @@ Orchestration systems (Kubernetes, AWS ALB, Render, Fly.io) can poll:
 ## 📋 Acceptance Verification Highlights
 
 * **Dynamic Pop Share Calculation**: Burlington's population share of Ontario is dynamically computed as `(186,948 / 14,223,942) * 100 = 1.314%`.
-* **Zero External Round Trips**: Confirmed with live counter `externalApiCallCount === 0`.
+* **External-call diagnostic**: `externalApiCallCount` records calls instrumented by the server. It does not prove that a deployment, browser, or every application route has zero network traffic.
 * **All 444 Municipalities Stored**: All 444 Ontario Census Subdivisions are indexed, normalized, and searchable.
 * **Table 33-10-1097-01**: Ingests December 2025 reference counts across employee size bands and NAICS sectors.
 * **Pricing Separation**: Asking prices are strictly separated from confirmed transaction closing prices.
