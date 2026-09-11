@@ -770,4 +770,36 @@ CREATE INDEX IF NOT EXISTS idx_planning_geo ON municipal_planning_initiatives(ge
 CREATE INDEX IF NOT EXISTS idx_planning_cat ON municipal_planning_initiatives(initiative_category);
 CREATE INDEX IF NOT EXISTS idx_planning_type ON municipal_planning_initiatives(plan_type);
 
+-- Local, metadata-only launch planning. Source references are not verified proof.
+CREATE TABLE IF NOT EXISTS launch_workspaces (
+    id UUID PRIMARY KEY,
+    name VARCHAR(120) NOT NULL CHECK (length(trim(name)) > 0),
+    municipality VARCHAR(120) NOT NULL CHECK (length(trim(municipality)) > 0),
+    industry VARCHAR(160) NOT NULL CHECK (length(trim(industry)) > 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS launch_checks (
+    workspace_id UUID NOT NULL REFERENCES launch_workspaces(id) ON DELETE CASCADE,
+    id VARCHAR(100) NOT NULL,
+    applicability VARCHAR(20) NOT NULL DEFAULT 'unknown' CHECK (applicability IN ('unknown', 'applicable', 'not_applicable')),
+    completion VARCHAR(20) NOT NULL DEFAULT 'incomplete' CHECK (completion IN ('incomplete', 'complete')),
+    blocker VARCHAR(20) NOT NULL DEFAULT 'none' CHECK (blocker IN ('none', 'unresolved', 'resolved')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (workspace_id, id)
+);
+CREATE TABLE IF NOT EXISTS launch_evidence (
+    id UUID PRIMARY KEY,
+    workspace_id UUID NOT NULL,
+    check_id VARCHAR(100) NOT NULL,
+    title VARCHAR(200) NOT NULL CHECK (length(trim(title)) > 0),
+    source_url VARCHAR(2048) NOT NULL CHECK (source_url ~ '^https?://[^[:space:]]+$'),
+    source_publisher VARCHAR(160) NOT NULL CHECK (length(trim(source_publisher)) > 0),
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    kind VARCHAR(32) NOT NULL DEFAULT 'user_recorded_reference' CHECK (kind = 'user_recorded_reference'),
+    FOREIGN KEY (workspace_id, check_id) REFERENCES launch_checks(workspace_id, id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_launch_evidence_check ON launch_evidence(workspace_id, check_id);
 

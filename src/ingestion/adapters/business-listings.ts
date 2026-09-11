@@ -107,6 +107,23 @@ export async function ingestBusinessListingsAndBenchmarks(): Promise<void> {
       sdePct: 26.0,
       assumptions: 'Commercial storefront centre of 1,200 to 1,600 sq ft serving 100-180 active students.',
       methodology: 'Student monthly subscription model ($180-$240/month per subject) with typical instructor ratios.'
+    },
+    {
+      categoryId: 'convenience_store',
+      geoId: 'PR_35',
+      naicsCode: '445120',
+      sourceDataset: 'StatCan Table 21-10-0171-01 & Convenience Industry Council of Canada (CICC)',
+      refYear: 2024,
+      low: 450000,
+      median: 820000,
+      avg: 890000,
+      high: 1600000,
+      cogsPct: 74.0,
+      laborPct: 12.0,
+      rentPct: 4.5,
+      sdePct: 9.5,
+      assumptions: 'Traditional suburban convenience store of 1,800 to 2,400 sq ft operating extended hours.',
+      methodology: 'Normalized using Statistics Canada Retail Trade operating expense surveys and Canadian convenience distributor financials.'
     }
   ];
 

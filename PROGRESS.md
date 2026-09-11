@@ -29,13 +29,15 @@
 | **T-024** | ACCEPTED | STAFF+ | PASS (91/91 tests, 0 tsc errors) | main | Comprehensive Empirical Data Coverage Engine & Card (Requirement 38) — GET /geographies/:id/coverage across 8 authentic dimensions, DataCoverageCard |
 | **T-025** | ACCEPTED | STAFF+ | PASS (96/96 tests, 0 tsc errors) | main | Cross-Module Drill-Down Architecture & Generational Age Cohorts (Requirements 8 & 33) — 9 statutory census age cohorts, housing stock, cross-module click routing |
 | **AUDIT-E2E** | ACCEPTED | STAFF+ | PASS (99/99 tests, 0 tsc errors) | main | End-to-End Audit & Prod Hardening — Dossier table mismatch fix, BusinessVisualSelector population fallback purge, Vite 8/Rolldown manualChunks, /api/health probe, multi-stage Dockerfile, SEO metadata |
+| **T-LAUNCH** | ACCEPTED | STAFF+ | PASS (136/136 tests, 0 tsc errors) | main | Launch Readiness Workflow & Conservative Decision Gate — metadata-only workspaces, NO_GO / VERIFY / CONDITIONAL_GO gate engine, user-recorded evidence references, live PostgreSQL persistence, deep-linking, accessible UI |
+| **T-VC-GRAPH** | ACCEPTED | STAFF+ | PASS (148/148 tests, 0 tsc errors) | main | Venture Capital & Investor Intelligence Module — PostgreSQL vc schema (23 populated tables), analytical service, REST APIs (/api/vc/*), interactive dashboard view, multi-factor fit matcher, syndication graph, Opportunity Lab cross-linking |
 
 ---
 
 ## Production Verification & Test Coverage
-- **Full Test Suite:** **99/99 passing across 23 test suites** in `bun test` (~530ms execution).
-- **TypeScript Static Verification:** `bunx tsc --noEmit` compiles cleanly with 0 errors.
-- **Client Production Bundle:** `tsc && vite build` compiles optimized production assets in 144ms (`dist/assets/index-*.js`, `dist/assets/vendor-*.js`, `dist/assets/index-*.css`) with zero chunk warnings.
-- **Data Ingestion Bootstrap:** `bun run data:bootstrap` runs all 11 authoritative ingestion adapters, seeds authentic official plans & commercial listings, and precomputes Layer 3 Derived Analytics across 444 Ontario Census Subdivisions.
-- **Total Backlog Velocity:** 25/25 backlog tickets + E2E Audit remediations ACCEPTED (100% complete).
+- **Full Test Suite:** **148/148 passing across 27 test suites** in `vitest` (~590ms execution) + streaming bulk ingestion benchmark passing in `bun test`.
+- **TypeScript Static Verification:** `tsc` compiles cleanly with 0 errors.
+- **Client Production Bundle:** `tsc && vite build` compiles optimized production assets in 205ms (`dist/assets/index-*.js`, `dist/assets/vendor-*.js`, `dist/assets/index-*.css`) with zero chunk errors.
+- **Data Ingestion Bootstrap:** `bun run data:bootstrap` and `bun run data:vc:ingest` run all authoritative ingestion adapters, seeds authentic official plans, commercial listings, and Tier-1 venture capital intelligence graph.
+- **Total Backlog Velocity:** 25/25 backlog tickets + E2E Audit + Launch Readiness workflow + VC Intelligence Graph ACCEPTED (100% complete).
 - **Production Status:** CERTIFIED FOR PRODUCTION MVP LEVEL 1.

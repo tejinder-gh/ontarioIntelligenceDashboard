@@ -1,6 +1,60 @@
 import { sql } from '../db/index.js';
 import { businessCountsData } from '../ingestion/adapters/statcan-business-counts.js';
 
+export type EvidenceClassification = 'OBSERVED' | 'AUDITED' | 'BENCHMARK' | 'DERIVED' | 'UNAVAILABLE';
+
+export interface EvidenceFieldMetadata {
+  classification: EvidenceClassification;
+  available: boolean;
+}
+
+export interface AvailabilitySummary {
+  availableInputs: number;
+  totalInputs: number;
+  completenessPct: number;
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function evidenceField(classification: Exclude<EvidenceClassification, 'UNAVAILABLE'>, value: unknown): EvidenceFieldMetadata {
+  const available = value !== null && value !== undefined;
+  return { classification: available ? classification : 'UNAVAILABLE', available };
+}
+
+function summarizeAvailability(fields: Record<string, EvidenceFieldMetadata>): AvailabilitySummary {
+  const values = Object.values(fields);
+  const availableInputs = values.filter(field => field.available).length;
+  return {
+    availableInputs,
+    totalInputs: values.length,
+    completenessPct: values.length === 0 ? 0 : Math.round((availableInputs / values.length) * 100)
+  };
+}
+
+function confidenceFromCompleteness(completenessPct: number): 'HIGH' | 'MEDIUM' | 'LOW' {
+  if (completenessPct >= 80) return 'HIGH';
+  if (completenessPct >= 50) return 'MEDIUM';
+  return 'LOW';
+}
+
+function weightedScore(parts: Array<{ score: number | null; weight: number }>): number | null {
+  const available = parts.filter((part): part is { score: number; weight: number } => part.score !== null);
+  const availableWeight = available.reduce((sum, part) => sum + part.weight, 0);
+  if (availableWeight === 0) return null;
+  return Math.min(100, Math.max(0, Math.round(
+    available.reduce((sum, part) => sum + part.score * part.weight, 0) / availableWeight
+  )));
+}
+
+function scaledAuditedCount(total: unknown, proportion: number): number | null {
+  const numericTotal = nullableNumber(total);
+  return numericTotal === null ? null : Math.round(numericTotal * proportion);
+}
+
 function getAuditedSectorCount(geoId: string, categoryId: string): number | null {
   const cityData = businessCountsData.find(b => b.geoId.toLowerCase() === geoId.toLowerCase());
   if (!cityData) return null;
@@ -11,7 +65,7 @@ function getAuditedSectorCount(geoId: string, categoryId: string): number | null
     case 'full_service_restaurant':
       return s['NAICS_72']?.fullService ?? null;
     case 'coffee_shop':
-      return Math.round((s['NAICS_72']?.total || 100) * 0.18);
+      return scaledAuditedCount(s['NAICS_72']?.total, 0.18);
     case 'convenience_store':
       return s['NAICS_44_45']?.convenience ?? null;
     case 'grocery_supermarket':
@@ -33,9 +87,9 @@ function getAuditedSectorCount(geoId: string, categoryId: string): number | null
     case 'car_detailing':
       return s['NAICS_81']?.carWash ?? null;
     case 'professional_services':
-      return s['NAICS_54']?.legalAccounting ?? Math.round((s['NAICS_54']?.total || 100) * 0.35);
+      return s['NAICS_54']?.legalAccounting ?? scaledAuditedCount(s['NAICS_54']?.total, 0.35);
     case 'home_services':
-      return Math.round((s['NAICS_81']?.total || 100) * 0.3);
+      return scaledAuditedCount(s['NAICS_81']?.total, 0.3);
     case 'logistics_warehouse':
       return s['NAICS_48_49']?.total ?? null;
     default:
@@ -57,25 +111,25 @@ export interface WorkflowAResult {
   geographyId: string;
   cityName: string;
   population: number;
-  growthPct: number;
-  medianHouseholdIncome: number;
+  growthPct: number | null;
+  medianHouseholdIncome: number | null;
   competitorCount: number;
   competitorsPer10kPop: number;
   populationPerCompetitor: number;
-  retailAskingRentSqft: number;
-  opportunityScore: number; // 0 to 100
+  retailAskingRentSqft: number | null;
+  opportunityScore: number | null; // 0 to 100 when sufficient inputs are available
   scoreComponents: {
     demandScore: number;
     competitionScore: number;
-    purchasingPowerScore: number;
-    growthScore: number;
-    operatingCostScore: number;
-    laborScore: number;
+    purchasingPowerScore: number | null;
+    growthScore: number | null;
+    operatingCostScore: number | null;
+    laborScore: number | null;
   };
   demandScore?: number;
   saturationIndex?: number;
-  medianIncome?: number;
-  estimatedRevenue?: number;
+  medianIncome?: number | null;
+  estimatedRevenue: number | null;
   evidenceSummary: string;
   strengths: string[];
   risks: string[];
@@ -86,6 +140,8 @@ export interface WorkflowAResult {
     competitorLocationsCoverage: number;
     commercialRentCoverage: number;
   };
+  evidenceMetadata: Record<string, EvidenceFieldMetadata>;
+  availability: AvailabilitySummary;
 }
 
 export interface WorkflowBRecommendation {
@@ -93,22 +149,24 @@ export interface WorkflowBRecommendation {
   categoryName: string;
   cityName?: string;
   naicsCode: string;
-  existingCount: number;
-  countPer10kPop: number;
-  competitorDensity: number;
-  peerBenchmarkPer10kPop: number;
-  gapIndex: number; // > 1.0 means underserved relative to peers
-  opportunityScore: number;
-  demandScore: number;
-  competitionScore: number;
-  successProbability: 'VERY_HIGH' | 'HIGH' | 'MODERATE' | 'SELECTIVE';
-  typicalInvestmentCAD: { min: number; max: number };
-  estimatedAnnualRevenueCAD: { low: number; median: number; high: number; sdeMedian: number };
-  revenueBenchmarkRange: { low: number; median: number; high: number; sdeMedian: number };
+  existingCount: number | null;
+  countPer10kPop: number | null;
+  competitorDensity: number | null;
+  peerBenchmarkPer10kPop: number | null;
+  gapIndex: number | null; // > 1.0 means underserved relative to peers
+  opportunityScore: number | null;
+  demandScore: number | null;
+  competitionScore: number | null;
+  successProbability: null;
+  typicalInvestmentCAD: { min: number | null; max: number | null };
+  estimatedAnnualRevenueCAD: { low: number | null; median: number | null; high: number | null; sdeMedian: number | null };
+  revenueBenchmarkRange: { low: number | null; median: number | null; high: number | null; sdeMedian: number | null };
   rationale: string;
   keyDrivers: string[];
   potentialRisks: string[];
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  evidenceMetadata: Record<string, EvidenceFieldMetadata>;
+  availability: AvailabilitySummary;
 }
 
 export async function runWorkflowA(
@@ -141,19 +199,17 @@ export async function runWorkflowA(
       g.name as city_name,
       g.population_2021 as population,
       g.population_growth_pct as growth_pct,
-      COALESCE(o_inc.value_numeric, 95000) as median_income,
-      COALESCE(o_rent.value_numeric, 34.00) as retail_rent,
-      COALESCE(o_unemp.value_numeric, 6.5) as unemp_rate,
-      COALESCE(o_part.value_numeric, 66.0) as part_rate,
+      o_inc.value_numeric as median_income,
+      o_rent.value_numeric as retail_rent,
+      o_part.value_numeric as part_rate,
       COUNT(b.id) as competitor_count
     FROM geographies g
     LEFT JOIN observations o_inc ON o_inc.geography_id = g.id AND o_inc.metric_id = 'income_median_hh'
     LEFT JOIN observations o_rent ON o_rent.geography_id = g.id AND o_rent.metric_id = 'commercial_rent_retail_net'
-    LEFT JOIN observations o_unemp ON o_unemp.geography_id = g.id AND o_unemp.metric_id = 'labor_unemployment_rate'
     LEFT JOIN observations o_part ON o_part.geography_id = g.id AND o_part.metric_id = 'labor_participation_rate'
     LEFT JOIN businesses b ON b.geography_id = g.id AND b.category_id = ${categoryId}
     WHERE g.geo_type = 'CSD' AND g.population_2021 IS NOT NULL AND g.population_2021 >= ${minPopulation}
-    GROUP BY g.id, g.name, g.population_2021, g.population_growth_pct, o_inc.value_numeric, o_rent.value_numeric, o_unemp.value_numeric, o_part.value_numeric
+    GROUP BY g.id, g.name, g.population_2021, g.population_growth_pct, o_inc.value_numeric, o_rent.value_numeric, o_part.value_numeric
     ORDER BY g.population_2021 DESC;
   `;
 
@@ -161,13 +217,20 @@ export async function runWorkflowA(
 
   // Compute normalization metrics
   const maxPop = Math.max(...cityRows.map(r => r.population));
-  const maxGrowth = Math.max(...cityRows.map(r => r.growth_pct));
-  const maxIncome = Math.max(...cityRows.map(r => Number(r.median_income)));
-  const minRent = Math.min(...cityRows.map(r => Number(r.retail_rent)));
-  const maxRent = Math.max(...cityRows.map(r => Number(r.retail_rent)));
+  const growthValues = cityRows.map(r => nullableNumber(r.growth_pct)).filter((value): value is number => value !== null);
+  const incomeValues = cityRows.map(r => nullableNumber(r.median_income)).filter((value): value is number => value !== null);
+  const rentValues = cityRows.map(r => nullableNumber(r.retail_rent)).filter((value): value is number => value !== null);
+  const maxGrowth = growthValues.length > 0 ? Math.max(...growthValues) : null;
+  const maxIncome = incomeValues.length > 0 ? Math.max(...incomeValues) : null;
+  const minRent = rentValues.length > 0 ? Math.min(...rentValues) : null;
+  const maxRent = rentValues.length > 0 ? Math.max(...rentValues) : null;
 
   const scoredCities: WorkflowAResult[] = cityRows.map(r => {
-    const pop = r.population;
+    const pop = Number(r.population);
+    const growth = nullableNumber(r.growth_pct);
+    const income = nullableNumber(r.median_income);
+    const rent = nullableNumber(r.retail_rent);
+    const participationRate = nullableNumber(r.part_rate);
     const compCount = Number(r.competitor_count);
     const compsPer10k = parseFloat(((compCount / pop) * 10000).toFixed(2));
     const popPerComp = compCount > 0 ? Math.round(pop / compCount) : pop;
@@ -183,44 +246,58 @@ export async function runWorkflowA(
     const competitionScore = Math.max(10, Math.min(100, Math.round((2 - compRatio) * 50)));
 
     // 3. Purchasing Power Score
-    const income = Number(r.median_income);
-    const purchasingPowerScore = Math.min(100, Math.round((income / maxIncome) * 100));
+    const purchasingPowerScore = income !== null && maxIncome !== null && maxIncome > 0
+      ? Math.min(100, Math.round((income / maxIncome) * 100))
+      : null;
 
     // 4. Growth Score
-    const growth = r.growth_pct;
-    const growthScore = Math.max(10, Math.min(100, Math.round((growth / Math.max(maxGrowth, 10)) * 100)));
+    const growthScore = growth !== null && maxGrowth !== null
+      ? Math.max(10, Math.min(100, Math.round((growth / Math.max(maxGrowth, 10)) * 100)))
+      : null;
 
     // 5. Operating Cost Score: lower rent = higher score
-    const rent = Number(r.retail_rent);
-    const operatingCostScore = maxRent > minRent ? Math.max(10, Math.min(100, Math.round((1 - (rent - minRent) / (maxRent - minRent)) * 100))) : 50;
+    const operatingCostScore = rent !== null && minRent !== null && maxRent !== null
+      ? (maxRent > minRent ? Math.max(10, Math.min(100, Math.round((1 - (rent - minRent) / (maxRent - minRent)) * 100))) : 50)
+      : null;
 
     // 6. Labor Availability Score
-    const laborScore = Math.min(100, Math.round(Number(r.part_rate)));
+    const laborScore = participationRate === null ? null : Math.min(100, Math.round(participationRate));
 
     // Weighted Overall Opportunity Score
-    const totalScore = Math.min(100, Math.max(0, Math.round(
-      w.demand * demandScore +
-      w.competition * competitionScore +
-      w.purchasingPower * purchasingPowerScore +
-      w.growth * growthScore +
-      w.operatingCost * operatingCostScore +
-      w.labor * laborScore
-    )));
+    const totalScore = weightedScore([
+      { score: demandScore, weight: w.demand },
+      { score: competitionScore, weight: w.competition },
+      { score: purchasingPowerScore, weight: w.purchasingPower },
+      { score: growthScore, weight: w.growth },
+      { score: operatingCostScore, weight: w.operatingCost },
+      { score: laborScore, weight: w.labor }
+    ]);
 
     // Dynamic Strengths & Risks (Section 24 & 25)
     const strengths: string[] = [];
     const risks: string[] = [];
 
-    if (income >= 110000) strengths.push(`Affluent consumer base with high median household income ($${income.toLocaleString()} CAD)`);
-    if (growth >= 8.0) strengths.push(`Rapid population growth (+${growth}% 5-yr) driving new residential customer demand`);
+    if (income !== null && income >= 110000) strengths.push(`Affluent consumer base with high median household income ($${income.toLocaleString()} CAD)`);
+    if (growth !== null && growth >= 8.0) strengths.push(`Rapid population growth (+${growth}% 5-yr) driving new residential customer demand`);
     if (compsPer10k < 2.5) strengths.push(`Underserved market density (${compsPer10k} competitors per 10k residents vs Ontario benchmark of 3.0)`);
     if (popPerComp > 3500) strengths.push(`High population per competitor (${popPerComp.toLocaleString()} residents per store)`);
 
-    if (rent > 35.00) risks.push(`Premium commercial lease rates ($${rent.toFixed(2)}/sq ft net rent plus additional TMI)`);
+    if (rent !== null && rent > 35.00) risks.push(`Premium commercial lease rates ($${rent.toFixed(2)}/sq ft net rent plus additional TMI)`);
     if (compsPer10k > 3.8) risks.push(`Elevated competitor saturation (${compsPer10k} stores/10k pop) requiring strong brand differentiation`);
-    if (growth < 3.0) risks.push(`Moderate historical population growth (+${growth}% 5-yr) limiting organic customer base expansion`);
+    if (growth !== null && growth < 3.0) risks.push(`Moderate historical population growth (+${growth}% 5-yr) limiting organic customer base expansion`);
 
-    const evidence = `${r.city_name} achieves an opportunity score of ${totalScore}/100 based on ${pop.toLocaleString()} residents, median household income of $${income.toLocaleString()}, and current competitor concentration of ${compsPer10k} locations per 10,000 residents.`;
+    const evidenceParts = [`${pop.toLocaleString()} residents`, `${compsPer10k} recorded locations per 10,000 residents`];
+    if (income !== null) evidenceParts.splice(1, 0, `median household income of $${income.toLocaleString()}`);
+    const evidence = `${r.city_name} has an opportunity score of ${totalScore ?? 'unavailable'}/100 based on ${evidenceParts.join(', ')}.`;
+    const inputEvidence = {
+      population: evidenceField('OBSERVED', pop),
+      growthPct: evidenceField('OBSERVED', growth),
+      medianHouseholdIncome: evidenceField('OBSERVED', income),
+      competitorCount: evidenceField('OBSERVED', compCount),
+      retailAskingRentSqft: evidenceField('OBSERVED', rent),
+      laborParticipationRate: evidenceField('OBSERVED', participationRate)
+    };
+    const availability = summarizeAvailability(inputEvidence);
 
     return {
       rank: 0,
@@ -237,7 +314,7 @@ export async function runWorkflowA(
       demandScore,
       saturationIndex: compsPer10k,
       medianIncome: income,
-      estimatedRevenue: 750000,
+      estimatedRevenue: null,
       scoreComponents: {
         demandScore,
         competitionScore,
@@ -247,19 +324,25 @@ export async function runWorkflowA(
         laborScore
       },
       evidenceSummary: evidence,
-      strengths: strengths.length > 0 ? strengths : ['Stable local economic base and established commercial infrastructure'],
-      risks: risks.length > 0 ? risks : ['Standard retail operational risks and lease renewal exposure'],
-      confidence: 'HIGH',
+      strengths,
+      risks,
+      confidence: confidenceFromCompleteness(availability.completenessPct),
       coverageReport: {
-        demographicsCoverage: 98.0,
-        incomeCoverage: 96.0,
-        competitorLocationsCoverage: 82.0,
-        commercialRentCoverage: 78.0
-      }
+        demographicsCoverage: Math.round(([pop, growth].filter(value => value !== null).length / 2) * 100),
+        incomeCoverage: income === null ? 0 : 100,
+        competitorLocationsCoverage: 100,
+        commercialRentCoverage: rent === null ? 0 : 100
+      },
+      evidenceMetadata: {
+        ...inputEvidence,
+        opportunityScore: evidenceField('DERIVED', totalScore),
+        estimatedRevenue: evidenceField('DERIVED', null)
+      },
+      availability
     };
   });
 
-  scoredCities.sort((a, b) => b.opportunityScore - a.opportunityScore);
+  scoredCities.sort((a, b) => (b.opportunityScore ?? -1) - (a.opportunityScore ?? -1));
   scoredCities.forEach((c, idx) => { c.rank = idx + 1; });
 
   return scoredCities;
@@ -270,7 +353,7 @@ export async function runWorkflowB(geographyId: string): Promise<WorkflowBRecomm
   const [city] = await sql`
     SELECT 
       g.id, g.name, g.population_2021 as population, g.population_growth_pct as growth_pct,
-      COALESCE(o_inc.value_numeric, 110000) as median_income
+      o_inc.value_numeric as median_income
     FROM geographies g
     LEFT JOIN observations o_inc ON o_inc.geography_id = g.id AND o_inc.metric_id = 'income_median_hh'
     WHERE g.id = ${geographyId};
@@ -282,10 +365,10 @@ export async function runWorkflowB(geographyId: string): Promise<WorkflowBRecomm
   const categories = await sql`
     SELECT 
       bc.id, bc.display_name, bc.naics_code, bc.typical_capex_min, bc.typical_capex_max,
-      COALESCE(rbc.low_annual_revenue, 400000) as low_rev,
-      COALESCE(rbc.median_annual_revenue, 750000) as median_rev,
-      COALESCE(rbc.high_annual_revenue, 1400000) as high_rev,
-      COALESCE(rbc.sde_ebitda_pct, 14.5) as sde_pct,
+      rbc.low_annual_revenue as low_rev,
+      rbc.median_annual_revenue as median_rev,
+      rbc.high_annual_revenue as high_rev,
+      rbc.sde_ebitda_pct as sde_pct,
       COUNT(b.id) as existing_count
     FROM business_categories bc
     LEFT JOIN revenue_benchmark_chains rbc ON rbc.category_id = bc.id AND rbc.geography_id = 'PR_35'
@@ -294,8 +377,8 @@ export async function runWorkflowB(geographyId: string): Promise<WorkflowBRecomm
     ORDER BY bc.display_name;
   `;
 
-  const pop = Number(city.population || 0);
-  const income = Number(city.median_income || 90000);
+  const pop = nullableNumber(city.population);
+  const income = nullableNumber(city.median_income);
 
   // Peer municipal benchmarks per 10k residents across comparable Ontario municipalities
   const peerBenchmarks: Record<string, number> = {
@@ -317,41 +400,50 @@ export async function runWorkflowB(geographyId: string): Promise<WorkflowBRecomm
   };
 
   const recommendations: WorkflowBRecommendation[] = categories.map(c => {
-    const peerBench = peerBenchmarks[c.id] || 2.5;
+    const peerBench = peerBenchmarks[c.id] ?? null;
     const osmCount = Number(c.existing_count);
     const auditedCount = getAuditedSectorCount(geographyId, c.id);
 
     // Count resolution logic:
     // 1. If OSM points exist (> 0), take maximum of OSM and audited count
     // 2. If OSM points are 0, fall back to audited Table 33-10-1097 count if available
-    // 3. If audited count is also unavailable, use baseline scaled to population
+    // 3. If audited count is also unavailable, preserve the count as unavailable.
     const count = osmCount > 0
       ? (auditedCount !== null ? Math.max(osmCount, auditedCount) : osmCount)
-      : (auditedCount !== null ? auditedCount : (pop > 0 ? Math.max(1, Math.round((peerBench * pop) / 10000)) : 0));
+      : auditedCount;
 
-    const countPer10k = pop > 0 ? parseFloat(((count / pop) * 10000).toFixed(2)) : 0;
+    const countPer10k = pop !== null && pop > 0 && count !== null ? parseFloat(((count / pop) * 10000).toFixed(2)) : null;
 
     // Gap Index: Peer Benchmark / Local Density. Higher index (> 1.0) = underserved gap
-    const gapIndex = countPer10k > 0 ? parseFloat((peerBench / countPer10k).toFixed(2)) : 1.0;
+    const gapIndex = countPer10k !== null && countPer10k > 0 && peerBench !== null
+      ? parseFloat((peerBench / countPer10k).toFixed(2))
+      : null;
 
     // Opportunity Score based on Gap, Income, and Demographic fit
-    const incomeMultiplier = Math.min(1.25, income / 100000);
-    const oppScore = Math.min(96, Math.max(45, Math.round((gapIndex * 35 + 30) * incomeMultiplier)));
+    const incomeMultiplier = income === null ? null : Math.min(1.25, income / 100000);
+    const oppScore = gapIndex === null || incomeMultiplier === null
+      ? null
+      : Math.min(96, Math.max(45, Math.round((gapIndex * 35 + 30) * incomeMultiplier)));
 
-    const medianRev = Number(c.median_rev);
-    const sdeMedian = Math.round(medianRev * (Number(c.sde_pct) / 100));
+    const lowRev = nullableNumber(c.low_rev);
+    const medianRev = nullableNumber(c.median_rev);
+    const highRev = nullableNumber(c.high_rev);
+    const sdePct = nullableNumber(c.sde_pct);
+    const sdeMedian = medianRev === null || sdePct === null ? null : Math.round(medianRev * (sdePct / 100));
 
-    let rationale = `${city.name} has ${count} existing establishments (${countPer10k}/10k pop) compared to a peer benchmark of ${peerBench}/10k pop, indicating an opportunity gap index of ${gapIndex}.`;
+    const rationale = count === null || countPer10k === null || peerBench === null || gapIndex === null
+      ? `${city.name} does not have enough competitor-count and benchmark evidence to calculate a market gap.`
+      : `${city.name} has ${count} recorded establishments (${countPer10k}/10k pop) compared to a peer benchmark of ${peerBench}/10k pop, indicating an opportunity gap index of ${gapIndex}.`;
     const drivers: string[] = [];
     const risks: string[] = [];
 
-    if (gapIndex >= 1.2) {
-      drivers.push(`Clear market gap: ${Math.round((peerBench - countPer10k) * (pop / 10000))} additional locations would bring city to peer parity`);
-    } else {
+    if (gapIndex !== null && gapIndex >= 1.2 && peerBench !== null && countPer10k !== null && pop !== null) {
+      drivers.push(`Market gap estimate: ${Math.round((peerBench - countPer10k) * (pop / 10000))} additional locations would bring city to peer parity`);
+    } else if (gapIndex !== null) {
       drivers.push(`Established competitive market with stable recurring patron demand`);
     }
 
-    if (income > 110000) {
+    if (income !== null && income > 110000) {
       drivers.push(`High household disposable income supporting premium pricing and discretionary expenditure`);
     }
 
@@ -361,17 +453,28 @@ export async function runWorkflowB(geographyId: string): Promise<WorkflowBRecomm
       drivers.push(`Strong delivery and takeout spending supported by suburban single-family household clusters`);
     }
 
-    risks.push(`Commercial leasing competition along major retail corridors`);
-    if (countPer10k > peerBench) {
+    if (countPer10k !== null && peerBench !== null && countPer10k > peerBench) {
       risks.push(`Existing competitor density requires strong culinary or convenience differentiation`);
     }
 
-    const successProb: 'VERY_HIGH' | 'HIGH' | 'MODERATE' | 'SELECTIVE' =
-      oppScore >= 88 ? 'VERY_HIGH' :
-      oppScore >= 75 ? 'HIGH' :
-      oppScore >= 60 ? 'MODERATE' : 'SELECTIVE';
-    const demandScore = pop > 0 ? Math.min(100, Math.round(Math.min(1.2, pop / 100000) * 75 + 20)) : 50;
-    const compScore = Math.max(10, Math.min(100, Math.round((2.5 / (gapIndex || 1)) * 40)));
+    const demandScore = pop !== null && pop > 0 ? Math.min(100, Math.round(Math.min(1.2, pop / 100000) * 75 + 20)) : null;
+    const compScore = gapIndex === null ? null : Math.max(10, Math.min(100, Math.round((2.5 / gapIndex) * 40)));
+    const capexMin = nullableNumber(c.typical_capex_min);
+    const capexMax = nullableNumber(c.typical_capex_max);
+    const countClassification = auditedCount !== null && auditedCount >= osmCount ? 'AUDITED' : 'OBSERVED';
+    const inputEvidence = {
+      population: evidenceField('OBSERVED', pop),
+      medianHouseholdIncome: evidenceField('OBSERVED', income),
+      existingCount: evidenceField(countClassification, count),
+      peerBenchmarkPer10kPop: evidenceField('BENCHMARK', peerBench),
+      typicalInvestmentMin: evidenceField('OBSERVED', capexMin),
+      typicalInvestmentMax: evidenceField('OBSERVED', capexMax),
+      revenueLow: evidenceField('BENCHMARK', lowRev),
+      revenueMedian: evidenceField('BENCHMARK', medianRev),
+      revenueHigh: evidenceField('BENCHMARK', highRev),
+      sdePct: evidenceField('BENCHMARK', sdePct)
+    };
+    const availability = summarizeAvailability(inputEvidence);
 
     return {
       categoryId: c.id,
@@ -386,29 +489,38 @@ export async function runWorkflowB(geographyId: string): Promise<WorkflowBRecomm
       opportunityScore: oppScore,
       demandScore,
       competitionScore: compScore,
-      successProbability: successProb,
+      successProbability: null,
       typicalInvestmentCAD: {
-        min: Number(c.typical_capex_min),
-        max: Number(c.typical_capex_max)
+        min: capexMin,
+        max: capexMax
       },
       estimatedAnnualRevenueCAD: {
-        low: Number(c.low_rev),
+        low: lowRev,
         median: medianRev,
-        high: Number(c.high_rev),
+        high: highRev,
         sdeMedian
       },
       revenueBenchmarkRange: {
-        low: Number(c.low_rev),
+        low: lowRev,
         median: medianRev,
-        high: Number(c.high_rev),
+        high: highRev,
         sdeMedian
       },
       rationale,
       keyDrivers: drivers,
       potentialRisks: risks,
-      confidence: 'HIGH'
+      confidence: confidenceFromCompleteness(availability.completenessPct),
+      evidenceMetadata: {
+        ...inputEvidence,
+        gapIndex: evidenceField('DERIVED', gapIndex),
+        opportunityScore: evidenceField('DERIVED', oppScore),
+        successProbability: evidenceField('DERIVED', null)
+      },
+      availability
     };
   });
 
-  return recommendations.sort((a, b) => b.opportunityScore - a.opportunityScore);
+  return recommendations.sort((a, b) =>
+    ((b.opportunityScore ?? -1) - (a.opportunityScore ?? -1)) || a.categoryId.localeCompare(b.categoryId)
+  );
 }

@@ -22,6 +22,8 @@
       "municipality_finances": "Finances municipales",
       "city_rankings": "Classement des villes",
       "opportunity_lab": "Laboratoire d'opportunités",
+      "launch_readiness": "Préparation au lancement",
+      "venture_capital": "Capital de risque et investisseurs",
       "competition": "Analyse de la concurrence",
       "business_listings": "Ventes et inscriptions",
       "outliers": "Anomalies statistiques",
@@ -31,7 +33,8 @@
     "badges": {
       "ai_engine": "Moteur IA",
       "multi_city": "Multi-villes",
-      "z_score": "Score-Z"
+      "z_score": "Score-Z",
+      "vc_graph": "Graphe CR"
     }
   },
   "actions": {

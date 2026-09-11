@@ -57,7 +57,7 @@ const getIconForCategory = (catId: string): string => {
   return iconMap[catId] || '🏢';
 };
 
-export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, onSelectCity }) => {
+export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId = 'CSD_burlington', onSelectCity }) => {
   const [workflow, setWorkflow] = useState<'VISUAL' | 'B' | 'A'>('VISUAL'); // Default to Visual Picture & Keyword Mapping Matrix
   
   // Workflow A State ("I know the business")
@@ -153,9 +153,9 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
 
   // Feasibility Dossier Modal State (Amendment #8 & T-008)
   const [isDossierOpen, setIsDossierOpen] = useState<boolean>(false);
-  const [dossierCityId, setDossierCityId] = useState<string>(cityId);
+  const [dossierCityId, setDossierCityId] = useState<string>(cityId || 'CSD_burlington');
   const [dossierCategoryId, setDossierCategoryId] = useState<string>(selectedCategory || '');
-  const [dossierCityName, setDossierCityName] = useState<string>(cityId.replace('CSD_', ''));
+  const [dossierCityName, setDossierCityName] = useState<string>((cityId || 'CSD_burlington').replace('CSD_', ''));
 
   // Sync selectedCityId with prop
   useEffect(() => {
@@ -1552,6 +1552,33 @@ export const OpportunityLabView: React.FC<OpportunityLabViewProps> = ({ cityId, 
                   </div>
                 </>
               )}
+
+              {/* Venture & Growth Capital Synergy Card */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/60 to-purple-950/40 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shrink-0">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-white">Venture & Investor Capital Availability</h5>
+                    <p className="text-[11px] text-slate-300">
+                      Active Tier-1 institutional funds (Inovia, Georgian, Sequoia, a16z) deploy growth capital for tech & scale-up opportunities in this corridor.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDetail(null);
+                    window.history.pushState(null, '', '/venture-capital');
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                  }}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold whitespace-nowrap transition-colors shadow-sm flex items-center gap-1.5 shrink-0"
+                >
+                  <span>Explore VC Matches</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Footer */}

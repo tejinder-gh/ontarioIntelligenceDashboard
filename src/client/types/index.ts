@@ -13,6 +13,8 @@ export type ActiveTab =
   | 'business_listings'
   | 'outliers'
   | 'data_explorer'
+  | 'launch_readiness'
+  | 'venture_capital'
   | 'methodology_sources';
 
 export type MunicipalTier = 'SINGLE_TIER' | 'UPPER_TIER' | 'LOWER_TIER' | 'UNORGANIZED' | null;

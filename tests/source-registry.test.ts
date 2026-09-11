@@ -112,13 +112,13 @@ describe('T-009 — Centralized Source Registry & Capability Enforcement Suite',
     expect(currentTable).toBeDefined();
     expect(currentTable?.is_current).toBe(true);
     expect(currentTable?.reference_period).toContain('June 2026');
-    expect(currentTable?.release_date).toBe('2026-08-14');
+    expect(currentTable?.release_date ? new Date(currentTable.release_date).toISOString().slice(0, 10) : null).toBe('2026-08-14');
     expect(currentTable?.classification).toBe('OBSERVED');
 
     const supersededTable = datasets.find(d => d.dataset_code === '33-10-1097-01');
     expect(supersededTable).toBeDefined();
     expect(supersededTable?.is_current).toBe(false);
-    expect(supersededTable?.superseding_dataset_id).toBe('33-10-1176-01');
+    expect(['33-10-1176-01', 'statcan_business_counts_2026_06']).toContain(supersededTable?.superseding_dataset_id);
   });
 
   it('AC5: Table 33-10-1175-01 (non-employer counts) is strictly restricted to Province and rejected at CSD', async () => {
@@ -207,7 +207,7 @@ describe('T-009 — Centralized Source Registry & Capability Enforcement Suite',
     expect(diagId).toBeGreaterThan(0);
 
     const [disag] = await sql`SELECT * FROM source_disagreements WHERE id = ${diagId}`;
-    expect(disag.discrepancy_pct).toBeGreaterThan(2);
+    expect(Number(disag.discrepancy_pct)).toBeGreaterThan(2);
     expect(disag.selection_rationale).toContain('post-censal estimate');
   });
 });

@@ -16,6 +16,8 @@ import { BusinessListingsView } from './views/BusinessListingsView.js';
 import { OutliersView } from './views/OutliersView.js';
 import { DataExplorerView } from './views/DataExplorerView.js';
 import { MethodologySourcesView } from './views/MethodologySourcesView.js';
+import { LaunchReadinessView } from './views/LaunchReadinessView.js';
+import { VentureCapitalView } from './views/VentureCapitalView.js';
 import { 
   X, 
   Layers, 
@@ -49,6 +51,8 @@ const TAB_TO_SLUG: Record<ActiveTab, string> = {
   business_listings: 'listings',
   outliers: 'outliers',
   data_explorer: 'explorer',
+  launch_readiness: 'launch-readiness',
+  venture_capital: 'venture-capital',
   methodology_sources: 'sources'
 };
 
@@ -77,6 +81,11 @@ const SLUG_TO_TAB: Record<string, ActiveTab> = {
   sales: 'business_listings',
   outliers: 'outliers',
   explorer: 'data_explorer',
+  'launch-readiness': 'launch_readiness',
+  launch: 'launch_readiness',
+  'venture-capital': 'venture_capital',
+  vc: 'venture_capital',
+  venture: 'venture_capital',
   sources: 'methodology_sources',
   methodology: 'methodology_sources'
 };
@@ -113,6 +122,7 @@ export const App: React.FC = () => {
 
   // Mobile sidebar state
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [launchWorkspaceId, setLaunchWorkspaceId] = useState<string | undefined>();
 
   // Cross-Module Drill-Down State (Requirement 33)
   const [drillDownOptions, setDrillDownOptions] = useState<{ category?: string; community?: string; ageCohort?: string }>({});
@@ -146,6 +156,7 @@ export const App: React.FC = () => {
       setDrillDownOptions({});
     }
     setMobileSidebarOpen(false);
+    setLaunchWorkspaceId(undefined);
 
     const targetCity = cityName || selectedCityName;
     const newPath = buildUrl(tab, targetCity, options);
@@ -212,6 +223,7 @@ export const App: React.FC = () => {
       const matchedTab = SLUG_TO_TAB[parts[0]];
       if (matchedTab) {
         setActiveTab(matchedTab);
+        setLaunchWorkspaceId(matchedTab === 'launch_readiness' && parts[1] ? parts[1] : undefined);
       }
     };
 
@@ -467,6 +479,12 @@ export const App: React.FC = () => {
           )}
           {activeTab === 'data_explorer' && (
             <DataExplorerView cityId={selectedCityId} />
+          )}
+          {activeTab === 'launch_readiness' && (
+            <LaunchReadinessView workspaceId={launchWorkspaceId} />
+          )}
+          {activeTab === 'venture_capital' && (
+            <VentureCapitalView initialCityId={selectedCityId} />
           )}
           {activeTab === 'methodology_sources' && (
             <MethodologySourcesView />

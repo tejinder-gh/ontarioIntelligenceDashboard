@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { launchRouter } from './launch-routes.js';
+import { vcRouter } from './vc-routes.js';
 import { sql, testConnection } from '../db/index.js';
 import { runWorkflowA, runWorkflowB } from '../analytics/opportunity-engine.js';
 import { computeCitySimilarity, type SimilarityWeights } from '../analytics/similarity.js';
@@ -20,6 +22,8 @@ import {
 } from '../ingestion/capability-engine.js';
 
 export const apiRouter = Router();
+apiRouter.use('/launch', launchRouter);
+apiRouter.use('/vc', vcRouter);
 
 // 0. Production Health & Liveness Probe (Cloud / Kubernetes readiness)
 apiRouter.get('/health', async (req, res) => {
@@ -2065,50 +2069,36 @@ apiRouter.get('/dossier/:cityId/:categoryId', async (req, res) => {
 
     // 3. Observations / Demographics & Incomes
     const obsRows = await sql`
-      SELECT metric_id, value_numeric, unit, reference_year, source_id, dataset_id, vintage_date
+      SELECT metric_id, value_numeric, unit, reference_year, source_id, dataset_id, vintage_date,
+             metric_classification
       FROM observations
       WHERE geography_id = ${geo.id};
     `;
-    const obsMap: Record<string, number> = {};
+    const obsMap: Record<string, any> = {};
     for (const r of obsRows) {
-      obsMap[r.metric_id] = Number(r.value_numeric);
+      obsMap[r.metric_id] = r;
     }
 
     // 4. Commercial Real Estate
     const creRows = await sql`
-      SELECT property_type, net_rent_sqft_cad, tmi_additional_rent_sqft_cad, gross_rent_sqft_cad, vacancy_rate_pct
+      SELECT property_type, net_rent_sqft_cad, tmi_additional_rent_sqft_cad, gross_rent_sqft_cad,
+             vacancy_rate_pct, reference_period, source_report
       FROM commercial_real_estate
       WHERE geography_id = ${geo.id};
     `;
 
-    // 5. Business Counts (Table 33-10-1097-01)
-    const cityCounts = businessCountsData.find(b => b.geoId.toLowerCase() === geo.id.toLowerCase());
-    let counts: any = null;
-    if (cityCounts) {
-      const sb = (cityCounts.sizeBands || {}) as Record<string, number>;
-      counts = {
-        total_establishments: cityCounts.totalBusinesses,
-        without_employees: 0,
-        emp_1_to_4: sb['size_1_4'] || 0,
-        emp_5_to_9: sb['size_5_9'] || 0,
-        emp_10_to_19: sb['size_10_19'] || 0,
-        emp_20_to_49: sb['size_20_49'] || 0,
-        emp_50_to_99: sb['size_50_99'] || 0,
-        emp_100_plus: sb['size_100_plus'] || 0
-      };
-    }
-
-    // 6. Unit Economics / Revenue Chain (StatCan / Industry Filings)
+    // 5. Unit Economics / Revenue Chain (StatCan / Industry Filings)
     const [chain] = await sql`
       SELECT low_annual_revenue, median_annual_revenue, avg_annual_revenue, high_annual_revenue,
-             cogs_pct, labor_pct, rent_pct, sde_ebitda_pct, assumptions, confidence
+             cogs_pct, labor_pct, rent_pct, sde_ebitda_pct, assumptions, confidence,
+             source_dataset, reference_year, adjustment_methodology
       FROM revenue_benchmark_chains
       WHERE category_id = ${category.id} AND (geography_id = ${geo.id} OR geography_id = 'PR_35')
       ORDER BY (geography_id = ${geo.id}) DESC
       LIMIT 1;
     `;
 
-    // 7. Mapped Businesses & Listings
+    // 6. Mapped Businesses & Listings
     const mappedBusinesses = await sql`
       SELECT id, name, address, latitude, longitude, is_chain, brand_name
       FROM businesses
@@ -2121,12 +2111,141 @@ apiRouter.get('/dossier/:cityId/:categoryId', async (req, res) => {
       WHERE geography_id = ${geo.id} AND category_id = ${category.id} AND status = 'ACTIVE';
     `;
 
-    // 8. Gap index calculation
-    const pop = Number(geo.population_2021) || 50000;
-    const competitorsCount = mappedBusinesses.length || (counts ? Number(counts.total_establishments) : 3);
-    const establishmentsPer10k = (competitorsCount / pop) * 10000;
-    const provincialBenchmarkPer10k = 3.2; // Typical Ontario norm
-    const gapIndex = Number((provincialBenchmarkPer10k / Math.max(establishmentsPer10k, 0.5)).toFixed(2));
+    const numericOrNull = (value: unknown): number | null => {
+      if (value === null || value === undefined || value === '') return null;
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    };
+    const observedValue = (metricId: string) => numericOrNull(obsMap[metricId]?.value_numeric);
+    const evidenceClassification = (classification: unknown): 'observed' | 'benchmark' | 'modelled' | 'unavailable' => {
+      const normalized = String(classification || '').toUpperCase();
+      if (normalized === 'BENCHMARK') return 'benchmark';
+      if (normalized === 'DERIVED' || normalized === 'MODELED' || normalized === 'MODELLED') return 'modelled';
+      return normalized === 'OBSERVED' ? 'observed' : 'unavailable';
+    };
+    const unavailableEvidence = () => ({ classification: 'unavailable' as const, source: null, assumptions: [] as string[] });
+    const observationEvidence = (metricId: string) => {
+      const observation = obsMap[metricId];
+      if (!observation || observedValue(metricId) === null) return unavailableEvidence();
+      return {
+        classification: evidenceClassification(observation.metric_classification),
+        source: observation.dataset_id ? String(observation.dataset_id) : null,
+        assumptions: [] as string[]
+      };
+    };
+    const fieldEvidence = (value: unknown, source: string) => numericOrNull(value) === null
+      ? unavailableEvidence()
+      : { classification: 'observed' as const, source, assumptions: [] as string[] };
+
+    const population = numericOrNull(geo.population_2021);
+    const populationGrowth = numericOrNull(geo.population_growth_pct);
+    const businessCountObservation = obsMap['businesses_total_counts'];
+    const totalEstablishments = observedValue('businesses_total_counts');
+    const counts = totalEstablishments === null ? null : {
+      total_establishments: totalEstablishments,
+      without_employees: null,
+      emp_1_to_4: null,
+      emp_5_to_9: null,
+      emp_10_to_19: null,
+      emp_20_to_49: null,
+      emp_50_to_99: null,
+      emp_100_plus: null
+    };
+
+    // This density is a transparent calculation from mapped records, not a claim about
+    // the complete market. No gap or opportunity conclusion is possible without a sourced benchmark.
+    const establishmentsPer10k = population && population > 0
+      ? Number(((mappedBusinesses.length / population) * 10000).toFixed(2))
+      : null;
+    const provincialBenchmarkPer10k = null;
+    const gapIndex = null;
+
+    const evidenceMap: Record<string, {
+      classification: 'observed' | 'benchmark' | 'modelled' | 'unavailable';
+      source: string | null;
+      assumptions: string[];
+    }> = {
+      'demographics.population': fieldEvidence(geo.population_2021, 'geographies.population_2021'),
+      'demographics.populationGrowth5Year': fieldEvidence(geo.population_growth_pct, 'geographies.population_growth_pct'),
+      'demographics.medianAge': observationEvidence('age_median'),
+      'demographics.medianHouseholdIncome': observationEvidence('income_median_hh'),
+      'demographics.averageHouseholdIncome': observationEvidence('income_average_hh'),
+      'demographics.medianAfterTaxIncome': observationEvidence('income_after_tax_median_hh'),
+      'demographics.medianMonthlyRent': observationEvidence('shelter_cost_median_rent'),
+      'demographics.averageHomeValue': observationEvidence('dwelling_value_average'),
+      'demographics.laborParticipationRate': observationEvidence('labor_participation_rate'),
+      'demographics.unemploymentRate': observationEvidence('labor_unemployment_rate'),
+      commercialRealEstate: creRows.length > 0
+        ? {
+            classification: 'benchmark',
+            source: [...new Set(creRows.map(row => row.source_report).filter(Boolean).map(String))].join('; ') || null,
+            assumptions: []
+          }
+        : unavailableEvidence(),
+      'businessCountsTable33.total_establishments': totalEstablishments === null
+        ? unavailableEvidence()
+        : {
+            classification: evidenceClassification(businessCountObservation?.metric_classification),
+            source: businessCountObservation?.dataset_id ? String(businessCountObservation.dataset_id) : null,
+            assumptions: []
+          },
+      'businessCountsTable33.employee_size_bands': unavailableEvidence(),
+      unitEconomics: chain
+        ? {
+            classification: 'benchmark',
+            source: chain.source_dataset ? String(chain.source_dataset) : null,
+            assumptions: chain.assumptions ? [String(chain.assumptions)] : []
+          }
+        : unavailableEvidence(),
+      'competitiveLandscape.mappedCompetitorsCount': {
+        classification: 'observed',
+        source: 'businesses',
+        assumptions: []
+      },
+      'competitiveLandscape.activeForSaleListings': {
+        classification: 'observed',
+        source: 'business_listings',
+        assumptions: []
+      },
+      'competitiveLandscape.establishmentsPer10k': establishmentsPer10k === null
+        ? unavailableEvidence()
+        : {
+            classification: 'modelled',
+            source: 'businesses; geographies.population_2021',
+            assumptions: ['Mapped business records are the numerator and may not represent the complete market.']
+          },
+      'competitiveLandscape.provincialNormPer10k': unavailableEvidence(),
+      'competitiveLandscape.gapIndex': unavailableEvidence(),
+      'competitiveLandscape.opportunityTier': unavailableEvidence()
+    };
+
+    const citations = [
+      ...(population !== null || populationGrowth !== null ? [{
+        source: 'Statistics Canada',
+        product: '2021 Census of Population',
+        catalogue: '98-401-X2021001',
+        referencePeriod: '2021 Quinquennial Census'
+      }] : []),
+      ...[...new Map(obsRows
+        .filter(row => row.dataset_id)
+        .map(row => [String(row.dataset_id), {
+          source: row.source_id ? String(row.source_id) : 'Recorded observation',
+          product: String(row.dataset_id),
+          referencePeriod: row.reference_year ? String(row.reference_year) : null
+        }])).values()],
+      ...[...new Map(creRows
+        .filter(row => row.source_report)
+        .map(row => [String(row.source_report), {
+          source: String(row.source_report),
+          product: 'Commercial real estate benchmark',
+          referencePeriod: row.reference_period ? String(row.reference_period) : null
+        }])).values()],
+      ...(chain ? [{
+        source: chain.source_dataset ? String(chain.source_dataset) : 'Recorded benchmark chain',
+        product: 'Revenue benchmark chain',
+        referencePeriod: chain.reference_year ? String(chain.reference_year) : null
+      }] : [])
+    ];
 
     const dossier = {
       generatedAt: new Date().toISOString(),
@@ -2135,55 +2254,20 @@ apiRouter.get('/dossier/:cityId/:categoryId', async (req, res) => {
       geography: geo,
       category,
       demographics: {
-        population: Number(geo.population_2021),
-        populationGrowth5Year: Number(geo.population_growth_pct),
-        medianAge: obsMap['age_median'] || 43.6,
-        medianHouseholdIncome: obsMap['income_median_hh'] || 116000,
-        averageHouseholdIncome: obsMap['income_average_hh'] || 142800,
-        medianAfterTaxIncome: obsMap['income_after_tax_median_hh'] || 98000,
-        medianMonthlyRent: obsMap['shelter_cost_median_rent'] || 1650,
-        averageHomeValue: obsMap['dwelling_value_average'] || 1058000,
-        laborParticipationRate: obsMap['labor_participation_rate'] || 66.8,
-        unemploymentRate: obsMap['labor_unemployment_rate'] || 6.6,
+        population,
+        populationGrowth5Year: populationGrowth,
+        medianAge: observedValue('age_median'),
+        medianHouseholdIncome: observedValue('income_median_hh'),
+        averageHouseholdIncome: observedValue('income_average_hh'),
+        medianAfterTaxIncome: observedValue('income_after_tax_median_hh'),
+        medianMonthlyRent: observedValue('shelter_cost_median_rent'),
+        averageHomeValue: observedValue('dwelling_value_average'),
+        laborParticipationRate: observedValue('labor_participation_rate'),
+        unemploymentRate: observedValue('labor_unemployment_rate'),
       },
-      commercialRealEstate: creRows.length > 0 ? creRows : [
-        {
-          property_type: 'RETAIL_STRIP_PLAZA',
-          net_rent_sqft_cad: 32.50,
-          tmi_additional_rent_sqft_cad: 12.50,
-          gross_rent_sqft_cad: 45.00,
-          vacancy_rate_pct: 4.2
-        },
-        {
-          property_type: 'RETAIL_STREETFRONT',
-          net_rent_sqft_cad: 38.00,
-          tmi_additional_rent_sqft_cad: 14.00,
-          gross_rent_sqft_cad: 52.00,
-          vacancy_rate_pct: 5.1
-        }
-      ],
-      businessCountsTable33: counts || {
-        total_establishments: competitorsCount,
-        without_employees: 1,
-        emp_1_to_4: Math.max(1, Math.round(competitorsCount * 0.4)),
-        emp_5_to_9: Math.max(1, Math.round(competitorsCount * 0.3)),
-        emp_10_to_19: Math.max(1, Math.round(competitorsCount * 0.2)),
-        emp_20_to_49: 1,
-        emp_50_to_99: 0,
-        emp_100_plus: 0
-      },
-      unitEconomics: chain || {
-        low_annual_revenue: 380000,
-        median_annual_revenue: 550000,
-        avg_annual_revenue: 580000,
-        high_annual_revenue: 850000,
-        cogs_pct: 30.0,
-        labor_pct: 28.0,
-        rent_pct: 9.0,
-        sde_ebitda_pct: 18.5,
-        assumptions: 'Standard Canadian QSR franchise operational benchmark',
-        confidence: 'HIGH'
-      },
+      commercialRealEstate: creRows,
+      businessCountsTable33: counts,
+      unitEconomics: chain || null,
       competitiveLandscape: {
         mappedCompetitorsCount: mappedBusinesses.length,
         competitors: mappedBusinesses,
@@ -2191,28 +2275,10 @@ apiRouter.get('/dossier/:cityId/:categoryId', async (req, res) => {
         establishmentsPer10k,
         provincialNormPer10k: provincialBenchmarkPer10k,
         gapIndex,
-        opportunityTier: gapIndex >= 1.5 ? 'HIGH_EXPANSION_OPPORTUNITY' : gapIndex >= 1.0 ? 'BALANCED_MARKET' : 'SATURATED_COMPETITIVE'
+        opportunityTier: null
       },
-      citations: [
-        {
-          source: 'Statistics Canada',
-          product: '2021 Census of Population',
-          catalogue: '98-401-X2021001',
-          referencePeriod: '2021 Quinquennial Census'
-        },
-        {
-          source: 'Statistics Canada',
-          product: 'Canadian Business Counts, with employees',
-          catalogue: 'Table 33-10-1097-01',
-          referencePeriod: 'December 2025'
-        },
-        {
-          source: 'Ministry of Municipal Affairs and Housing (MMAH)',
-          product: 'Financial Information Return (FIR)',
-          schedules: 'Schedule 10 & 40',
-          referencePeriod: '2022-2024'
-        }
-      ]
+      evidenceMap,
+      citations
     };
 
     res.json({ success: true, data: dossier });
@@ -2339,4 +2405,3 @@ apiRouter.post('/alerts/notifications/deliver', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-

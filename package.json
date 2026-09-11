@@ -10,6 +10,7 @@
     "start": "bun run src/server/index.ts",
     "data:bootstrap": "bun run src/ingestion/bootstrap.ts",
     "data:sync": "bun run src/ingestion/sync.ts",
+    "data:vc:ingest": "bun run scripts/ingest-vc-graph.ts",
     "test": "vitest run"
   },
   "dependencies": {

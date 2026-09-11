@@ -159,6 +159,23 @@ Navigate to `http://localhost:3000`.
 
 ---
 
+## 🦄 Venture Capital & Investor Intelligence Graph
+
+The platform includes a dedicated **Venture Capital & Investor Intelligence Graph** operating on the PostgreSQL `vc` schema:
+
+* **Tier-1 Funds & Managing Partners**: Tracks $175B+ in institutional AUM across Canadian champions (Inovia Capital, Georgian, Version One) and US co-investor syndicates (Sequoia, a16z, Founders Fund, Benchmark, Accel, Bessemer).
+* **Scale-Up Deals & Valuations**: Tracks $540B+ in portfolio valuations and financing rounds (Cohere $500M Series D in Toronto, OpenAI $6.6B, Stripe $65B, Databricks $43B).
+* **Multi-Factor Investor Fit Matcher**: Dynamic compatibility engine evaluating sector taxonomy hierarchy, financing stage, check size envelope, and geographic mandates (0–100 match score with explainable rationales).
+* **Syndication Network & Institutional LPs**: Traces public pension & sovereign commitments (CDPQ $100M commitment to Inovia Growth III, BDC Capital) and co-investment syndication ties.
+* **REST APIs (`/api/vc/*`)**:
+  * `GET /api/vc/summary` — Macro ecosystem KPIs and distributions.
+  * `GET /api/vc/firms` — Directory filterable by stage, sector, and geography.
+  * `GET /api/vc/deals` — Financing rounds with post-money valuations and lead investors.
+  * `POST /api/vc/fit-score` — Real-time founder investor fit scoring.
+  * `GET /api/vc/syndication` — Co-investment ties and LP commitments.
+
+---
+
 ## 🐳 Containerized Production Deployment (Docker)
 
 A multi-stage production [`Dockerfile`](./Dockerfile) is provided:

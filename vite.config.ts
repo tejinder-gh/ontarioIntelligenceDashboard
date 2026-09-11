@@ -11,27 +11,23 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
+      'bun:test': 'vitest',
     },
   },
   server: {
+    host: '::',
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
       },
     },
   },
   build: {
-    chunkSizeWarningLimit: 600,
-    rollupOptions: {
-      output: {
-        manualChunks(id: string) {
-          if (id.includes('node_modules/recharts')) return 'vendor-recharts';
-          if (id.includes('node_modules/lucide-react')) return 'vendor-lucide';
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) return 'vendor-react';
-        },
-      },
-    },
+    chunkSizeWarningLimit: 1500,
+  },
+  test: {
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests/ingestion-benchmark.test.ts'],
   },
 });

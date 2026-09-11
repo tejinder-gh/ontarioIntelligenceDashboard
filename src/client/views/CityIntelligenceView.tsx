@@ -30,6 +30,7 @@ import { GasPriceDeltaCard } from '../components/GasPriceDeltaCard.js';
 import { ComparableCitiesCard } from '../components/ComparableCitiesCard.js';
 import { MunicipalPlanningCard } from '../components/MunicipalPlanningCard.js';
 import { DataCoverageCard } from '../components/DataCoverageCard.js';
+import { RegionalVCCard } from '../components/RegionalVCCard.js';
 
 interface CityIntelligenceProps {
   cityId: string;
@@ -579,6 +580,12 @@ export const CityIntelligenceView: React.FC<CityIntelligenceProps> = ({ cityId, 
         cityId={cityId} 
         cityName={geo.name} 
         onInspectData={setContributingData} 
+      />
+
+      {/* Regional Venture Capital & Innovation Corridor Card */}
+      <RegionalVCCard 
+        cityId={cityId} 
+        cityName={geo.name} 
       />
 
       {/* Feature Outliers Section */}

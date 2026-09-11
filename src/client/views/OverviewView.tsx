@@ -25,6 +25,7 @@ import { HousingAndRentalCard } from '../components/HousingAndRentalCard.js';
 import { GasPriceDeltaCard } from '../components/GasPriceDeltaCard.js';
 import { ComparableCitiesCard } from '../components/ComparableCitiesCard.js';
 import { DataCoverageCard } from '../components/DataCoverageCard.js';
+import { RegionalVCCard } from '../components/RegionalVCCard.js';
 
 interface OverviewViewProps {
   cityId: string;
@@ -1224,6 +1225,13 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
         onInspectData={setContributingData} 
       />
 
+      {/* Regional Venture Capital & Innovation Corridor Card */}
+      <RegionalVCCard 
+        cityId={cityId} 
+        cityName={geo.name} 
+        onNavigateToVC={() => onNavigateTab('venture_capital')} 
+      />
+
       {/* Interactive Cross-Module Intelligence Drill-Down Hub (Requirement 33) */}
       <div className="glass-panel p-5 rounded-xl border border-indigo-900/50 bg-gradient-to-r from-slate-950 via-indigo-950/20 to-slate-950 shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -1238,7 +1246,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ cityId, onNavigateTa
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           {/* 1. 25-34 Population -> Age Profile */}
           <button
             type="button"

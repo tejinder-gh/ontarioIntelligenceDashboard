@@ -22,6 +22,8 @@
       "municipality_finances": "Municipality Finances",
       "city_rankings": "City Rankings League",
       "opportunity_lab": "Opportunity Lab",
+      "launch_readiness": "Launch Readiness",
+      "venture_capital": "Venture & Investor Capital",
       "competition": "Competition Analysis",
       "business_listings": "Sales & Listings",
       "outliers": "Statistical Outliers",
@@ -31,7 +33,8 @@
     "badges": {
       "ai_engine": "AI Engine",
       "multi_city": "Multi-City",
-      "z_score": "Z-Score"
+      "z_score": "Z-Score",
+      "vc_graph": "VC Graph"
     }
   },
   "actions": {

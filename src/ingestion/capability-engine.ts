@@ -19,7 +19,7 @@ export async function checkDatasetCapability(
   requestedResolution?: string
 ): Promise<CapabilityCheckResult> {
   // 1. Resolve dataset or source
-  const [ds] = await sql`
+  let [ds] = await sql`
     SELECT d.id as dataset_id, d.dataset_code, d.name as dataset_name, d.source_id,
            s.friendly_code as source_friendly_code, s.name as source_name
     FROM datasets d
@@ -32,6 +32,25 @@ export async function checkDatasetCapability(
   `;
 
   if (!ds) {
+    const [src] = await sql`
+      SELECT id as source_id, friendly_code as source_friendly_code, name as source_name
+      FROM sources
+      WHERE id = ${datasetCodeOrId} OR friendly_code = ${datasetCodeOrId}
+      LIMIT 1;
+    `;
+    if (src) {
+      ds = {
+        dataset_id: null,
+        dataset_code: null,
+        dataset_name: src.source_name,
+        source_id: src.source_id,
+        source_friendly_code: src.source_friendly_code,
+        source_name: src.source_name
+      };
+    }
+  }
+
+  if (!ds) {
     return {
       authorized: false,
       allowed: false,
@@ -40,10 +59,15 @@ export async function checkDatasetCapability(
   }
 
   // 2. Check granular dataset_capabilities table first
-  const [cap] = await sql`
+  const [cap] = ds.dataset_id ? await sql`
     SELECT is_provided, supported_resolutions, notes, constraints
     FROM dataset_capabilities
     WHERE dataset_id = ${ds.dataset_id} AND attribute_group = ${attributeGroup}
+    LIMIT 1;
+  ` : await sql`
+    SELECT is_provided, supported_resolutions, notes, constraints
+    FROM dataset_capabilities
+    WHERE source_id = ${ds.source_id} AND attribute_group = ${attributeGroup}
     LIMIT 1;
   `;
 
@@ -63,7 +87,7 @@ export async function checkDatasetCapability(
         return {
           authorized: false,
           allowed: false,
-          reason: `Requested resolution '${requestedResolution}' is not supported for '${attributeGroup}' in '${ds.dataset_name}'. Supported: ${cap.supported_resolutions.join(', ')}.`,
+          reason: `Requested resolution '${requestedResolution}' is prohibited and not supported for '${attributeGroup}' in '${ds.dataset_name}'. Supported: ${cap.supported_resolutions.join(', ')}.`,
           closestResolution: cap.supported_resolutions[0],
           fallbackBenchmark: cap.constraints || undefined,
           fallbackBenchmarkCode: cap.constraints || undefined
@@ -215,7 +239,7 @@ export async function getDetailedProvenance(metricId: string, geographyId: strin
       o.revision_number,
       o.is_superseded,
       s.id as source_id,
-      COALESCE(s.friendly_code, 'STATCAN') as source_friendly_code,
+      COALESCE(ds_s.friendly_code, s.friendly_code, 'STATCAN') as source_friendly_code,
       s.name as source_name,
       s.organization_type,
       COALESCE(d.dataset_code, s.official_dataset_id) as official_dataset_id,
@@ -238,6 +262,7 @@ export async function getDetailedProvenance(metricId: string, geographyId: strin
     JOIN metrics_definitions m ON m.id = o.metric_id
     JOIN sources s ON s.id = o.source_id
     JOIN datasets d ON d.id = o.dataset_id
+    LEFT JOIN sources ds_s ON ds_s.id = d.source_id
     WHERE o.metric_id = ${metricId} AND o.geography_id = ${geographyId}
     ORDER BY o.is_superseded ASC, o.reference_year DESC
     LIMIT 1;

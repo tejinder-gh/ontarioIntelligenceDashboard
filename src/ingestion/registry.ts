@@ -733,7 +733,8 @@ export async function initializeRegistries(): Promise<void> {
     { sourceId: 'biz_osm', attributeGroup: 'ratings', isAuthorized: false, supportedResolutions: [], notes: 'OSM does not provide ratings or reviews' },
     { sourceId: 'biz_osm', attributeGroup: 'revenues', isAuthorized: false, supportedResolutions: [], notes: 'OSM does not track commercial revenues' },
     { sourceId: 'biz_google', attributeGroup: 'ratings', isAuthorized: true, supportedResolutions: ['CSD'], notes: 'Live ratings and review counts' },
-    { sourceId: 'biz_google', attributeGroup: 'unrestricted_historical_warehouse', isAuthorized: false, supportedResolutions: [], notes: 'Google terms forbid permanent indefinite storage of Places content' }
+    { sourceId: 'biz_google', attributeGroup: 'unrestricted_historical_warehouse', isAuthorized: false, supportedResolutions: [], notes: 'Google terms forbid permanent indefinite storage of Places content' },
+    { sourceId: 'biz_google', attributeGroup: 'place_warehouse', isAuthorized: false, supportedResolutions: [], notes: 'Google Places API terms prohibit permanent warehousing of merchant places without real-time refreshes' }
   ];
 
   for (const cap of capabilities) {
@@ -1297,6 +1298,7 @@ export async function initializeRegistries(): Promise<void> {
         ${ds.updateFrequency}, ${ds.classification}, ${ds.supersedingDatasetId}, ${ds.staleAfterDays}, ${ds.isCurrent}
       )
       ON CONFLICT (id) DO UPDATE SET
+        source_id = EXCLUDED.source_id,
         name = EXCLUDED.name,
         dataset_code = EXCLUDED.dataset_code,
         reference_period = EXCLUDED.reference_period,
@@ -1319,6 +1321,7 @@ export async function initializeRegistries(): Promise<void> {
     { datasetId: 'statcan_census_profile_2021', sourceId: 'dem_cen21', attributeGroup: 'household_income', capabilityName: 'Household Income Distribution', isProvided: true, supportedResolutions: ['PROVINCE', 'CMA', 'CD', 'CSD'], notes: 'Median and average after-tax income distributions' },
     { datasetId: 'statcan_census_profile_2021', sourceId: 'dem_cen21', attributeGroup: 'housing_stock', capabilityName: 'Dwelling Tenure & Structural Stock', isProvided: true, supportedResolutions: ['PROVINCE', 'CMA', 'CD', 'CSD'], notes: 'Owner vs renter tenure and structural dwelling types' },
     { datasetId: 'statcan_census_profile_2021', sourceId: 'dem_cen21', attributeGroup: 'live_competitors', capabilityName: 'Active Merchant Locations', isProvided: false, supportedResolutions: [], notes: 'Statistics Canada Census does not monitor individual merchant addresses or store fronts' },
+    { datasetId: 'statcan_census_profile_2021', sourceId: 'dem_cen21', attributeGroup: 'business_counts', capabilityName: 'Live Business Entity Counts', isProvided: false, supportedResolutions: [], notes: 'Census of Population cannot provide live business entity counts; use Canadian Business Counts (Table 33-10-1176-01)' },
     { datasetId: 'statcan_census_profile_2021', sourceId: 'dem_cen21', attributeGroup: 'gas_prices', capabilityName: 'Current Fuel Pump Prices', isProvided: false, supportedResolutions: [], notes: 'Census profile does not report retail commodities or gasoline pump prices' },
 
     // BUS-CNT-CSD (statcan_business_counts_2026_06)
@@ -1330,7 +1333,8 @@ export async function initializeRegistries(): Promise<void> {
     { datasetId: 'statcan_business_counts_nonemp_2026_06', sourceId: 'bus_cnt_nonemp', attributeGroup: 'household_spending', capabilityName: 'Municipal Observed Non-Employer Counts', isProvided: false, supportedResolutions: [], notes: 'Statistics Canada Table 33-10-1175 is published at Canada/Province only; never allocate to CSD' },
 
     // SPEND-SHS (statcan_household_spending_shs)
-    { datasetId: 'statcan_household_spending_shs', sourceId: 'spend_shs', attributeGroup: 'household_spending', capabilityName: 'Ontario Household Spending Benchmark', isProvided: true, supportedResolutions: ['PROVINCE', 'CMA'], notes: 'Survey of Household Spending averages for food, shelter, recreation, transport' },
+    { datasetId: 'statcan_household_spending_shs', sourceId: 'spend_shs', attributeGroup: 'household_spending', capabilityName: 'Ontario Household Spending Benchmark', isProvided: true, supportedResolutions: ['PROVINCE', 'CMA'], notes: 'Survey of Household Spending averages for food, shelter, recreation, transport', constraints: 'PR_35' },
+    { datasetId: 'statcan_household_spending_shs', sourceId: 'spend_shs', attributeGroup: 'spending_category', capabilityName: 'Spending Category Distributions', isProvided: true, supportedResolutions: ['PROVINCE', 'CMA'], notes: 'Ontario and CMA household expenditure category benchmarks', constraints: 'PR_35' },
     { datasetId: 'statcan_household_spending_shs', sourceId: 'spend_shs', attributeGroup: 'csd_observed_spending', capabilityName: 'Municipal Observed Spending', isProvided: false, supportedResolutions: [], notes: 'SHS survey sample size limits CSD municipal reporting. Localized estimates must be marked MODELED ESTIMATE.' },
 
     // WEALTH-SFS (statcan_financial_security_sfs)
@@ -1340,22 +1344,24 @@ export async function initializeRegistries(): Promise<void> {
     // BIZ-GOOGLE (google_places_api)
     { datasetId: 'osm_business_entities', sourceId: 'biz_osm', attributeGroup: 'business_locations', capabilityName: 'OSM-listed Commercial POIs', isProvided: true, supportedResolutions: ['CSD'], notes: 'OSM-listed business locations; not verified complete active directory' },
     { datasetId: 'osm_business_entities', sourceId: 'biz_osm', attributeGroup: 'revenues', capabilityName: 'Merchant Financial Statements', isProvided: false, supportedResolutions: [], notes: 'OSM does not track commercial revenues or financial disclosures' },
-    { datasetId: 'osm_business_entities', sourceId: 'biz_osm', attributeGroup: 'ratings', capabilityName: 'Customer Ratings', isProvided: false, supportedResolutions: [], notes: 'OSM does not catalogue customer ratings or reviews' }
+    { datasetId: 'osm_business_entities', sourceId: 'biz_osm', attributeGroup: 'ratings', capabilityName: 'Customer Ratings', isProvided: false, supportedResolutions: [], notes: 'OSM does not catalogue customer ratings or reviews' },
+    { datasetId: 'osm_business_entities', sourceId: 'biz_osm', attributeGroup: 'place_warehouse', capabilityName: 'Permanent Place Data Warehousing', isProvided: false, supportedResolutions: [], notes: 'Commercial API terms prohibit permanent warehousing of merchant places without real-time refreshes' }
   ];
 
   for (const cap of datasetCapabilities) {
     await sql`
       INSERT INTO dataset_capabilities (
-        dataset_id, source_id, attribute_group, capability_name, is_provided, supported_resolutions, notes
+        dataset_id, source_id, attribute_group, capability_name, is_provided, supported_resolutions, notes, constraints
       )
       VALUES (
         ${cap.datasetId}, ${cap.sourceId}, ${cap.attributeGroup}, ${cap.capabilityName},
-        ${cap.isProvided}, ${cap.supportedResolutions}, ${cap.notes}
+        ${cap.isProvided}, ${cap.supportedResolutions}, ${cap.notes}, ${(cap as any).constraints || null}
       )
       ON CONFLICT (dataset_id, attribute_group, capability_name) DO UPDATE SET
         is_provided = EXCLUDED.is_provided,
         supported_resolutions = EXCLUDED.supported_resolutions,
-        notes = EXCLUDED.notes;
+        notes = EXCLUDED.notes,
+        constraints = EXCLUDED.constraints;
     `;
   }
 

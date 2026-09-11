@@ -20,7 +20,8 @@ import {
   Sparkles,
   MapPin,
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  TrendingUp
 } from 'lucide-react';
 import { ActiveTab, GeographySummary } from '../types/index.js';
 import { CitySearch } from './CitySearch.js';
@@ -63,6 +64,8 @@ const NAV_CATEGORIES: NavCategory[] = [
     defaultTitle: 'Market Opportunity & Fit',
     items: [
       { id: 'opportunity_lab', defaultLabel: 'Opportunity Lab', icon: <Target className="w-4 h-4" />, badgeKey: 'ai_engine', defaultBadge: 'AI Engine' },
+      { id: 'launch_readiness', defaultLabel: 'Launch Readiness', icon: <ShieldCheck className="w-4 h-4" /> },
+      { id: 'venture_capital', defaultLabel: 'Venture & Investor Capital', icon: <TrendingUp className="w-4 h-4" />, badgeKey: 'vc_graph', defaultBadge: 'VC Graph' },
       { id: 'competition', defaultLabel: 'Competition Analysis', icon: <Compass className="w-4 h-4" /> },
       { id: 'business_listings', defaultLabel: 'Sales & Listings', icon: <FileText className="w-4 h-4" /> }
     ]
