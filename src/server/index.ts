@@ -1,5 +1,6 @@
 import { app } from './app.js';
 import { testConnection, closeDatabase } from '../db/index.js';
+import { startCron, stopCron } from './cron.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -16,10 +17,12 @@ async function startServer() {
     console.log(`  Database Read Path: Persistent PostgreSQL (localhost:5432)`);
     console.log(`  Zero-External-Round-Trip Mode: ACTIVE`);
     console.log(`================================================================`);
+    startCron();
   });
 
   const shutdown = async (signal: string) => {
     console.log(`\nReceived ${signal}. Gracefully closing server and database connections...`);
+    stopCron();
     server.close(async () => {
       await closeDatabase();
       console.log('Server and database pool cleanly closed.');

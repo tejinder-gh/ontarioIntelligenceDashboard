@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { launchRouter } from './launch-routes.js';
 import { vcRouter } from './vc-routes.js';
+import { authRouter } from './auth.js';
 import { sql, testConnection } from '../db/index.js';
 import { runWorkflowA, runWorkflowB } from '../analytics/opportunity-engine.js';
 import { computeCitySimilarity, type SimilarityWeights } from '../analytics/similarity.js';
@@ -18,6 +19,7 @@ import {
 export const apiRouter = Router();
 apiRouter.use('/launch', launchRouter);
 apiRouter.use('/vc', vcRouter);
+apiRouter.use('/auth', authRouter);
 
 // 0. Production Health & Liveness Probe (Cloud / Kubernetes readiness)
 export async function healthHandler(

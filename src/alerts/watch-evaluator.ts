@@ -268,3 +268,15 @@ export async function markNotificationsDelivered(notificationIds: number[]): Pro
     WHERE id IN ${sql(notificationIds)};
   `;
 }
+
+/**
+ * Marks a single notification as sent
+ */
+export async function markNotificationSent(notificationId: number): Promise<void> {
+  await sql`
+    UPDATE watch_notifications
+    SET delivered = TRUE,
+        delivered_at = NOW()
+    WHERE id = ${notificationId};
+  `;
+}

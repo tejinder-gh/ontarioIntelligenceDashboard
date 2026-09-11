@@ -54,3 +54,97 @@ export async function sendDossierEmail(
     return false;
   }
 }
+
+/**
+ * Sends a Magic Link login email to the user.
+ */
+export async function sendMagicLinkEmail(toEmail: string, token: string): Promise<boolean> {
+  try {
+    const magicLinkUrl = `http://localhost:5173/api/auth/verify?token=${token}`;
+    
+    const htmlContent = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        <h2 style="color: #4F46E5;">Log In to Ontario Intelligence</h2>
+        <p>Click the secure link below to log in to your account. This link will expire in 15 minutes.</p>
+        
+        <div style="margin: 32px 0;">
+          <a href="${magicLinkUrl}" 
+             style="background-color: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+            Log In Now
+          </a>
+        </div>
+        
+        <p style="font-size: 12px; color: #6B7280;">
+          If you didn't request this email, you can safely ignore it.
+        </p>
+      </div>
+    `;
+
+    const { data, error } = await resend.emails.send({
+      from: 'Ontario Intelligence Auth <noreply@ontario-intelligence.example.com>',
+      to: [toEmail],
+      subject: 'Your Login Link for Ontario Intelligence',
+      html: htmlContent,
+    });
+
+    if (error) {
+      console.error('Failed to send magic link email:', error);
+      return false;
+    }
+
+    console.log(`Magic link sent to ${toEmail} [ID: ${data?.id}]`);
+    return true;
+  } catch (err) {
+    console.error('Exception sending magic link:', err);
+    return false;
+  }
+}
+
+/**
+ * Sends an Alert Notification to a subscriber.
+ */
+export async function sendAlertNotificationEmail(
+  toEmail: string,
+  eventTitle: string,
+  eventDescription: string,
+  occurredAt: string
+): Promise<boolean> {
+  try {
+    const dateStr = new Date(occurredAt).toLocaleString();
+    
+    const htmlContent = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        <h2 style="color: #F59E0B;">Ontario Intelligence Alert Triggered</h2>
+        <p>One of your active watches has recorded a new event:</p>
+        
+        <div style="background-color: #FFFBEB; border-left: 4px solid #F59E0B; padding: 16px; margin: 24px 0;">
+          <h3 style="margin-top: 0;">${eventTitle}</h3>
+          <p>${eventDescription}</p>
+          <p style="font-size: 12px; color: #9CA3AF; margin-bottom: 0;">Recorded: ${dateStr}</p>
+        </div>
+        
+        <p style="font-size: 12px; color: #6B7280;">
+          You are receiving this because you set up an active watch on the Ontario Intelligence platform.
+        </p>
+      </div>
+    `;
+
+    const { data, error } = await resend.emails.send({
+      from: 'Ontario Intelligence Alerts <alerts@ontario-intelligence.example.com>',
+      to: [toEmail],
+      subject: `Alert: ${eventTitle}`,
+      html: htmlContent,
+    });
+
+    if (error) {
+      console.error('Failed to send alert email:', error);
+      return false;
+    }
+
+    console.log(`Alert sent to ${toEmail} [ID: ${data?.id}]`);
+    return true;
+  } catch (err) {
+    console.error('Exception sending alert:', err);
+    return false;
+  }
+}

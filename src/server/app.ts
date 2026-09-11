@@ -23,51 +23,47 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), hand
 
 app.use(express.json());
 
-// In-memory sliding-window IP rate limiter for sensitive endpoints (T-034)
-interface RateLimitBucket {
-  count: number;
-  resetAt: number;
-}
-const rateLimitMap = new Map<string, RateLimitBucket>();
-
-const cleanupInterval = setInterval(() => {
-  const now = Date.now();
-  for (const [key, bucket] of rateLimitMap.entries()) {
-    if (bucket.resetAt <= now) {
-      rateLimitMap.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
-if (cleanupInterval.unref) cleanupInterval.unref();
+import { sql } from '../db/index.js';
 
 export function createRateLimiter(options: { windowMs: number; max: number; message?: string }) {
-  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     // In test suite, skip unless explicitly testing rate limiter
     if (process.env.NODE_ENV === 'test' && !req.headers['x-test-rate-limit']) {
       return next();
     }
     const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
-    const key = `${req.baseUrl || ''}${req.path}:${ip}`;
-    const now = Date.now();
-    let bucket = rateLimitMap.get(key);
+    const endpoint = `${req.baseUrl || ''}${req.path}`;
+    
+    // Align window to the block size
+    const nowMs = Date.now();
+    const windowStartMs = Math.floor(nowMs / options.windowMs) * options.windowMs;
+    const windowStart = new Date(windowStartMs);
 
-    if (!bucket || bucket.resetAt <= now) {
-      bucket = { count: 1, resetAt: now + options.windowMs };
-      rateLimitMap.set(key, bucket);
-      return next();
+    try {
+      const [record] = await sql<{ request_count: number }[]>`
+        INSERT INTO rate_limits (ip_address, endpoint, window_start, request_count)
+        VALUES (${ip}, ${endpoint}, ${windowStart}, 1)
+        ON CONFLICT (ip_address, endpoint, window_start)
+        DO UPDATE SET request_count = rate_limits.request_count + 1
+        RETURNING request_count;
+      `;
+
+      if (record.request_count > options.max) {
+        const resetAtMs = windowStartMs + options.windowMs;
+        const retrySec = Math.ceil((resetAtMs - nowMs) / 1000);
+        res.setHeader('Retry-After', retrySec.toString());
+        return res.status(429).json({
+          success: false,
+          error: options.message || 'Too many requests, please try again later.'
+        });
+      }
+
+      next();
+    } catch (err) {
+      console.error('[RateLimiter Error]', err);
+      // Fail open so we don't block requests if DB drops
+      next();
     }
-
-    bucket.count++;
-    if (bucket.count > options.max) {
-      const retrySec = Math.ceil((bucket.resetAt - now) / 1000);
-      res.setHeader('Retry-After', retrySec.toString());
-      return res.status(429).json({
-        success: false,
-        error: options.message || 'Too many requests, please try again later.'
-      });
-    }
-
-    next();
   };
 }
 
