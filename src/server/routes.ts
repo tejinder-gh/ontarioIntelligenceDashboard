@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { launchRouter } from './launch-routes.js';
 import { vcRouter } from './vc-routes.js';
-import { authRouter } from './auth.js';
+import { authRouter, requireAuth } from './auth.js';
 import { sql, testConnection } from '../db/index.js';
 import { runWorkflowA, runWorkflowB } from '../analytics/opportunity-engine.js';
 import { computeCitySimilarity, type SimilarityWeights } from '../analytics/similarity.js';
@@ -20,6 +20,27 @@ export const apiRouter = Router();
 apiRouter.use('/launch', launchRouter);
 apiRouter.use('/vc', vcRouter);
 apiRouter.use('/auth', authRouter);
+
+apiRouter.get('/user/dossiers', requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const dossiers = await sql`
+      SELECT d.* 
+      FROM dossier_orders d
+      WHERE d.customer_email = ${user.email}
+      ORDER BY d.created_at DESC;
+    `;
+    
+    res.json({ success: true, dossiers });
+  } catch (err) {
+    console.error('Fetch dossiers error:', err);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
 
 // 0. Production Health & Liveness Probe (Cloud / Kubernetes readiness)
 export async function healthHandler(
