@@ -1,18 +1,30 @@
 import { Resend } from 'resend';
 
+export const APP_BASE_URL = (process.env.APP_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+
 const resendApiKey = process.env.RESEND_API_KEY || 're_test_12345';
 const resend = new Resend(resendApiKey);
 
+function isMockEnvironment(): boolean {
+  return process.env.NODE_ENV !== 'production' && (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.startsWith('re_test_') || process.env.RESEND_API_KEY === 're_mock_key_for_development');
+}
+
 /**
  * Sends the Location Feasibility Dossier to a customer post-purchase.
- * In a real application, this might attach a PDF or a signed URL.
- * For now, we simulate delivery with a nicely formatted email and link.
  */
 export async function sendDossierEmail(
   toEmail: string,
   cityId: string,
   categoryId: string
 ): Promise<boolean> {
+  const dossierUrl = `${APP_BASE_URL}/?city=${encodeURIComponent(cityId)}&category=${encodeURIComponent(categoryId)}&view=dossier`;
+
+  if (isMockEnvironment()) {
+    console.log(`[Dev/Test Email Dispatcher] Dossier email simulated to ${toEmail}`);
+    console.log(`[Dev/Test Email Dispatcher] Access URL: ${dossierUrl}`);
+    return true;
+  }
+
   try {
     const htmlContent = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
@@ -23,7 +35,7 @@ export async function sendDossierEmail(
         <div style="background-color: #F3F4F6; padding: 20px; border-radius: 8px; margin: 24px 0;">
           <h3 style="margin-top: 0;">Access Your Report</h3>
           <p style="margin-bottom: 24px;">Your secure digital dossier can be viewed and downloaded using the link below:</p>
-          <a href="https://ontario-intelligence.example.com/dossier/unlock?city=${cityId}&category=${categoryId}" 
+          <a href="${dossierUrl}" 
              style="background-color: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
             View Full Dossier
           </a>
@@ -59,9 +71,15 @@ export async function sendDossierEmail(
  * Sends a Magic Link login email to the user.
  */
 export async function sendMagicLinkEmail(toEmail: string, token: string): Promise<boolean> {
+  const magicLinkUrl = `${APP_BASE_URL}/?token=${encodeURIComponent(token)}`;
+
+  if (isMockEnvironment()) {
+    console.log(`[Dev/Test Email Dispatcher] Magic link email simulated to ${toEmail}`);
+    console.log(`[Dev/Test Email Dispatcher] Login URL: ${magicLinkUrl}`);
+    return true;
+  }
+
   try {
-    const magicLinkUrl = `http://localhost:5173/api/auth/verify?token=${token}`;
-    
     const htmlContent = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <h2 style="color: #4F46E5;">Log In to Ontario Intelligence</h2>
@@ -109,6 +127,11 @@ export async function sendAlertNotificationEmail(
   eventDescription: string,
   occurredAt: string
 ): Promise<boolean> {
+  if (isMockEnvironment()) {
+    console.log(`[Dev/Test Email Dispatcher] Alert simulated to ${toEmail}: ${eventTitle}`);
+    return true;
+  }
+
   try {
     const dateStr = new Date(occurredAt).toLocaleString();
     

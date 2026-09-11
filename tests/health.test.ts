@@ -79,4 +79,24 @@ describe('Production Health & Liveness Probe', () => {
 
     expect(lastStatus).toBe(429);
   });
+
+  it('throttles excessive login attempts on /api/auth/login (T-056)', async () => {
+    const loginUrl = `${baseUrl}/api/auth/login`;
+    let lastStatus = 200;
+
+    for (let i = 0; i < 15; i++) {
+      const res = await fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-test-rate-limit': 'true',
+        },
+        body: JSON.stringify({ email: `test.limiter.${i}@example.com` }),
+      });
+      lastStatus = res.status;
+      if (lastStatus === 429) break;
+    }
+
+    expect(lastStatus).toBe(429);
+  });
 });

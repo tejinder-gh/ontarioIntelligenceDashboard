@@ -15,9 +15,16 @@ interface UserPortalModalProps {
   onClose: () => void;
   authToken: string;
   onSignOut: () => void;
+  onViewDossier: (cityId: string, categoryId: string) => void;
 }
 
-export const UserPortalModal: React.FC<UserPortalModalProps> = ({ isOpen, onClose, authToken, onSignOut }) => {
+export const UserPortalModal: React.FC<UserPortalModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  authToken, 
+  onSignOut,
+  onViewDossier 
+}) => {
   const [dossiers, setDossiers] = useState<Dossier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -113,7 +120,7 @@ export const UserPortalModal: React.FC<UserPortalModalProps> = ({ isOpen, onClos
                   <div>
                     <div className="flex justify-between items-start mb-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
-                        {dossier.report_id}
+                        ORDER #{dossier.id ? String(dossier.id).slice(0, 8) : 'ACCESS'}
                       </span>
                       <span className="text-[10px] text-slate-500">
                         {new Date(dossier.created_at).toLocaleDateString()}
@@ -129,9 +136,8 @@ export const UserPortalModal: React.FC<UserPortalModalProps> = ({ isOpen, onClos
                   <button
                     type="button"
                     onClick={() => {
-                      // We don't have a dedicated printable route in this MVP UI,
-                      // so we'll just alert that this would open the PDF.
-                      alert(`In a production environment, this would open the secured PDF for report ${dossier.report_id}.`);
+                      onViewDossier(dossier.city_id, dossier.category_id);
+                      onClose();
                     }}
                     className="mt-4 w-full py-2 rounded-lg text-xs font-semibold bg-slate-800 group-hover:bg-indigo-600 text-slate-300 group-hover:text-white transition-colors flex items-center justify-center gap-1.5"
                   >

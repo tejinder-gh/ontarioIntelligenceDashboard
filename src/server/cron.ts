@@ -1,4 +1,4 @@
-import { getPendingNotifications, markNotificationSent } from '../alerts/watch-evaluator.js';
+import { getPendingNotifications, markNotificationSent, recordNotificationFailure } from '../alerts/watch-evaluator.js';
 import { sendAlertNotificationEmail } from '../alerts/email-dispatcher.js';
 
 export async function processAlerts() {
@@ -18,7 +18,8 @@ export async function processAlerts() {
           await markNotificationSent(notif.id!);
           console.log(`[Cron] Sent notification to ${notif.subscriber_email} (Notification ID: ${notif.id})`);
         } else {
-          console.error(`[Cron] Failed to send email to ${notif.subscriber_email} for Notification ID: ${notif.id}`);
+          await recordNotificationFailure(notif.id!);
+          console.error(`[Cron] Failed to send email to ${notif.subscriber_email} for Notification ID: ${notif.id}. Attempt recorded.`);
         }
       }
     }

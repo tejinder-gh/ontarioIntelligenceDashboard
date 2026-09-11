@@ -252,6 +252,8 @@ export async function getPendingNotifications(): Promise<WatchNotification[]> {
     FROM watch_notifications n
     JOIN audit_events e ON e.id = n.event_id
     WHERE n.delivered = FALSE
+      AND (n.status IS NULL OR n.status != 'FAILED')
+      AND (n.retry_count IS NULL OR n.retry_count < 3)
     ORDER BY n.created_at ASC;
   `;
 }
@@ -264,6 +266,7 @@ export async function markNotificationsDelivered(notificationIds: number[]): Pro
   await sql`
     UPDATE watch_notifications
     SET delivered = TRUE,
+        status = 'DELIVERED',
         delivered_at = NOW()
     WHERE id IN ${sql(notificationIds)};
   `;
@@ -276,7 +279,20 @@ export async function markNotificationSent(notificationId: number): Promise<void
   await sql`
     UPDATE watch_notifications
     SET delivered = TRUE,
+        status = 'DELIVERED',
         delivered_at = NOW()
+    WHERE id = ${notificationId};
+  `;
+}
+
+/**
+ * Records a delivery failure attempt. If retry_count reaches maxRetries (3), marks as FAILED.
+ */
+export async function recordNotificationFailure(notificationId: number, maxRetries = 3): Promise<void> {
+  await sql`
+    UPDATE watch_notifications
+    SET retry_count = COALESCE(retry_count, 0) + 1,
+        status = CASE WHEN COALESCE(retry_count, 0) + 1 >= ${maxRetries} THEN 'FAILED' ELSE 'RETRYING' END
     WHERE id = ${notificationId};
   `;
 }

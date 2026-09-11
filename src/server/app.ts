@@ -73,8 +73,22 @@ const sensitivePostLimiter = createRateLimiter({
   message: 'Too many requests to this endpoint, please retry in 1 minute.'
 });
 
+const authLoginLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: 'Too many login attempts, please try again in 1 minute.'
+});
+
+const authVerifyLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: 'Too many verification attempts, please retry in 1 minute.'
+});
+
 app.post('/api/checkout/dossier', sensitivePostLimiter);
 app.post('/api/alerts/watches', sensitivePostLimiter);
+app.post('/api/auth/login', authLoginLimiter);
+app.get('/api/auth/verify', authVerifyLimiter);
 
 // Request logging & persistence audit
 app.use((req, res, next) => {

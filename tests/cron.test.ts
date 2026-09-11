@@ -58,9 +58,53 @@ describe('Cron Worker - Process Alerts', () => {
 
     // Verify it was marked as delivered in the DB
     const [notif] = await sql`
-      SELECT delivered FROM watch_notifications 
+      SELECT delivered, status FROM watch_notifications 
       WHERE watch_id = ${watchId} AND event_id = ${eventId}
     `;
     expect(notif.delivered).toBe(true);
+    expect(notif.status).toBe('DELIVERED');
+  });
+
+  it('records failure and bounds retries when delivery fails (T-057)', async () => {
+    // Create an unsendable notification
+    const [eventFail] = await sql`
+      INSERT INTO audit_events (event_type, entity_type, entity_id, title)
+      VALUES ('LISTING_PRICE_CHANGE', 'business_listing', 'listing_test_fail', 'Failing Alert')
+      RETURNING id;
+    `;
+
+    const [notifFail] = await sql`
+      INSERT INTO watch_notifications (watch_id, event_id, subscriber_email, channel, delivered)
+      VALUES (${watchId}, ${eventFail.id}, 'fail.cron@example.com', 'EMAIL', FALSE)
+      RETURNING id;
+    `;
+
+    // Make mock fail for this call
+    vi.mocked(sendAlertNotificationEmail).mockResolvedValueOnce(false);
+
+    await processAlerts();
+
+    const [updated] = await sql`
+      SELECT delivered, retry_count, status FROM watch_notifications WHERE id = ${notifFail.id};
+    `;
+    expect(updated.delivered).toBe(false);
+    expect(updated.retry_count).toBe(1);
+    expect(updated.status).toBe('RETRYING');
+
+    // Simulate 2 more failures to test transition to FAILED
+    vi.mocked(sendAlertNotificationEmail).mockResolvedValueOnce(false);
+    await processAlerts();
+    vi.mocked(sendAlertNotificationEmail).mockResolvedValueOnce(false);
+    await processAlerts();
+
+    const [final] = await sql`
+      SELECT delivered, retry_count, status FROM watch_notifications WHERE id = ${notifFail.id};
+    `;
+    expect(final.retry_count).toBe(3);
+    expect(final.status).toBe('FAILED');
+
+    // Clean up
+    await sql`DELETE FROM watch_notifications WHERE id = ${notifFail.id}`;
+    await sql`DELETE FROM audit_events WHERE id = ${eventFail.id}`;
   });
 });

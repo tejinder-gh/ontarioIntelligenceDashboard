@@ -39,6 +39,7 @@ import { AlertSubscriptionModal } from './components/AlertSubscriptionModal.js';
 import { CheckoutSuccessModal } from './components/CheckoutSuccessModal.js';
 import { LoginModal } from './components/LoginModal.js';
 import { UserPortalModal } from './components/UserPortalModal.js';
+import { FeasibilityDossierModal } from './components/FeasibilityDossierModal.js';
 
 const TAB_TO_SLUG: Record<ActiveTab, string> = {
   overview: 'overview',
@@ -138,19 +139,36 @@ export const App: React.FC = () => {
   const [authToken, setAuthToken] = useState<string>(localStorage.getItem('auth_token') || '');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isPortalOpen, setIsPortalOpen] = useState(false);
+  const [viewDossierState, setViewDossierState] = useState<{ isOpen: boolean; cityId: string; categoryId: string }>({
+    isOpen: false,
+    cityId: 'CSD_burlington',
+    categoryId: 'pizza_store'
+  });
 
-  // Handle Token Verification from URL
+  // Handle URL parameters (Token Verification & Direct Dossier Links)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
+    const view = params.get('view');
+    const urlCity = params.get('city');
+    const urlCat = params.get('category');
+
+    if (view === 'dossier' && urlCity && urlCat) {
+      setViewDossierState({
+        isOpen: true,
+        cityId: urlCity,
+        categoryId: urlCat
+      });
+    }
     
     if (token) {
       fetch(`/api/auth/verify?token=${token}`)
         .then(res => res.json())
         .then(json => {
           if (json.success) {
-            setAuthToken(token);
-            localStorage.setItem('auth_token', token);
+            const tokenToStore = json.sessionToken || token;
+            setAuthToken(tokenToStore);
+            localStorage.setItem('auth_token', tokenToStore);
             setIsPortalOpen(true);
             alert('Successfully signed in!');
           } else {
@@ -847,6 +865,21 @@ export const App: React.FC = () => {
         onClose={() => setIsPortalOpen(false)} 
         authToken={authToken} 
         onSignOut={handleSignOut} 
+        onViewDossier={(cityId, categoryId) => {
+          setViewDossierState({
+            isOpen: true,
+            cityId,
+            categoryId
+          });
+        }}
+      />
+
+      {/* Global Purchased/Deep-linked Feasibility Dossier Viewer */}
+      <FeasibilityDossierModal
+        isOpen={viewDossierState.isOpen}
+        onClose={() => setViewDossierState(prev => ({ ...prev, isOpen: false }))}
+        cityId={viewDossierState.cityId}
+        categoryId={viewDossierState.categoryId}
       />
     </div>
   );
