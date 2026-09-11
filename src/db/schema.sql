@@ -817,3 +817,32 @@ CREATE TABLE IF NOT EXISTS dossier_orders (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 32. Rate Limiting (Phase 2 Remediation)
+CREATE TABLE IF NOT EXISTS rate_limits (
+    ip_address VARCHAR(45) NOT NULL,
+    endpoint VARCHAR(255) NOT NULL,
+    window_start TIMESTAMPTZ NOT NULL,
+    request_count INTEGER DEFAULT 1,
+    PRIMARY KEY (ip_address, endpoint, window_start)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limits_cleanup ON rate_limits(window_start);
+
+-- 33. User Accounts & Authentication (Phase 2 Remediation)
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_login TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    token VARCHAR(64) PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
