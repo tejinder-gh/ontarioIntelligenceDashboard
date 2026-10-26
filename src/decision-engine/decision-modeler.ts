@@ -13,8 +13,31 @@ export function resolveCategoryIdFromInquiry(inquiry: string, explicitCategory?:
     return explicitCategory.trim().toLowerCase();
   }
   const text = inquiry.toLowerCase();
-  if (text.includes('shipping') || text.includes('courier') || text.includes('logistics') || text.includes('parcel') || text.includes('freight') || text.includes('warehouse')) {
+  if (
+    text.includes('warehouse') ||
+    text.includes('logistics') ||
+    text.includes('freight') ||
+    text.includes('cross-dock') ||
+    text.includes('cross dock') ||
+    text.includes('distribution depot') ||
+    text.includes('distribution centre') ||
+    text.includes('distribution center') ||
+    text.includes('3pl') ||
+    text.includes('trucking')
+  ) {
     return 'logistics_warehouse';
+  }
+  if (
+    text.includes('shipping') ||
+    text.includes('courier') ||
+    text.includes('parcel') ||
+    text.includes('pack and ship') ||
+    text.includes('pack & ship') ||
+    text.includes('mailbox') ||
+    text.includes('ups store') ||
+    text.includes('postnet')
+  ) {
+    return 'retail_shipping_counter';
   }
   if (text.includes('daycare') || text.includes('childcare') || text.includes('preschool') || text.includes('infant')) {
     return 'child_daycare';
@@ -25,10 +48,40 @@ export function resolveCategoryIdFromInquiry(inquiry: string, explicitCategory?:
   if (text.includes('gym') || text.includes('fitness')) {
     return 'gym_fitness';
   }
-  if (text.includes('retail') || text.includes('boutique') || text.includes('store') && !text.includes('pizza')) {
+  if (text.includes('retail') || text.includes('boutique') || (text.includes('store') && !text.includes('pizza'))) {
     return 'retail_store';
   }
   return 'pizza_store';
+}
+
+export function extractBudgetFromText(text: string): number | undefined {
+  const match = text.match(/\$\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\s*(k|thousand))?/i)
+    || text.match(/(?:budget|capital|invest(?:ment)?|have)\s*(?:of|is|around|approx|approximately|up to)?\s*\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\s*(k|thousand))?/i);
+  if (!match) return undefined;
+  const rawNum = match[1]!.replace(/,/g, '');
+  let val = parseFloat(rawNum);
+  if (match[2] && (match[2].toLowerCase() === 'k' || match[2].toLowerCase() === 'thousand')) {
+    val *= 1000;
+  } else if (val < 1000 && val > 0) {
+    val *= 1000;
+  }
+  return val >= 10000 ? val : undefined;
+}
+
+export function extractLocationsFromText(text: string): string[] {
+  const ONTARIO_MUNICIPALITIES = [
+    'Toronto', 'Mississauga', 'Brampton', 'Hamilton', 'Burlington', 'Oakville', 'Milton',
+    'Vaughan', 'Markham', 'Richmond Hill', 'Ottawa', 'London', 'Kitchener', 'Waterloo',
+    'Cambridge', 'Guelph', 'Barrie', 'Oshawa', 'Whitby', 'Ajax', 'Pickering', 'Halton Hills'
+  ];
+  const found: string[] = [];
+  for (const m of ONTARIO_MUNICIPALITIES) {
+    const regex = new RegExp(`\\b${m}\\b`, 'i');
+    if (regex.test(text)) {
+      found.push(m);
+    }
+  }
+  return found;
 }
 
 export function buildDecisionModel(input: DecisionInquiry): {
@@ -64,9 +117,14 @@ export function buildDecisionModel(input: DecisionInquiry): {
     return selectedScenario.ownership;
   })();
 
-  const investmentCapital = input.investmentCapital ?? selectedScenario.investmentCapital;
+  const extractedBudget = !input.investmentCapital ? extractBudgetFromText(input.inquiry) : undefined;
+  const investmentCapital = input.investmentCapital ?? (extractedBudget ?? selectedScenario.investmentCapital);
   if (!input.investmentCapital) {
-    unspecifiedPreferences.push(`CapEx budget unprovided — defaulted to ${profile.canonicalName} benchmark ($${investmentCapital.toLocaleString()})`);
+    if (extractedBudget) {
+      unspecifiedPreferences.push(`CapEx budget extracted from inquiry text ($${investmentCapital.toLocaleString()})`);
+    } else {
+      unspecifiedPreferences.push(`CapEx budget unprovided — defaulted to ${profile.canonicalName} benchmark ($${investmentCapital.toLocaleString()})`);
+    }
   }
 
   const workingCapital = input.workingCapital ?? selectedScenario.workingCapital;
@@ -86,8 +144,16 @@ export function buildDecisionModel(input: DecisionInquiry): {
 
   const desiredAnnualIncome = input.desiredDiscretionaryIncome ?? 85000;
   const targetTimelineMonths = input.targetTimelineMonths ?? 6;
-  const geographicScope = input.targetRegions && input.targetRegions.length > 0
-    ? input.targetRegions.join(', ')
+
+  const extractedLocations = (!input.targetRegions || input.targetRegions.length === 0)
+    ? extractLocationsFromText(input.inquiry)
+    : [];
+  const targetRegions = (input.targetRegions && input.targetRegions.length > 0)
+    ? input.targetRegions
+    : (extractedLocations.length > 0 ? extractedLocations : undefined);
+
+  const geographicScope = targetRegions && targetRegions.length > 0
+    ? targetRegions.join(', ')
     : 'Ontario Growth Corridors (GTA West & Golden Horseshoe Core)';
 
   // Deterministic Break-Even Unit Volume
@@ -100,14 +166,20 @@ export function buildDecisionModel(input: DecisionInquiry): {
 
   // Minimum Catchment Scale based on category archetype
   const annualUnitsNeeded = minDailyOrdersNeeded * 365;
-  const penetrationRate = categoryId === 'logistics_warehouse' ? 0.08 : 0.04;
-  const annualFrequency = categoryId === 'logistics_warehouse' ? 18.0 : 4.5;
+  const isHeavyLogistics = categoryId === 'logistics_warehouse';
+  const penetrationRate = isHeavyLogistics ? 0.08 : 0.04;
+  const annualFrequency = isHeavyLogistics ? 18.0 : 4.5;
   const minCatchmentHouseholds = Math.round((annualUnitsNeeded / annualFrequency) / penetrationRate);
 
-  const maxGrossRentPctRevenue = categoryId === 'logistics_warehouse' ? 0.14 : 0.09;
+  const maxGrossRentPctRevenue = isHeavyLogistics ? 0.14 : 0.09;
 
   let categoryLimitations: string | undefined;
-  if (profile.categoryId !== 'pizza_store' && profile.categoryId !== 'logistics_warehouse' && profile.categoryId !== 'child_daycare') {
+  if (
+    profile.categoryId !== 'pizza_store' &&
+    profile.categoryId !== 'logistics_warehouse' &&
+    profile.categoryId !== 'retail_shipping_counter' &&
+    profile.categoryId !== 'child_daycare'
+  ) {
     categoryLimitations = `Note on ${profile.canonicalName}: Detailed localized unit transaction benchmarks are generalized from provincial commercial retail baselines. Full engineering specifications require tailored commercial site audits.`;
   }
 

@@ -16,19 +16,39 @@ export function calculateFinancialEconomics(
   const monthlyRent = candidate.monthlyRent || (grossRentAnnual / 12);
   const annualRent = monthlyRent * 12;
 
-  // Capital Expenditure & Setup
+  // 1. Capital Expenditure: Separate Business Acquisition vs Greenfield Fit-Out
   const rentDeposit = monthlyRent * 3; // First, last, and damage security
-  const fitoutMultiplier = model.categoryId === 'logistics_warehouse' ? 25 : 65; // Industrial vs Commercial retail fitout $/sqft
-  const equipmentBase = model.categoryId === 'logistics_warehouse' ? 75000 : 95000;
-  const buildoutEquipmentCapEx = (sqft * fitoutMultiplier) + equipmentBase + rentDeposit;
+  const isAcquisition = Boolean(candidate.askingPrice && candidate.askingPrice > 0);
+  const acquisitionCost = isAcquisition ? Math.round(candidate.askingPrice!) : 0;
+
+  let buildoutEquipmentCapEx: number;
+  if (isAcquisition) {
+    // Existing business purchase: equipment and leaseholds are included in asking price.
+    // Tenant only incurs rebranding/refresh costs + rent deposit.
+    const transitionRefresh = Math.min(25000, Math.round(sqft * 12));
+    buildoutEquipmentCapEx = transitionRefresh + rentDeposit;
+  } else {
+    // Greenfield lease: full equipment procurement and leasehold buildout required.
+    const fitoutMultiplier = model.categoryId === 'logistics_warehouse' ? 25 : 65;
+    const equipmentBase = model.categoryId === 'logistics_warehouse' ? 75000 : 95000;
+    buildoutEquipmentCapEx = (sqft * fitoutMultiplier) + equipmentBase + rentDeposit;
+  }
+
   const workingCapitalBuffer = model.workingCapital;
-  const totalInitialCapital = buildoutEquipmentCapEx + workingCapitalBuffer;
+  const totalInitialCapital = acquisitionCost + buildoutEquipmentCapEx + workingCapitalBuffer;
+  const fundingGap = Math.max(0, totalInitialCapital - model.investmentCapital);
+  const isFullyFunded = model.investmentCapital >= totalInitialCapital;
 
   const aov = model.targetPricePointAov || profile.benchmarkUnitRevenue;
   const unitLabel = model.volumeUnit || profile.volumeUnit;
 
-  // Fixed overhead: Utilities, property insurance, software/telecom, maintenance
+  // 2. Unified Cost Model: Shared across scenarios, break-even, and sensitivity
+  const isFranchise = model.ownership === 'FRANCHISE';
+  const franchiseRoyaltyRatio = isFranchise ? 0.055 : 0;
+  const isInvestor = model.ownerInvolvement === 'INVESTOR';
+  const investorManagementFeeAnnual = isInvestor ? 55000 : 0;
   const fixedAnnualOverhead = profile.fixedMonthlyOverhead * 12;
+  const fixedAnnualCosts = annualRent + fixedAnnualOverhead + investorManagementFeeAnnual;
 
   // Helper for computing financial bands
   function buildBand(
@@ -41,18 +61,12 @@ export function calculateFinancialEconomics(
     const foodCostCogs = annualRevenue * cogsPct;
     const laborCost = annualRevenue * laborPct;
     const occupancyCostRent = annualRent;
-    
-    // Channel / commissions (third-party delivery apps or freight brokerage commissions)
     const deliveryCommissions = annualRevenue * channelPct;
-    
-    // Franchise royalty if franchise model
-    const royaltyCost = model.ownership === 'FRANCHISE' ? annualRevenue * 0.055 : 0;
-    
-    const operatingExpenses = fixedAnnualOverhead + royaltyCost;
-    const totalExpenses = foodCostCogs + laborCost + occupancyCostRent + deliveryCommissions + operatingExpenses;
+    const franchiseRoyalty = annualRevenue * franchiseRoyaltyRatio;
+    const operatingExpenses = fixedAnnualOverhead + investorManagementFeeAnnual;
+
+    const totalExpenses = foodCostCogs + laborCost + occupancyCostRent + deliveryCommissions + franchiseRoyalty + operatingExpenses;
     const netOperatingIncome = annualRevenue - totalExpenses;
-    
-    // Owner Cash Flow: If full-time operator, includes owner draw; debt service accounted if leveraged
     const ownerCashFlow = netOperatingIncome;
     
     const paybackMonths = ownerCashFlow > 0 
@@ -80,7 +94,7 @@ export function calculateFinancialEconomics(
   const baseLabor = profile.variableLaborRatio;
   const baseChannel = profile.channelOrCommissionRatio;
 
-  // 1. Conservative: Slower market penetration, higher channel/waste costs
+  // 1. Conservative: Slower ramp, higher delivery dependence/waste
   const conservative = buildBand(
     Math.round(model.minDailyOrdersNeeded * 0.80),
     baseChannel * 1.35,
@@ -96,7 +110,7 @@ export function calculateFinancialEconomics(
     baseLabor
   );
 
-  // 3. Optimistic: High operational throughput, strong direct/repeat customer base
+  // 3. Optimistic: High operational throughput, strong direct capture
   const optimistic = buildBand(
     Math.round(model.minDailyOrdersNeeded * 1.30),
     baseChannel * 0.70,
@@ -104,13 +118,10 @@ export function calculateFinancialEconomics(
     Math.max(0.18, baseLabor - 0.03)
   );
 
-  // Deterministic Contribution Margin calculation
-  const totalVariableCostRatio = baseCogs + baseLabor + baseChannel;
+  // 3. Contribution Margin & Break-Even (Royalties & Investor Fees Unified)
+  const totalVariableCostRatio = baseCogs + baseLabor + baseChannel + franchiseRoyaltyRatio;
   const contributionMarginRatio = 1 - totalVariableCostRatio;
 
-  const fixedAnnualCosts = annualRent + fixedAnnualOverhead + (model.ownerInvolvement === 'INVESTOR' ? 55000 : 0);
-
-  // Handle zero/negative contribution margin boundary safely
   let breakEvenFeasible = true;
   let marginWarning: string | undefined;
   let breakEvenAnnualRevenue = 0;
@@ -118,7 +129,7 @@ export function calculateFinancialEconomics(
 
   if (contributionMarginRatio <= 0.05) {
     breakEvenFeasible = false;
-    marginWarning = `Variable costs (${(totalVariableCostRatio * 100).toFixed(1)}%) leave insufficient contribution margin (${(contributionMarginRatio * 100).toFixed(1)}%). Break-even cannot be reached under current unit cost structure.`;
+    marginWarning = `Variable costs (${(totalVariableCostRatio * 100).toFixed(1)}% including ${(franchiseRoyaltyRatio * 100).toFixed(1)}% royalty) leave non-viable contribution margin (${(contributionMarginRatio * 100).toFixed(1)}%). Break-even cannot be reached.`;
     breakEvenDailyUnits = 999999;
   } else {
     breakEvenAnnualRevenue = fixedAnnualCosts / contributionMarginRatio;
@@ -130,7 +141,11 @@ export function calculateFinancialEconomics(
   return {
     totalInitialCapital: Math.round(totalInitialCapital),
     buildoutEquipmentCapEx: Math.round(buildoutEquipmentCapEx),
+    acquisitionCost: isAcquisition ? acquisitionCost : 0,
+    isAcquisition,
     workingCapitalBuffer: Math.round(workingCapitalBuffer),
+    fundingGap: Math.round(fundingGap),
+    isFullyFunded,
     breakEvenDailyOrders: breakEvenDailyUnits,
     breakEvenDailyUnits,
     breakEvenMonthlyRevenue,

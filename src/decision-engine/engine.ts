@@ -6,6 +6,7 @@ import type {
   DecisionInquiry,
   DecisionModel,
   EvidenceRecordItem,
+  FinancialEconomics,
   FunnelCandidate,
 } from './types.js';
 import type { MetricProvenance } from './provenance.js';
@@ -139,18 +140,18 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
   };
 
   // 10. Persist Versioned Run to PostgreSQL with Workspace Isolation
-  try {
-    const isUuid = (val: string | undefined): boolean => 
-      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
-    const dbUserId: string | null = (inquiry.userId && isUuid(inquiry.userId)) ? inquiry.userId : null;
+  const isUuid = (val: string | undefined): boolean => 
+    Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+  const dbUserId: string | null = (inquiry.userId && isUuid(inquiry.userId)) ? inquiry.userId : null;
 
+  try {
     await sql`
       INSERT INTO decision_engine_runs (
         id, engine_version, category_id, inquiry_text, operating_format, 
         scenario_label, selected_candidate_id, recommendation_outcome,
         decision_model_snapshot, funnel_snapshot, hypotheses_snapshot,
         evidence_snapshot, alternatives_snapshot, sensitivity_snapshot,
-        decision_brief, workspace_id, user_id
+        financial_snapshot, decision_brief, workspace_id, user_id
       ) VALUES (
         ${runId},
         ${ENGINE_VERSION},
@@ -166,13 +167,15 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
         ${JSON.stringify(evidenceLedger)},
         ${JSON.stringify(rankedAlternatives)},
         ${JSON.stringify({ sensitivityShocks, switchingConditions })},
+        ${JSON.stringify(financialEconomics)},
         ${JSON.stringify(decisionBrief)},
         ${workspaceId},
         ${dbUserId}
       );
     `;
   } catch (dbErr) {
-    console.error('[Decision Engine] Warning: Failed to persist run snapshot to database:', dbErr);
+    console.error(`[Decision Engine] Error persisting run snapshot ${runId}:`, dbErr);
+    throw new Error(`Database persistence failure for run ${runId}: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`);
   }
 
   return result;
@@ -191,6 +194,11 @@ export async function replayDecisionRun(runId: string, workspaceId: string): Pro
 
   const row = rows[0]!;
 
+  // Strict snapshot integrity validation: reject corrupted/incomplete records
+  if (!row.decision_model_snapshot || !row.alternatives_snapshot || !row.funnel_snapshot) {
+    throw new Error(`Malformed snapshot for run ${runId}: missing essential decision or alternatives payload`);
+  }
+
   const safeParse = <T>(val: unknown, fallback: T): T => {
     if (!val) return fallback;
     if (typeof val === 'string') {
@@ -208,29 +216,14 @@ export async function replayDecisionRun(runId: string, workspaceId: string): Pro
   const alternatives = safeParse<CandidateComparison[]>(row.alternatives_snapshot, []);
   const topCandidate = alternatives[0]?.candidate;
 
-  const financialEconomics = topCandidate 
-    ? calculateFinancialEconomics(topCandidate, decisionModel)
-    : calculateFinancialEconomics({
-        id: 'placeholder',
-        name: 'Snapshot Candidate',
-        city: 'Snapshot City',
-        parentGeoId: 'snapshot_csd',
-        resolutionTier: 'PROSPECTIVE_MARKET',
-        population2021: 100000,
-        populationGrowthPct: 3.5,
-        medianIncome: 80000,
-        annualFoodAwayExpenditure: 4200,
-        commercialGrossRentSqft: 32.0,
-        commercialNetRentSqft: 22.0,
-        commercialTmiSqft: 10.0,
-        estimatedDirectCompetitors: 10,
-        competitorDataSource: 'StatCan Business Counts',
-        attractivenessScore: 75,
-        confidenceScore: 80,
-        suitabilityScore: 78,
-        zoningFeasibilityStatus: 'UNVERIFIED_PENDING_REVIEW',
-        buildingSuitabilityStatus: 'UNVERIFIED_MEP_CHECK_NEEDED'
-      }, decisionModel);
+  // Restore immutable financial snapshot directly; do not invent fake candidates
+  const persistedEconomics = safeParse<FinancialEconomics | null>(row.financial_snapshot, null);
+  const financialEconomics = persistedEconomics 
+    || (topCandidate ? calculateFinancialEconomics(topCandidate, decisionModel) : null);
+
+  if (!financialEconomics) {
+    throw new Error(`Malformed snapshot for run ${runId}: candidate and financial economics are both missing`);
+  }
 
   return {
     runId: row.id,

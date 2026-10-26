@@ -32,8 +32,8 @@ describe('Decision Engine Behavioural Quality & Verification Suite', () => {
     expect(unknowns.some(u => u.title.includes('Type 1 Grease Exhaust'))).toBe(false);
   });
 
-  // 2. No Eligible Properties: Graceful Neighborhood Bounding Without Hallucinating Addresses
-  it('B2: bounds resolution tier to PROMISING_NEIGHBOURHOOD when no commercial listing exists', async () => {
+  // 2. No Eligible Properties: Graceful Area Bounding Without Hallucinating Addresses
+  it('B2: bounds resolution tier to PROSPECTIVE_MARKET when no commercial listing exists', async () => {
     const { decisionModel } = buildDecisionModel({
       inquiry: 'Open a commercial logistics freight depot in Ontario'
     });
@@ -41,12 +41,12 @@ describe('Decision Engine Behavioural Quality & Verification Suite', () => {
     
     // For logistics_warehouse, no pre-seeded listings exist in business_listings
     const topCandidate = funnel.shortlistedCandidates[0]!;
-    expect(topCandidate.resolutionTier).toBe('PROMISING_NEIGHBOURHOOD');
+    expect(topCandidate.resolutionTier).toBe('PROSPECTIVE_MARKET');
     expect(topCandidate.propertyAddress).toBeUndefined();
     expect(topCandidate.listingId).toBeUndefined();
 
     // Provenance/ledger must report physical address as UNAVAILABLE or UNVERIFIED
-    const unverifiedClaim = funnel.stoppingCriteria.some(s => s.includes('PROMISING_NEIGHBOURHOOD'));
+    const unverifiedClaim = funnel.stoppingCriteria.some(s => s.includes('PROSPECTIVE_MARKET') || s.includes('PROMISING_NEIGHBOURHOOD'));
     expect(unverifiedClaim).toBe(true);
   });
 

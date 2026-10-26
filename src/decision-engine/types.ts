@@ -79,7 +79,7 @@ export interface FunnelCandidate {
   commercialNetRentSqft: number;
   commercialTmiSqft: number;
   commercialGrossRentSqft: number;
-  estimatedDirectCompetitors: number;
+  estimatedDirectCompetitors?: number;
   competitorDataSource: string;
   attractivenessScore: number; // 0-100 market demand score
   confidenceScore: number;     // 0-100 evidence completeness (strictly separate)
@@ -147,7 +147,11 @@ export interface FinancialBand {
 export interface FinancialEconomics {
   totalInitialCapital: number;
   buildoutEquipmentCapEx: number;
+  acquisitionCost?: number;
+  isAcquisition: boolean;
   workingCapitalBuffer: number;
+  fundingGap: number;
+  isFullyFunded: boolean;
   breakEvenDailyOrders: number;
   breakEvenDailyUnits: number;
   breakEvenMonthlyRevenue: number;

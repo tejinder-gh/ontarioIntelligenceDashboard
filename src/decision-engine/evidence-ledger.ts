@@ -16,7 +16,9 @@ export function buildEvidenceLedger(
   const sqft = candidate.squareFootage || 1400;
   const monthlyRent = candidate.monthlyRent || sqft * (grossRent / 12);
   const monthlySales = dailyTarget * aov * 30;
-  const rentRatio = (monthlyRent / Math.max(1, monthlySales)) * 100;
+  const rentRatioFraction = monthlyRent / Math.max(1, monthlySales);
+  const rentRatioPct = rentRatioFraction * 100;
+  const ceilingPct = model.maxGrossRentPctRevenue * 100;
   const isIndustrial = model.categoryId === 'logistics_warehouse';
   const geoId = candidate.parentGeoId;
 
@@ -87,9 +89,9 @@ export function buildEvidenceLedger(
     geographyName: candidate.city,
     geographyResolution: 'CSD',
     units: 'establishments with employees',
-    originalValue: candidate.estimatedDirectCompetitors,
+    originalValue: candidate.estimatedDirectCompetitors ?? 'UNAVAILABLE',
     transformation: 'Filtered business register by CSD boundary and 6-digit NAICS code',
-    evidenceClassification: 'AUDITED',
+    evidenceClassification: candidate.estimatedDirectCompetitors !== undefined ? 'AUDITED' : 'UNVERIFIED_ASSUMPTION',
     limitations: 'Register counts establishments with formal payroll accounts. Does not include non-employer or unclassified operations.',
     claimRequiresAddressLevel: false
   });
@@ -118,23 +120,29 @@ export function buildEvidenceLedger(
     {
       claim: `Commercial occupancy expense is sustainable under base operating volume.`,
       evidenceObserved: `Benchmark ${isIndustrial ? 'industrial' : 'commercial retail'} lease rate is $${grossRent.toFixed(2)}/sqft (Net $${candidate.commercialNetRentSqft.toFixed(2)} + TMI $${candidate.commercialTmiSqft.toFixed(2)}), translating to ~$${Math.round(monthlyRent).toLocaleString()}/month for ${sqft.toLocaleString()} sqft.`,
-      calculationMethod: `Occupancy cost represents ${rentRatio.toFixed(1)}% of base monthly revenue ($${Math.round(monthlySales).toLocaleString()}), evaluated against the ${model.maxGrossRentPctRevenue}% threshold.`,
+      calculationMethod: `Occupancy cost represents ${rentRatioPct.toFixed(1)}% of base monthly revenue ($${Math.round(monthlySales).toLocaleString()}), evaluated against the ${ceilingPct.toFixed(1)}% viability ceiling.`,
       classification: 'BENCHMARK',
       uncertaintyEstimate: 'Moderate: Submarket benchmark rate. Final lease agreement will dictate actual base rent and CAM pass-throughs.',
-      decisionImplication: rentRatio <= model.maxGrossRentPctRevenue 
-        ? 'Occupancy expense is viable under base projections; negotiate CAM escalation caps (<= 5%/yr).'
-        : `Occupancy ratio (${rentRatio.toFixed(1)}%) breaches ceiling (${model.maxGrossRentPctRevenue}%). Landlord negotiations or smaller footprint needed.`,
+      decisionImplication: rentRatioFraction <= model.maxGrossRentPctRevenue 
+        ? `Occupancy expense (${rentRatioPct.toFixed(1)}%) is viable under base projections (within ${ceilingPct.toFixed(1)}% ceiling); negotiate CAM escalation caps (<= 5%/yr).`
+        : `Occupancy ratio (${rentRatioPct.toFixed(1)}%) breaches ceiling (${ceilingPct.toFixed(1)}%). Landlord negotiations or smaller footprint needed.`,
       verificationSource: 'CBRE / Colliers GTA West Commercial Market Benchmark',
       provenance: rentProvenance
     },
     {
       claim: `Competitive density permits capture of profitable local market share for NAICS ${model.naicsCode}.`,
-      evidenceObserved: `Audited business register identifies ${candidate.estimatedDirectCompetitors} licensed establishments in ${candidate.city}.`,
-      calculationMethod: `Competitor density corresponds to 1 operator per ${Math.round(candidate.population2021 / Math.max(1, candidate.estimatedDirectCompetitors)).toLocaleString()} residents.`,
-      classification: 'AUDITED',
-      uncertaintyEstimate: 'High: Low competitor density may indicate unmet demand OR lack of localized customer appetite/infrastructure.',
+      evidenceObserved: candidate.estimatedDirectCompetitors !== undefined
+        ? `Audited business register identifies ${candidate.estimatedDirectCompetitors} licensed establishments in ${candidate.city}.`
+        : `Direct competitor count for ${model.categoryName} is unavailable in StatCan business registry for ${candidate.city}.`,
+      calculationMethod: candidate.estimatedDirectCompetitors !== undefined
+        ? `Competitor density corresponds to 1 operator per ${Math.round(candidate.population2021 / Math.max(1, candidate.estimatedDirectCompetitors)).toLocaleString()} residents.`
+        : 'Specific localized NAICS density unavailable; requires primary local corridor audit.',
+      classification: candidate.estimatedDirectCompetitors !== undefined ? 'AUDITED' : 'BENCHMARK',
+      uncertaintyEstimate: candidate.estimatedDirectCompetitors !== undefined
+        ? 'High: Low competitor density may indicate unmet demand OR lack of localized customer appetite/infrastructure.'
+        : 'High: Specific business register sub-segment count unrecorded for this geography.',
       decisionImplication: 'Differentiate strongly on service speed, specialized offering, or modern logistics integrations.',
-      verificationSource: 'StatCan Canadian Business Counts Table 33-10-1176-01 (June 2026)',
+      verificationSource: candidate.competitorDataSource || 'StatCan Canadian Business Counts Table 33-10-1097-01',
       provenance: compProvenance
     }
   ];

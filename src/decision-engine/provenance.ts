@@ -37,6 +37,7 @@ export function buildMetricProvenance(params: {
   evidenceClassification: EvidenceClassification | 'UNVERIFIED_ASSUMPTION';
   limitations: string;
   claimRequiresAddressLevel?: boolean;
+  retrievalTimestamp?: string;
 }): MetricProvenance {
   // Enforce boundary rule: City/CSD data cannot be used as an address-level claim without explicit marking
   const geographicFitValid = !(params.claimRequiresAddressLevel && params.geographyResolution !== 'PROPERTY_ADDRESS');
@@ -49,7 +50,7 @@ export function buildMetricProvenance(params: {
     datasetId: params.datasetId,
     recordIdentifier: params.recordIdentifier,
     observationPeriod: params.observationPeriod,
-    retrievalTimestamp: new Date().toISOString(),
+    retrievalTimestamp: params.retrievalTimestamp || new Date().toISOString(),
     geographyId: params.geographyId,
     geographyName: params.geographyName,
     geographyResolution: params.geographyResolution,

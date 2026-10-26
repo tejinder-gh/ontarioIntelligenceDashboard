@@ -4,6 +4,8 @@ import { DecisionInquirySchema } from '../decision-engine/types.js';
 import { runDecisionEngine, replayDecisionRun } from '../decision-engine/engine.js';
 import { OPERATING_SCENARIOS } from '../decision-engine/decision-modeler.js';
 import { evaluateSourceRegistry } from '../decision-engine/source-evaluator.js';
+import { requireAuth } from './auth.js';
+import { ensureWorkspaceAccess, verifyWorkspaceMembership } from './workspace-auth.js';
 
 export const decisionEngineRouter = Router();
 
@@ -13,7 +15,7 @@ const sanitizeError = (res: Response, logPrefix: string, err: unknown) => {
   res.status(500).json({ success: false, error: msg });
 };
 
-function extractWorkspaceId(req: { headers: Record<string, string | string[] | undefined>; query: Record<string, unknown>; body?: Record<string, unknown> }): string {
+function extractWorkspaceId(req: { headers: Record<string, string | string[] | undefined>; query: Record<string, unknown>; body?: Record<string, unknown> }, fallbackUserWs: string): string {
   const headerWs = req.headers['x-workspace-id'];
   if (typeof headerWs === 'string' && headerWs.trim().length > 0) {
     return headerWs.trim();
@@ -24,16 +26,26 @@ function extractWorkspaceId(req: { headers: Record<string, string | string[] | u
   if (req.body && typeof req.body.workspaceId === 'string' && req.body.workspaceId.trim().length > 0) {
     return req.body.workspaceId.trim();
   }
-  return 'workspace_default';
+  return fallbackUserWs;
 }
 
-// 1. Run Decision Engine Analysis
-decisionEngineRouter.post('/analyze', async (req, res) => {
+// 1. Run Decision Engine Analysis (Authenticated & Workspace Authorized)
+decisionEngineRouter.post('/analyze', requireAuth, async (req, res) => {
   try {
-    const workspaceId = extractWorkspaceId(req);
+    const userId = req.user!.id;
+    const workspaceId = extractWorkspaceId(req, `ws_${userId}`);
+
+    // Verify workspace authorization in database (rejects spoofed victim workspace IDs)
+    const access = await ensureWorkspaceAccess(userId, workspaceId);
+    if (!access.allowed) {
+      res.status(403).json({ success: false, error: access.reason });
+      return;
+    }
+
     const rawBody = {
       ...req.body,
-      workspaceId: req.body?.workspaceId || workspaceId
+      workspaceId,
+      userId
     };
 
     const parseResult = DecisionInquirySchema.safeParse(rawBody);
@@ -53,12 +65,12 @@ decisionEngineRouter.post('/analyze', async (req, res) => {
   }
 });
 
-// 2. Pre-Configured Operating Scenarios
+// 2. Pre-Configured Operating Scenarios (Public Metadata)
 decisionEngineRouter.get('/scenarios', (_req, res) => {
   res.json({ success: true, data: OPERATING_SCENARIOS });
 });
 
-// 3. Audited Data Source Registry
+// 3. Audited Data Source Registry (Public Metadata)
 decisionEngineRouter.get('/sources', async (_req, res) => {
   try {
     const sources = await evaluateSourceRegistry();
@@ -68,10 +80,18 @@ decisionEngineRouter.get('/sources', async (_req, res) => {
   }
 });
 
-// 4. List Saved Auditable Runs with Workspace Isolation
-decisionEngineRouter.get('/runs', async (req, res) => {
+// 4. List Saved Auditable Runs with Workspace Membership Verification
+decisionEngineRouter.get('/runs', requireAuth, async (req, res) => {
   try {
-    const workspaceId = extractWorkspaceId(req);
+    const userId = req.user!.id;
+    const workspaceId = extractWorkspaceId(req, `ws_${userId}`);
+
+    const access = await ensureWorkspaceAccess(userId, workspaceId);
+    if (!access.allowed) {
+      res.status(403).json({ success: false, error: access.reason });
+      return;
+    }
+
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string || '20', 10)));
     const runs = await sql`
       SELECT 
@@ -89,12 +109,13 @@ decisionEngineRouter.get('/runs', async (req, res) => {
   }
 });
 
-// 5. Get Single Versioned Run by ID with Workspace Isolation Verification
-decisionEngineRouter.get('/runs/:id', async (req, res) => {
+// 5. Get Single Versioned Run by ID with Workspace Membership Verification
+decisionEngineRouter.get('/runs/:id', requireAuth, async (req, res) => {
   try {
-    const workspaceId = extractWorkspaceId(req);
+    const userId = req.user!.id;
+    const runId = Array.isArray(req.params.id) ? req.params.id[0]! : (req.params.id || '');
     const [anyRun] = await sql`
-      SELECT id, workspace_id FROM decision_engine_runs WHERE id = ${req.params.id};
+      SELECT id, workspace_id FROM decision_engine_runs WHERE id = ${runId};
     `;
 
     if (!anyRun) {
@@ -102,16 +123,17 @@ decisionEngineRouter.get('/runs/:id', async (req, res) => {
       return;
     }
 
-    if (anyRun.workspace_id !== workspaceId) {
+    const isMember = await verifyWorkspaceMembership(userId, anyRun.workspace_id);
+    if (!isMember) {
       res.status(403).json({
         success: false,
-        error: 'Access denied: Decision run belongs to an isolated workspace'
+        error: 'Access denied: You do not have membership in the workspace owning this decision run'
       });
       return;
     }
 
     const [run] = await sql`
-      SELECT * FROM decision_engine_runs WHERE id = ${req.params.id} AND workspace_id = ${workspaceId};
+      SELECT * FROM decision_engine_runs WHERE id = ${runId} AND workspace_id = ${anyRun.workspace_id};
     `;
 
     res.json({ success: true, data: run });
@@ -120,11 +142,30 @@ decisionEngineRouter.get('/runs/:id', async (req, res) => {
   }
 });
 
-// 6. Replay Saved Run Reproducibly
-decisionEngineRouter.post('/runs/:id/replay', async (req, res) => {
+// 6. Replay Saved Run Reproducibly with Workspace Membership Verification
+decisionEngineRouter.post('/runs/:id/replay', requireAuth, async (req, res) => {
   try {
-    const workspaceId = extractWorkspaceId(req);
-    const replayed = await replayDecisionRun(req.params.id, workspaceId);
+    const userId = req.user!.id;
+    const runId = Array.isArray(req.params.id) ? req.params.id[0]! : (req.params.id || '');
+    const [anyRun] = await sql`
+      SELECT id, workspace_id FROM decision_engine_runs WHERE id = ${runId};
+    `;
+
+    if (!anyRun) {
+      res.status(404).json({ success: false, error: 'Decision run snapshot not found' });
+      return;
+    }
+
+    const isMember = await verifyWorkspaceMembership(userId, anyRun.workspace_id);
+    if (!isMember) {
+      res.status(403).json({
+        success: false,
+        error: 'Access denied: You do not have membership in the workspace owning this decision run'
+      });
+      return;
+    }
+
+    const replayed = await replayDecisionRun(runId, anyRun.workspace_id);
     res.json({ success: true, data: replayed });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error replaying run';

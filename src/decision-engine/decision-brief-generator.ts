@@ -35,14 +35,22 @@ export function generateDecisionBrief(
     feasibilityGateNote = 'FEASIBILITY GATE VERIFIED: Municipal permitted use verified as-of-right for target NAICS classification.';
   }
 
-  // Capital check
-  if (model.investmentCapital < 100000 || !economics.breakEvenFeasible || economics.breakEvenDailyUnits > 250) {
+  // Capital & Funding Gap Check
+  let capitalHeadlineReason = '';
+  if (!economics.isFullyFunded) {
     outcome = 'DO_NOT_PROCEED';
+    capitalHeadlineReason = `Funding gap of $${economics.fundingGap.toLocaleString()} (Available capital $${model.investmentCapital.toLocaleString()} vs required $${economics.totalInitialCapital.toLocaleString()})`;
+  } else if (!economics.breakEvenFeasible) {
+    outcome = 'DO_NOT_PROCEED';
+    capitalHeadlineReason = economics.marginWarning || 'Non-viable contribution margin';
+  } else if (economics.breakEvenDailyUnits > 250) {
+    outcome = 'DO_NOT_PROCEED';
+    capitalHeadlineReason = `Required break-even volume (${economics.breakEvenDailyUnits} ${unitLabel}/day) exceeds trade-area throughput ceiling`;
   }
 
   const headline = outcome === 'PROCEED_WITH_VERIFICATION'
     ? `Target ${topCandidate.name} (${topCandidate.city}) for ${activeScenario.label} under conditional due diligence.`
-    : `DO NOT PROCEED: Investment capital buffer, contribution economics, or break-even volume exceeds viable thresholds.`;
+    : `DO NOT PROCEED: ${capitalHeadlineReason || (topCandidate.zoningFeasibilityStatus === 'DISALLOWED' ? 'Municipal zoning strictly prohibits target use' : 'Viability criteria not satisfied')}.`;
 
   const whyThisLocation = [
     `Strong Macro Demographics & Market Base: ${topCandidate.city} combines a robust municipal population (${topCandidate.population2021.toLocaleString()}) with sustained growth (+${topCandidate.populationGrowthPct.toFixed(1)}%) and high median household income ($${topCandidate.medianIncome.toLocaleString()}).`,
@@ -64,6 +72,10 @@ export function generateDecisionBrief(
     `Competitive Ingress: Local incumbents may possess established contract relationships or generational customer loyalty requiring sustained marketing spend to penetrate.`,
     `Macroeconomic Discretionary Compression: Elevated interest rates or inflation could slow discretionary consumer demand or corporate logistics spending.`
   ];
+
+  if (!economics.isFullyFunded) {
+    whatCouldMakeThisWrong.unshift(`Capital Funding Shortfall: Available investment capital ($${model.investmentCapital.toLocaleString()}) falls short of total required capital ($${economics.totalInitialCapital.toLocaleString()}) by $${economics.fundingGap.toLocaleString()}. Additional equity or tenant improvement financing must be secured.`);
+  }
 
   if (model.categoryLimitations) {
     whatCouldMakeThisWrong.push(`Category Coverage Limitation: ${model.categoryLimitations}`);

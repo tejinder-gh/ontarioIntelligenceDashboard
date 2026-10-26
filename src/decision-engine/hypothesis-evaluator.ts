@@ -165,7 +165,7 @@ export function evaluateBusinessHypotheses(
   let h5Status: 'SUPPORTED' | 'CONTRADICTED' | 'INCONCLUSIVE' = 'INCONCLUSIVE';
   if (pop < (isLogistics ? 40000 : 25000)) {
     h5Status = 'CONTRADICTED';
-  } else if (competitors <= (isLogistics ? 120 : 30)) {
+  } else if (competitors !== undefined && competitors <= (isLogistics ? 120 : 30)) {
     h5Status = 'SUPPORTED';
   }
 

@@ -847,7 +847,18 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
 
--- 34. Intelligent Research and Decision Engine Versioned Runs
+-- 34. Multi-Tenant Workspace Memberships (T-062 Phase 2 Auth)
+CREATE TABLE IF NOT EXISTS workspace_memberships (
+    workspace_id VARCHAR(64) NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(32) NOT NULL DEFAULT 'MEMBER',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (workspace_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_memberships_user ON workspace_memberships(user_id);
+
+-- 35. Intelligent Research and Decision Engine Versioned Runs
 CREATE TABLE IF NOT EXISTS decision_engine_runs (
     id VARCHAR(64) PRIMARY KEY,
     engine_version VARCHAR(32) NOT NULL,
@@ -865,6 +876,7 @@ CREATE TABLE IF NOT EXISTS decision_engine_runs (
     evidence_snapshot JSONB NOT NULL,
     alternatives_snapshot JSONB NOT NULL,
     sensitivity_snapshot JSONB NOT NULL,
+    financial_snapshot JSONB,
     decision_brief JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );

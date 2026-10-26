@@ -6,6 +6,7 @@ import type {
   SwitchingCondition,
 } from './types.js';
 import { getCategoryProfile } from './category-profiles.js';
+import { calculateFinancialEconomics } from './financial-scenarios.js';
 
 export function runSensitivityAnalysis(
   topCandidate: FunnelCandidate,
@@ -49,7 +50,7 @@ export function runSensitivityAnalysis(
     baseMetric: `${economics.bands.baseCase.dailyUnitVolume} ${unitLabel}/day ($${baseNet.toLocaleString()} net)`,
     shockedMetric: `${Math.round(economics.bands.baseCase.dailyUnitVolume * 0.75)} ${unitLabel}/day ($${Math.round(shockedSalesNet).toLocaleString()} net)`,
     impactOnViability: shockedSalesNet > 0 
-      ? 'Survives initial ramp without cash call; working capital buffer covers early monthly cash flow deficit.'
+      ? 'Survives initial ramp without cash call; working capital buffer covers early monthly cash flow deficit.' 
       : `Deficit requires drawing from working capital ($${model.workingCapital.toLocaleString()} reserves sustain approx ${Math.max(1, Math.round((model.workingCapital / Math.abs(shockedSalesNet || 1)) * 12))} months runway).`,
     resilienceRating: shockedSalesNet >= 20000 ? 'SENSITIVE' : 'VULNERABLE'
   };
@@ -83,8 +84,8 @@ export function runSensitivityAnalysis(
   const compShock: SensitivityShock = {
     parameter: 'Local Competitive Ingress',
     shockApplied: 'New entrant establishes operations within primary catchment and captures 10% volume',
-    baseMetric: `${topCandidate.estimatedDirectCompetitors} existing area competitors`,
-    shockedMetric: `${topCandidate.estimatedDirectCompetitors + 1} competitors ($${Math.round(competitorNet).toLocaleString()} adjusted net income)`,
+    baseMetric: `${topCandidate.estimatedDirectCompetitors ?? 0} existing area competitors`,
+    shockedMetric: `${(topCandidate.estimatedDirectCompetitors ?? 0) + 1} competitors ($${Math.round(competitorNet).toLocaleString()} adjusted net income)`,
     impactOnViability: 'Remains viable provided brand establishes localized customer loyalty and service differentiation.',
     resilienceRating: 'ROBUST'
   };
@@ -95,26 +96,36 @@ export function runSensitivityAnalysis(
   const switchingConditions: SwitchingCondition[] = [];
 
   if (runnerUpCandidate) {
+    const runnerEconomics = calculateFinancialEconomics(runnerUpCandidate, model);
+    const runnerBaseNet = runnerEconomics.bands.baseCase.netOperatingIncome;
     const topSqft = topCandidate.squareFootage || profile.typicalSqftMin;
-    const runnerSqft = runnerUpCandidate.squareFootage || profile.typicalSqftMin;
-    const runnerRentAnnual = runnerSqft * runnerUpCandidate.commercialGrossRentSqft;
-    const netIncomeDifference = Math.max(0, baseNet - (annualRev * 0.90 - runnerRentAnnual - (profile.fixedMonthlyOverhead * 12)));
-    
-    // Exact mathematical rent threshold where top candidate net income equals runner up net income
-    const allowableRentIncrease = netIncomeDifference / Math.max(1, topSqft);
-    const thresholdRentSqft = topCandidate.commercialGrossRentSqft + allowableRentIncrease;
+    const aov = model.targetPricePointAov || profile.benchmarkUnitRevenue;
+    const franchiseRoyaltyRatio = model.ownership === 'FRANCHISE' ? 0.055 : 0;
+    const totalVariableCostRatio = profile.cogsRatio + profile.variableLaborRatio + profile.channelOrCommissionRatio + franchiseRoyaltyRatio;
+    const contributionMarginRatio = Math.max(0.01, 1 - totalVariableCostRatio);
+    const isInvestor = model.ownerInvolvement === 'INVESTOR';
+    const investorManagementFeeAnnual = isInvestor ? 55000 : 0;
+    const topFixedCosts = annualRent + (profile.fixedMonthlyOverhead * 12) + investorManagementFeeAnnual;
+
+    // 1. Exact mathematical lease rate switching threshold: Net_1(R*) = Net_2
+    const netIncomeDifference = baseNet - runnerBaseNet;
+    const allowableRentDelta = netIncomeDifference / Math.max(1, topSqft);
+    const thresholdRentSqft = topCandidate.commercialGrossRentSqft + allowableRentDelta;
 
     switchingConditions.push({
       conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) ranks higher if ${topCandidate.name}'s negotiated lease rate exceeds $${thresholdRentSqft.toFixed(2)}/sqft gross.`,
-      formulaTrigger: `Gross Lease Rate > $${thresholdRentSqft.toFixed(2)}/sqft (Net income advantage of $${Math.round(netIncomeDifference).toLocaleString()} is erased)`,
+      formulaTrigger: `Gross Lease Rate > $${thresholdRentSqft.toFixed(2)}/sqft (Erases $${Math.round(netIncomeDifference).toLocaleString()} net income advantage)`,
       switchingThresholdValue: `$${thresholdRentSqft.toFixed(2)}/sqft/yr`,
       alternativeTarget: runnerUpCandidate.name
     });
 
+    // 2. Exact mathematical transaction volume switching threshold: Net_1(V*) = Net_2
+    const thresholdDailyVolume = Math.max(0, Math.round((topFixedCosts + runnerBaseNet) / (360 * aov * contributionMarginRatio)));
+
     switchingConditions.push({
-      conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) ranks higher if direct customer capture falls below 45% of total volume.`,
-      formulaTrigger: 'Direct Capture < 45% (Intermediary commission burden eliminates location density premium)',
-      switchingThresholdValue: '45% direct customer share',
+      conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) ranks higher if ${topCandidate.name}'s daily transaction volume drops below ${thresholdDailyVolume} ${unitLabel}/day.`,
+      formulaTrigger: `Daily Volume < ${thresholdDailyVolume} ${unitLabel}/day (Net cash flow falls below ${runnerUpCandidate.name}'s baseline of $${Math.round(runnerBaseNet).toLocaleString()}/yr)`,
+      switchingThresholdValue: `${thresholdDailyVolume} ${unitLabel}/day`,
       alternativeTarget: runnerUpCandidate.name
     });
   } else {
@@ -128,4 +139,51 @@ export function runSensitivityAnalysis(
   }
 
   return { shocks, switchingConditions };
+}
+
+export function verifySwitchingThresholds(
+  topCandidate: FunnelCandidate,
+  runnerUpCandidate: FunnelCandidate,
+  model: DecisionModel
+): {
+  thresholdRentSqft: number;
+  thresholdDailyVolume: number;
+  topNetAtRentThreshold: number;
+  runnerNet: number;
+  topNetAtVolumeThreshold: number;
+  rentEqualityDelta: number;
+  volumeEqualityDelta: number;
+} {
+  const profile = getCategoryProfile(model.categoryId);
+  const topEconomics = calculateFinancialEconomics(topCandidate, model);
+  const runnerEconomics = calculateFinancialEconomics(runnerUpCandidate, model);
+  const topBaseNet = topEconomics.bands.baseCase.netOperatingIncome;
+  const runnerNet = runnerEconomics.bands.baseCase.netOperatingIncome;
+  const topSqft = topCandidate.squareFootage || profile.typicalSqftMin;
+  const aov = model.targetPricePointAov || profile.benchmarkUnitRevenue;
+  const franchiseRoyaltyRatio = model.ownership === 'FRANCHISE' ? 0.055 : 0;
+  const totalVariableCostRatio = profile.cogsRatio + profile.variableLaborRatio + profile.channelOrCommissionRatio + franchiseRoyaltyRatio;
+  const contributionMarginRatio = Math.max(0.01, 1 - totalVariableCostRatio);
+  const isInvestor = model.ownerInvolvement === 'INVESTOR';
+  const investorManagementFeeAnnual = isInvestor ? 55000 : 0;
+  const annualRent = topEconomics.bands.baseCase.occupancyCostRent;
+  const topFixedCosts = annualRent + (profile.fixedMonthlyOverhead * 12) + investorManagementFeeAnnual;
+
+  const allowableRentDelta = (topBaseNet - runnerNet) / Math.max(1, topSqft);
+  const thresholdRentSqft = topCandidate.commercialGrossRentSqft + allowableRentDelta;
+  const topNetAtRentThreshold = topBaseNet - (allowableRentDelta * topSqft);
+
+  const exactVolume = (topFixedCosts + runnerNet) / (360 * aov * contributionMarginRatio);
+  const thresholdDailyVolume = Math.round(exactVolume);
+  const topNetAtVolumeThreshold = (exactVolume * 360 * aov * contributionMarginRatio) - topFixedCosts;
+
+  return {
+    thresholdRentSqft,
+    thresholdDailyVolume,
+    topNetAtRentThreshold,
+    runnerNet,
+    topNetAtVolumeThreshold,
+    rentEqualityDelta: Math.abs(topNetAtRentThreshold - runnerNet),
+    volumeEqualityDelta: Math.abs(topNetAtVolumeThreshold - runnerNet)
+  };
 }
