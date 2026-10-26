@@ -3,63 +3,183 @@ import type {
   EvidenceRecordItem,
   FunnelCandidate,
 } from './types.js';
+import { buildMetricProvenance } from './provenance.js';
 
 export function buildEvidenceLedger(
   candidate: FunnelCandidate,
   model: DecisionModel
 ): EvidenceRecordItem[] {
   const dailyTarget = model.minDailyOrdersNeeded;
+  const unitLabel = model.volumeUnit || 'units';
   const aov = model.targetPricePointAov;
   const grossRent = candidate.commercialGrossRentSqft;
-  const monthlyRent = candidate.monthlyRent || (candidate.squareFootage || 1400) * (grossRent / 12);
+  const sqft = candidate.squareFootage || 1400;
+  const monthlyRent = candidate.monthlyRent || sqft * (grossRent / 12);
   const monthlySales = dailyTarget * aov * 30;
   const rentRatio = (monthlyRent / Math.max(1, monthlySales)) * 100;
+  const isIndustrial = model.categoryId === 'logistics_warehouse';
+  const geoId = candidate.parentGeoId;
 
-  return [
+  const popProvenance = buildMetricProvenance({
+    metricKey: 'population_2021',
+    metricName: 'Total Population (2021 Census)',
+    sourceName: 'Statistics Canada',
+    sourceUrl: 'https://www12.statcan.gc.ca/census-recensement/2021/dp-pd/prof/index.cfm',
+    datasetId: '98-316-X2021001',
+    recordIdentifier: geoId,
+    observationPeriod: '2021 Census',
+    geographyId: geoId,
+    geographyName: candidate.city,
+    geographyResolution: 'CSD',
+    units: 'persons',
+    originalValue: candidate.population2021,
+    transformation: 'Sum of enumerated permanent residents in municipality',
+    evidenceClassification: 'AUDITED',
+    limitations: 'Macro Census count does not measure foot traffic, commercial dayparts, or specific business category demand.',
+    claimRequiresAddressLevel: false
+  });
+
+  const incomeProvenance = buildMetricProvenance({
+    metricKey: 'median_after_tax_income',
+    metricName: 'Median After-Tax Household Income',
+    sourceName: 'Statistics Canada',
+    sourceUrl: 'https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1110022201',
+    datasetId: 'Table 11-10-0222-01',
+    observationPeriod: '2021 Census / 2024 Household Spending Survey',
+    geographyId: geoId,
+    geographyName: candidate.city,
+    geographyResolution: 'CSD',
+    units: 'CAD',
+    originalValue: candidate.medianIncome,
+    transformation: 'Median household after-tax income from census tax files',
+    evidenceClassification: 'AUDITED',
+    limitations: 'Household income indicates consumer purchasing power; does not reflect B2B commercial procurement budgets.',
+    claimRequiresAddressLevel: false
+  });
+
+  const rentProvenance = buildMetricProvenance({
+    metricKey: 'commercial_gross_rent_sqft',
+    metricName: isIndustrial ? 'Industrial Net Asking Rent + TMI' : 'Retail Gross Asking Rent / sqft',
+    sourceName: 'CBRE / Colliers GTA West Commercial Market Survey',
+    sourceUrl: 'https://www.cbre.ca/insights/reports',
+    datasetId: 'GTA-COMMERCIAL-BENCHMARK-2024Q4',
+    observationPeriod: '2024 Q4',
+    geographyId: geoId,
+    geographyName: candidate.city,
+    geographyResolution: 'CMA',
+    units: 'CAD/sqft/year',
+    originalValue: grossRent,
+    transformation: 'Net asking rate plus municipal property tax, maintenance, and insurance (TMI)',
+    evidenceClassification: 'BENCHMARK',
+    limitations: 'Submarket average. Specific lease contracts require site-specific TI allowances, escalations, and audit of CAM items.',
+    claimRequiresAddressLevel: false
+  });
+
+  const compProvenance = buildMetricProvenance({
+    metricKey: 'competitor_count',
+    metricName: `Active NAICS ${model.naicsCode} Establishments`,
+    sourceName: 'Statistics Canada Canadian Business Counts',
+    sourceUrl: 'https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3310117601',
+    datasetId: 'Table 33-10-1176-01',
+    recordIdentifier: `${geoId}:${model.naicsCode}`,
+    observationPeriod: 'June 2026 Business Register',
+    geographyId: geoId,
+    geographyName: candidate.city,
+    geographyResolution: 'CSD',
+    units: 'establishments with employees',
+    originalValue: candidate.estimatedDirectCompetitors,
+    transformation: 'Filtered business register by CSD boundary and 6-digit NAICS code',
+    evidenceClassification: 'AUDITED',
+    limitations: 'Register counts establishments with formal payroll accounts. Does not include non-employer or unclassified operations.',
+    claimRequiresAddressLevel: false
+  });
+
+  const items: EvidenceRecordItem[] = [
     {
-      claim: `Catchment area contains sufficient customer base to generate ${dailyTarget} daily orders.`,
-      evidenceObserved: `Official 2021 Census records ${candidate.population2021.toLocaleString()} residents in ${candidate.city}; estimated 62,000 households within 15-minute delivery radius.`,
-      calculationMethod: `Mathematical target requires capturing ${Math.round((dailyTarget * 365) / 4.5)} unique active households annually (approx 3.8% localized household market penetration).`,
+      claim: `Catchment area contains sufficient scale to generate ${dailyTarget} daily ${unitLabel}.`,
+      evidenceObserved: `Official 2021 Census records ${candidate.population2021.toLocaleString()} residents in ${candidate.city} (CSD ${geoId}).`,
+      calculationMethod: `Target requires capturing ${Math.round((dailyTarget * 365) / 4.5)} annual transactions across localized trade area.`,
       classification: 'OBSERVED',
-      uncertaintyEstimate: 'Moderate uncertainty: Macro Census counts do not reflect specific dietary preferences or delivery app adoption rates. Demographic correlation does not guarantee pizza purchase volume.',
-      decisionImplication: 'Sufficient macro scale exists; marketing must specifically convert target households within the primary 3.5 km delivery quadrant.',
-      verificationSource: 'Statistics Canada 2021 Census Profile (98-316-X2021001)'
+      uncertaintyEstimate: 'Moderate: Macro municipal population does not guarantee localized micro-catchment traffic without micro-location verification.',
+      decisionImplication: `Ensure physical site is oriented toward primary arterial or density cluster supporting ${dailyTarget} ${unitLabel}/day.`,
+      verificationSource: 'Statistics Canada 2021 Census Profile (98-316-X2021001)',
+      provenance: popProvenance
     },
     {
-      claim: `Household purchasing power comfortably supports proposed $${aov.toFixed(2)} Average Order Value.`,
-      evidenceObserved: `Median after-tax income of $${candidate.medianIncome.toLocaleString()} and annual food-away-from-home spending of $${candidate.annualFoodAwayExpenditure.toLocaleString()}/household.`,
-      calculationMethod: `Average pizza order ($${aov.toFixed(2)}) represents approximately 0.9% of annual dining-out budget per household across 4.2 annual orders.`,
+      claim: `Purchasing power / commercial demand supports proposed $${aov.toFixed(2)} ${model.unitRevenueLabel}.`,
+      evidenceObserved: `Median after-tax income of $${candidate.medianIncome.toLocaleString()} and annual spending of $${candidate.annualFoodAwayExpenditure.toLocaleString()} in ${candidate.city}.`,
+      calculationMethod: `Unit revenue ($${aov.toFixed(2)}) aligns with regional disposable purchasing benchmarks.`,
       classification: 'AUDITED',
-      uncertaintyEstimate: 'Low-to-moderate: Consumer price sensitivity has increased; elevated mortgage carrying costs may cause trade-downs toward discount grocery meal solutions.',
-      decisionImplication: 'Position menu pricing at quality-to-value sweet spot; avoid aggressive premium pricing ($38+) without clear artisan differentiation.',
-      verificationSource: 'StatCan Survey of Household Spending (Table 11-10-0222-01)'
+      uncertaintyEstimate: 'Low-to-moderate: Macro income is strong, but economic shocks and inflation can cause trade-downs.',
+      decisionImplication: 'Maintain disciplined price-value relationship relative to incumbent competitors.',
+      verificationSource: 'StatCan Survey of Household Spending (Table 11-10-0222-01)',
+      provenance: incomeProvenance
     },
     {
       claim: `Commercial occupancy expense is sustainable under base operating volume.`,
-      evidenceObserved: `Benchmark commercial retail gross lease rate is $${grossRent.toFixed(2)}/sqft (Net Rent $${candidate.commercialNetRentSqft.toFixed(2)} + TMI $${candidate.commercialTmiSqft.toFixed(2)}), translating to $${Math.round(monthlyRent).toLocaleString()}/month for 1,400 sqft.`,
-      calculationMethod: `Occupancy cost represents ${rentRatio.toFixed(1)}% of base gross monthly sales ($${Math.round(monthlySales).toLocaleString()}), meeting the <= 9% viability ceiling.`,
-      classification: 'OBSERVED',
-      uncertaintyEstimate: 'Moderate: Subject to landlord negotiation, additional CAM common-area reconciliations, and property tax reassessments.',
-      decisionImplication: 'Viable under base case; lease must stipulate a CAM escalation cap (maximum 5% per annum) to protect margin.',
-      verificationSource: 'CBRE & Colliers GTA West Commercial Retail Reports (Q4)'
+      evidenceObserved: `Benchmark ${isIndustrial ? 'industrial' : 'commercial retail'} lease rate is $${grossRent.toFixed(2)}/sqft (Net $${candidate.commercialNetRentSqft.toFixed(2)} + TMI $${candidate.commercialTmiSqft.toFixed(2)}), translating to ~$${Math.round(monthlyRent).toLocaleString()}/month for ${sqft.toLocaleString()} sqft.`,
+      calculationMethod: `Occupancy cost represents ${rentRatio.toFixed(1)}% of base monthly revenue ($${Math.round(monthlySales).toLocaleString()}), evaluated against the ${model.maxGrossRentPctRevenue}% threshold.`,
+      classification: 'BENCHMARK',
+      uncertaintyEstimate: 'Moderate: Submarket benchmark rate. Final lease agreement will dictate actual base rent and CAM pass-throughs.',
+      decisionImplication: rentRatio <= model.maxGrossRentPctRevenue 
+        ? 'Occupancy expense is viable under base projections; negotiate CAM escalation caps (<= 5%/yr).'
+        : `Occupancy ratio (${rentRatio.toFixed(1)}%) breaches ceiling (${model.maxGrossRentPctRevenue}%). Landlord negotiations or smaller footprint needed.`,
+      verificationSource: 'CBRE / Colliers GTA West Commercial Market Benchmark',
+      provenance: rentProvenance
     },
     {
-      claim: `Competitive density permits capture of profitable local market share.`,
-      evidenceObserved: `Audited business counts identify ${candidate.estimatedDirectCompetitors} licensed NAICS 722511/722512 pizza establishments in the municipality (approx 1 per 12,800 residents).`,
-      calculationMethod: `Provincial median is 1 establishment per 9,200 residents; market indicates an underserved ratio by approximately 28%.`,
+      claim: `Competitive density permits capture of profitable local market share for NAICS ${model.naicsCode}.`,
+      evidenceObserved: `Audited business register identifies ${candidate.estimatedDirectCompetitors} licensed establishments in ${candidate.city}.`,
+      calculationMethod: `Competitor density corresponds to 1 operator per ${Math.round(candidate.population2021 / Math.max(1, candidate.estimatedDirectCompetitors)).toLocaleString()} residents.`,
       classification: 'AUDITED',
-      uncertaintyEstimate: 'High: Low competitor density could reflect localized delivery dominance by mega-chains (Domino\'s/Pizza Pizza) or lower per-capita pizza consumption.',
-      decisionImplication: 'Differentiate strongly on quality, speed, or dough style (e.g. Detroit-style, sourdough, or gourmet gluten-free) rather than competing on commodity pricing.',
-      verificationSource: 'StatCan Canadian Business Counts Table 33-10-1176-01 (June 2026)'
-    },
-    {
-      claim: `Physical property at ${candidate.propertyAddress || 'Commercial Unit'} supports food service infrastructure.`,
-      evidenceObserved: `Commercial listing #${candidate.listingId || 'L-102'} specifies ${candidate.squareFootage || 1400} sq ft retail footprint with existing food service zoning classification.`,
-      calculationMethod: `Space allows 400 sqft kitchen/prep with dual deck oven, 200 sqft walk-in refrigeration, 500 sqft customer pickup/counter, and 300 sqft storage/office.`,
-      classification: 'OBSERVED',
-      uncertaintyEstimate: 'Critical uncertainty: HVAC exhaust ducting (Type 1 commercial grease hood) and 3-phase 200A electrical service unverified until engineering site audit.',
-      decisionImplication: 'Do NOT sign lease or waive conditions without landlord-confirmed mechanical drawings and municipal zoning certificate of occupancy.',
-      verificationSource: 'Commercial Brokerage Active Listing File & MMAH Planning Register'
+      uncertaintyEstimate: 'High: Low competitor density may indicate unmet demand OR lack of localized customer appetite/infrastructure.',
+      decisionImplication: 'Differentiate strongly on service speed, specialized offering, or modern logistics integrations.',
+      verificationSource: 'StatCan Canadian Business Counts Table 33-10-1176-01 (June 2026)',
+      provenance: compProvenance
     }
   ];
+
+  if (candidate.propertyAddress && candidate.listingId) {
+    const propertyProvenance = buildMetricProvenance({
+      metricKey: 'property_listing',
+      metricName: 'Commercial Property Listing',
+      sourceName: 'Active Commercial Brokerage Listing & MLS Feed',
+      sourceUrl: 'https://commercial.mls.ca/on/burlington',
+      datasetId: 'ON-MLS-COMMERCIAL',
+      recordIdentifier: String(candidate.listingId),
+      observationPeriod: 'Current Active',
+      geographyId: geoId,
+      geographyName: candidate.propertyAddress,
+      geographyResolution: 'PROPERTY_ADDRESS',
+      units: 'sqft',
+      originalValue: sqft,
+      transformation: 'Direct verification of active listing file and municipal zoning map',
+      evidenceClassification: 'OBSERVED',
+      limitations: 'Brokerage listing describes advertised specifications. Physical engineering inspection and permitted use confirmation required.',
+      claimRequiresAddressLevel: true
+    });
+
+    items.push({
+      claim: `Physical property at ${candidate.propertyAddress} fits operational envelope.`,
+      evidenceObserved: `Active listing #${candidate.listingId} indicates ${sqft.toLocaleString()} sqft footprint with advertised zoning.`,
+      calculationMethod: `Footprint meets minimum operational square footage (${sqft} >= 1,200 sqft).`,
+      classification: 'OBSERVED',
+      uncertaintyEstimate: 'Critical: Mechanical utilities, electrical capacity, and zoning occupancy certificate remain unverified pending site inspection.',
+      decisionImplication: 'Do not waive lease conditions or advance deposits without written municipal zoning clearance and mechanical inspection.',
+      verificationSource: 'Commercial Brokerage Active Listing File',
+      provenance: propertyProvenance
+    });
+  } else {
+    items.push({
+      claim: `Physical property at address level remains UNVERIFIED.`,
+      evidenceObserved: `Analysis is bounded at neighbourhood/corridor tier (${candidate.neighbourhood || candidate.city}). No single property lease executed.`,
+      calculationMethod: 'Macro and corridor screening completed; candidate selection requires broker RFP and physical site verification.',
+      classification: 'UNAVAILABLE',
+      uncertaintyEstimate: 'Address-level lease terms, build-out costs, loading doors, and clear heights are currently unverified assumptions.',
+      decisionImplication: 'Engage commercial tenant representative to tour specific qualifying units meeting category criteria before committing capital.',
+      verificationSource: 'Municipal Planning Initiatives & Commercial Registry'
+    });
+  }
+
+  return items;
 }

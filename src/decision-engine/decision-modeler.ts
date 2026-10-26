@@ -6,107 +6,124 @@ import type {
   OwnershipType,
   OwnerInvolvement,
 } from './types.js';
+import { getCategoryProfile } from './category-profiles.js';
 
-export const OPERATING_SCENARIOS: OperatingScenario[] = [
-  {
-    key: 'lean_takeout_delivery',
-    label: 'Scenario A: Lean Takeout & Delivery (Independent)',
-    format: 'TAKEOUT_DELIVERY',
-    ownership: 'INDEPENDENT',
-    investmentCapital: 195000,
-    workingCapital: 35000,
-    targetAov: 28.5,
-    rationale: 'Minimizes front-of-house square footage (1,000–1,300 sq ft) and fit-out capital while prioritizing 3–5 km delivery catchment density and digital ordering.'
-  },
-  {
-    key: 'turnkey_franchise',
-    label: 'Scenario B: Turnkey Franchise Acquisition',
-    format: 'TAKEOUT_DELIVERY',
-    ownership: 'FRANCHISE',
-    investmentCapital: 320000,
-    workingCapital: 45000,
-    targetAov: 26.0,
-    rationale: 'Leverages established regional brand loyalty and standardized supply chains, balanced against franchise fee and 5–6% ongoing gross royalty burden.'
-  },
-  {
-    key: 'artisan_fast_casual',
-    label: 'Scenario C: Artisan Fast-Casual & Slice Bar',
-    format: 'FAST_CASUAL',
-    ownership: 'INDEPENDENT',
-    investmentCapital: 275000,
-    workingCapital: 50000,
-    targetAov: 34.0,
-    rationale: 'Targets affluent demographics and active daytime footfall with higher-margin beverage pairings, gourmet toppings, and dual lunch/dinner dayparts.'
+export function resolveCategoryIdFromInquiry(inquiry: string, explicitCategory?: string): string {
+  if (explicitCategory && explicitCategory.trim()) {
+    return explicitCategory.trim().toLowerCase();
   }
-];
+  const text = inquiry.toLowerCase();
+  if (text.includes('shipping') || text.includes('courier') || text.includes('logistics') || text.includes('parcel') || text.includes('freight') || text.includes('warehouse')) {
+    return 'logistics_warehouse';
+  }
+  if (text.includes('daycare') || text.includes('childcare') || text.includes('preschool') || text.includes('infant')) {
+    return 'child_daycare';
+  }
+  if (text.includes('coffee') || text.includes('cafe')) {
+    return 'coffee_shop';
+  }
+  if (text.includes('gym') || text.includes('fitness')) {
+    return 'gym_fitness';
+  }
+  if (text.includes('retail') || text.includes('boutique') || text.includes('store') && !text.includes('pizza')) {
+    return 'retail_store';
+  }
+  return 'pizza_store';
+}
 
 export function buildDecisionModel(input: DecisionInquiry): {
   decisionModel: DecisionModel;
   activeScenario: OperatingScenario;
   allScenarios: OperatingScenario[];
 } {
-  const selectedScenario = OPERATING_SCENARIOS.find(s => s.key === input.selectedScenarioKey) || OPERATING_SCENARIOS[0]!;
+  const categoryId = resolveCategoryIdFromInquiry(input.inquiry, input.categoryId);
+  const profile = getCategoryProfile(categoryId);
+
+  const allScenarios: OperatingScenario[] = profile.scenarios.map(s => ({
+    key: s.key,
+    label: s.label,
+    format: s.format,
+    ownership: s.ownership,
+    investmentCapital: s.investmentCapital,
+    workingCapital: s.workingCapital,
+    targetAov: s.targetUnitRevenue,
+    rationale: s.rationale
+  }));
+
+  const selectedScenario = allScenarios.find(s => s.key === input.selectedScenarioKey) || allScenarios[0]!;
 
   const unspecifiedPreferences: string[] = [];
 
   const format: OperatingFormat = input.format ?? (() => {
-    unspecifiedPreferences.push('Operating format unprovided — default modelled under ' + selectedScenario.label);
+    unspecifiedPreferences.push(`Operating format unprovided — default modelled under ${selectedScenario.label}`);
     return selectedScenario.format;
   })();
 
   const ownership: OwnershipType = input.ownership ?? (() => {
-    unspecifiedPreferences.push('Ownership structure unprovided — default modelled under ' + selectedScenario.ownership);
+    unspecifiedPreferences.push(`Ownership structure unprovided — default modelled under ${selectedScenario.ownership}`);
     return selectedScenario.ownership;
   })();
 
   const investmentCapital = input.investmentCapital ?? selectedScenario.investmentCapital;
   if (!input.investmentCapital) {
-    unspecifiedPreferences.push(`CapEx budget unprovided — defaulted to scenario standard ($${investmentCapital.toLocaleString()})`);
+    unspecifiedPreferences.push(`CapEx budget unprovided — defaulted to ${profile.canonicalName} benchmark ($${investmentCapital.toLocaleString()})`);
   }
 
   const workingCapital = input.workingCapital ?? selectedScenario.workingCapital;
   if (!input.workingCapital) {
-    unspecifiedPreferences.push(`Working capital buffer unprovided — defaulted to 3 months reserves ($${workingCapital.toLocaleString()})`);
+    unspecifiedPreferences.push(`Working capital buffer unprovided — defaulted to 3 months operating reserves ($${workingCapital.toLocaleString()})`);
   }
 
   const targetPricePointAov = input.targetPricePointAov ?? selectedScenario.targetAov;
   if (!input.targetPricePointAov) {
-    unspecifiedPreferences.push(`Average Order Value (AOV) unprovided — modelled at $${targetPricePointAov.toFixed(2)} based on format benchmark`);
+    unspecifiedPreferences.push(`${profile.unitRevenueLabel} unprovided — modelled at $${targetPricePointAov.toFixed(2)} based on format benchmark`);
   }
 
   const ownerInvolvement: OwnerInvolvement = input.ownerInvolvement ?? 'FULL_TIME_OPERATOR';
   if (!input.ownerInvolvement) {
-    unspecifiedPreferences.push('Owner role unprovided — assumed Full-Time Operator (eliminating external general manager salary in year 1)');
+    unspecifiedPreferences.push('Owner role unprovided — assumed Full-Time Operator (eliminates external general manager salary in year 1)');
   }
 
   const desiredAnnualIncome = input.desiredDiscretionaryIncome ?? 85000;
   const targetTimelineMonths = input.targetTimelineMonths ?? 6;
-  const geographicScope = input.targetRegions && input.targetRegions.length > 0 
-    ? input.targetRegions.join(', ') 
-    : 'Ontario Core Growth Corridors (GTA West & Golden Horseshoe)';
+  const geographicScope = input.targetRegions && input.targetRegions.length > 0
+    ? input.targetRegions.join(', ')
+    : 'Ontario Growth Corridors (GTA West & Golden Horseshoe Core)';
 
-  // Deterministic threshold formulations
-  // Rule: Break-even daily orders = (Fixed monthly costs + owner min income / 12) / (AOV * Contribution Margin) / 30
-  // Standard pizza contribution margin after food cost (30%) and delivery cut (avg 18%) is ~52%
-  const approxFixedMonthly = 5200 + 4500 + 1200; // Rent + basic labor/manager + utilities/software
+  // Deterministic Break-Even Unit Volume
   const monthlyProfitTarget = desiredAnnualIncome / 12;
-  const grossMarginPerOrder = targetPricePointAov * 0.52;
-  const minDailyOrdersNeeded = Math.ceil((approxFixedMonthly + monthlyProfitTarget) / (grossMarginPerOrder * 30));
+  const variableMarginRatio = Math.max(0.05, 1 - profile.cogsRatio - profile.variableLaborRatio - profile.channelOrCommissionRatio);
+  const contributionPerUnit = targetPricePointAov * variableMarginRatio;
+  const minDailyOrdersNeeded = contributionPerUnit > 0
+    ? Math.ceil((profile.fixedMonthlyOverhead + 4800 + monthlyProfitTarget) / (contributionPerUnit * 30))
+    : 999;
 
-  // Minimum catchment: Assuming 1.8% annual household penetration, orders/day * 365 / orders_per_household (approx 4.5/yr)
-  const annualOrdersNeeded = minDailyOrdersNeeded * 365;
-  const minCatchmentHouseholds = Math.round((annualOrdersNeeded / 4.5) / 0.04); // 4% penetration
-  const maxGrossRentPctRevenue = 0.09; // Maximum 9% gross rent to sales ratio for viability
+  // Minimum Catchment Scale based on category archetype
+  const annualUnitsNeeded = minDailyOrdersNeeded * 365;
+  const penetrationRate = categoryId === 'logistics_warehouse' ? 0.08 : 0.04;
+  const annualFrequency = categoryId === 'logistics_warehouse' ? 18.0 : 4.5;
+  const minCatchmentHouseholds = Math.round((annualUnitsNeeded / annualFrequency) / penetrationRate);
+
+  const maxGrossRentPctRevenue = categoryId === 'logistics_warehouse' ? 0.14 : 0.09;
+
+  let categoryLimitations: string | undefined;
+  if (profile.categoryId !== 'pizza_store' && profile.categoryId !== 'logistics_warehouse' && profile.categoryId !== 'child_daycare') {
+    categoryLimitations = `Note on ${profile.canonicalName}: Detailed localized unit transaction benchmarks are generalized from provincial commercial retail baselines. Full engineering specifications require tailored commercial site audits.`;
+  }
 
   const decisionModel: DecisionModel = {
-    categoryId: input.categoryId || 'pizza_store',
-    categoryName: input.categoryId === 'pizza_store' ? 'Pizza & Italian Takeout' : input.categoryId,
+    categoryId: profile.categoryId,
+    categoryName: profile.canonicalName,
+    naicsCode: profile.naicsCode,
+    naicsTitle: profile.naicsTitle,
     format,
     ownership,
     investmentCapital,
     workingCapital,
     totalRequiredCapital: investmentCapital + workingCapital,
     targetPricePointAov,
+    unitRevenueLabel: profile.unitRevenueLabel,
+    volumeUnit: profile.volumeUnit,
     ownerInvolvement,
     geographicScope,
     targetTimelineMonths,
@@ -114,12 +131,24 @@ export function buildDecisionModel(input: DecisionInquiry): {
     minDailyOrdersNeeded,
     minCatchmentHouseholds,
     maxGrossRentPctRevenue,
-    unspecifiedPreferencesExplored: unspecifiedPreferences
+    unspecifiedPreferencesExplored: unspecifiedPreferences,
+    categoryLimitations
   };
 
   return {
     decisionModel,
     activeScenario: selectedScenario,
-    allScenarios: OPERATING_SCENARIOS
+    allScenarios
   };
 }
+
+export const OPERATING_SCENARIOS: OperatingScenario[] = getCategoryProfile('pizza_store').scenarios.map(s => ({
+  key: s.key,
+  label: s.label,
+  format: s.format,
+  ownership: s.ownership,
+  investmentCapital: s.investmentCapital,
+  workingCapital: s.workingCapital,
+  targetAov: s.targetUnitRevenue,
+  rationale: s.rationale
+}));

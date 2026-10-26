@@ -5,6 +5,7 @@ import type {
   SensitivityShock,
   SwitchingCondition,
 } from './types.js';
+import { getCategoryProfile } from './category-profiles.js';
 
 export function runSensitivityAnalysis(
   topCandidate: FunnelCandidate,
@@ -15,106 +16,114 @@ export function runSensitivityAnalysis(
   shocks: SensitivityShock[];
   switchingConditions: SwitchingCondition[];
 } {
+  const profile = getCategoryProfile(model.categoryId);
   const baseNet = economics.bands.baseCase.netOperatingIncome;
-  const baseBreakEvenOrders = economics.breakEvenDailyOrders;
+  const baseBreakEvenUnits = economics.breakEvenDailyUnits;
   const annualRent = economics.bands.baseCase.occupancyCostRent;
   const annualRev = economics.bands.baseCase.annualRevenue;
+  const unitLabel = model.volumeUnit || profile.volumeUnit;
+  const isIndustrial = model.categoryId === 'logistics_warehouse';
 
-  // 1. Rent Shock: Commercial Lease +20%
+  // 1. Occupancy Cost Shock: Gross Lease / TMI +20%
   const shockedRentDelta = annualRent * 0.20;
   const netAfterRentShock = baseNet - shockedRentDelta;
-  const rentShockBreakEven = Math.ceil((baseBreakEvenOrders * (annualRent * 1.20 + (annualRev * 0.18))) / (annualRent + (annualRev * 0.18)));
+  const rentShockBreakEven = Math.ceil(baseBreakEvenUnits * (annualRent * 1.20 + (annualRev * 0.18)) / Math.max(1, (annualRent + (annualRev * 0.18))));
   
   const rentShock: SensitivityShock = {
-    parameter: 'Commercial Lease Rate',
-    shockApplied: '+20% increase in Gross Lease (Net Rent + TMI)',
-    baseMetric: `$${Math.round(annualRent).toLocaleString()}/yr (${baseBreakEvenOrders} orders/day break-even)`,
-    shockedMetric: `$${Math.round(annualRent * 1.2).toLocaleString()}/yr (${rentShockBreakEven} orders/day break-even, net income -$${Math.round(shockedRentDelta).toLocaleString()})`,
-    impactOnViability: netAfterRentShock > 45000 
-      ? 'Remains viable with healthy buffer; owner income reduced but positive.' 
-      : 'Erodes safety margin severely; requires +7 orders/day to offset.',
-    resilienceRating: netAfterRentShock > 50000 ? 'ROBUST' : 'SENSITIVE'
+    parameter: isIndustrial ? 'Industrial Net Lease + TMI' : 'Commercial Retail Gross Lease Rate',
+    shockApplied: '+20% increase in base rent or municipal property tax / CAM escalation',
+    baseMetric: `$${Math.round(annualRent).toLocaleString()}/yr (${baseBreakEvenUnits} ${unitLabel}/day break-even)`,
+    shockedMetric: `$${Math.round(annualRent * 1.2).toLocaleString()}/yr (${rentShockBreakEven} ${unitLabel}/day break-even, -$${Math.round(shockedRentDelta).toLocaleString()} net cash flow)`,
+    impactOnViability: netAfterRentShock > 35000 
+      ? 'Remains financially viable; operator cash flow reduced but comfortably covers debt service and operations.' 
+      : 'Erodes safety buffer; requires active lease cap negotiation before signing offer to lease.',
+    resilienceRating: netAfterRentShock > 45000 ? 'ROBUST' : 'SENSITIVE'
   };
 
-  // 2. Sales Volume Shock: -25% Slower Initial Sales Ramp
+  // 2. Volume Demand Ramp Shock: -25% Slower Initial Volume
   const shockedSalesRev = annualRev * 0.75;
-  const shockedSalesNet = (shockedSalesRev * 0.455) - (annualRent + 33600);
+  const shockedSalesNet = (shockedSalesRev * (1 - (profile.cogsRatio + profile.variableLaborRatio + profile.channelOrCommissionRatio))) - (annualRent + (profile.fixedMonthlyOverhead * 12));
   const volumeShock: SensitivityShock = {
-    parameter: 'First-Year Customer Ramp',
-    shockApplied: '-25% lower order volume than modelled base case',
-    baseMetric: `${economics.bands.baseCase.dailyOrders} daily orders ($${baseNet.toLocaleString()} net)`,
-    shockedMetric: `${Math.round(economics.bands.baseCase.dailyOrders * 0.75)} daily orders ($${Math.round(shockedSalesNet).toLocaleString()} net)`,
+    parameter: 'First-Year Customer Ramp / Volume',
+    shockApplied: `-25% lower transaction throughput than modelled base case`,
+    baseMetric: `${economics.bands.baseCase.dailyUnitVolume} ${unitLabel}/day ($${baseNet.toLocaleString()} net)`,
+    shockedMetric: `${Math.round(economics.bands.baseCase.dailyUnitVolume * 0.75)} ${unitLabel}/day ($${Math.round(shockedSalesNet).toLocaleString()} net)`,
     impactOnViability: shockedSalesNet > 0 
-      ? 'Survives initial year without capital call; working capital buffer covers monthly shortfall during months 1–4.'
-      : 'Requires tapping working capital reserve ($35k buffer provides 7.2 months runway under sustained deficit).',
+      ? 'Survives initial ramp without cash call; working capital buffer covers early monthly cash flow deficit.'
+      : `Deficit requires drawing from working capital ($${model.workingCapital.toLocaleString()} reserves sustain approx ${Math.max(1, Math.round((model.workingCapital / Math.abs(shockedSalesNet || 1)) * 12))} months runway).`,
     resilienceRating: shockedSalesNet >= 20000 ? 'SENSITIVE' : 'VULNERABLE'
   };
 
-  // 3. Margin Compression: Food Cost +300 bps (Ingredient Inflation)
-  const foodCostInflation = annualRev * 0.03;
-  const netAfterFoodCost = baseNet - foodCostInflation;
-  const foodShock: SensitivityShock = {
-    parameter: 'Food Cost COGS (Cheese & Flour Inflation)',
-    shockApplied: '+300 bps increase in food cost (29% -> 32%)',
-    baseMetric: `29.0% COGS ($${economics.bands.baseCase.foodCostCogs.toLocaleString()})`,
-    shockedMetric: `32.0% COGS ($${Math.round(economics.bands.baseCase.foodCostCogs + foodCostInflation).toLocaleString()})`,
-    impactOnViability: 'Absorbable via minor retail menu price adjustment (+$0.85 per large pie).',
+  // 3. Direct Cost Inflation (COGS / Consumables / Fuel / Supplies)
+  const cogsInflation = annualRev * 0.03;
+  const netAfterCogs = baseNet - cogsInflation;
+  const cogsShock: SensitivityShock = {
+    parameter: isIndustrial ? 'Fleet Fuel & Packaging Consumables' : 'Direct Product COGS / Ingredient Inflation',
+    shockApplied: `+300 bps increase in direct materials (${(profile.cogsRatio * 100).toFixed(1)}% -> ${((profile.cogsRatio + 0.03) * 100).toFixed(1)}%)`,
+    baseMetric: `${(profile.cogsRatio * 100).toFixed(1)}% COGS ($${economics.bands.baseCase.foodCostCogs.toLocaleString()})`,
+    shockedMetric: `${((profile.cogsRatio + 0.03) * 100).toFixed(1)}% COGS ($${Math.round(economics.bands.baseCase.foodCostCogs + cogsInflation).toLocaleString()})`,
+    impactOnViability: 'Absorbable through disciplined operational yield management or minor price indexation.',
     resilienceRating: 'ROBUST'
   };
 
-  // 4. Delivery Channel Shift: 70% Volume on Third-Party Apps (25% Commission)
-  const deliveryShiftCost = (annualRev * (0.70 - 0.48)) * 0.25;
-  const netAfterDeliveryShift = baseNet - deliveryShiftCost;
-  const deliveryShock: SensitivityShock = {
-    parameter: 'Third-Party Delivery Platform Dependence',
-    shockApplied: 'Delivery share jumps from 48% to 70% of gross orders at 25% take-rate',
-    baseMetric: `48% delivery share ($${economics.bands.baseCase.deliveryCommissions.toLocaleString()} commissions)`,
-    shockedMetric: `70% delivery share ($${Math.round(economics.bands.baseCase.deliveryCommissions + deliveryShiftCost).toLocaleString()} commissions)`,
-    impactOnViability: 'Substantial margin drag; forces active investment into direct first-party online ordering incentives (e.g. 10% direct-order loyalty discount).',
+  // 4. Channel Intermediation / Commission Shift
+  const channelShiftDelta = annualRev * 0.10 * 0.20;
+  const channelShock: SensitivityShock = {
+    parameter: isIndustrial ? '3PL Freight Brokerage Commission Shift' : 'Third-Party Digital Ordering / Delivery Platform Fee',
+    shockApplied: '10% shift in total volume from direct customer relationships to broker/app mediated channels',
+    baseMetric: `$${economics.bands.baseCase.deliveryCommissions.toLocaleString()} channel expense`,
+    shockedMetric: `$${Math.round(economics.bands.baseCase.deliveryCommissions + channelShiftDelta).toLocaleString()} channel expense`,
+    impactOnViability: 'Substantial margin drag; prioritizes direct account sales and corporate contracts.',
     resilienceRating: 'SENSITIVE'
   };
 
-  // 5. Competitor Entry: Direct Competitor Opens Within 600m
-  const competitorShareLoss = annualRev * 0.12;
-  const netAfterCompetitor = baseNet - (competitorShareLoss * 0.455);
-  const competitorShock: SensitivityShock = {
+  // 5. Direct Competitor Ingress
+  const competitorShareLoss = annualRev * 0.10;
+  const competitorNet = baseNet - (competitorShareLoss * 0.40);
+  const compShock: SensitivityShock = {
     parameter: 'Local Competitive Ingress',
-    shockApplied: 'New entrant captures 12% of local neighborhood catchment orders',
+    shockApplied: 'New entrant establishes operations within primary catchment and captures 10% volume',
     baseMetric: `${topCandidate.estimatedDirectCompetitors} existing area competitors`,
-    shockedMetric: `${topCandidate.estimatedDirectCompetitors + 1} competitors ($${Math.round(netAfterCompetitor).toLocaleString()} adjusted net income)`,
-    impactOnViability: 'Unit economics remain profitable provided brand establishes crust/quality differentiation before new entrant arrival.',
+    shockedMetric: `${topCandidate.estimatedDirectCompetitors + 1} competitors ($${Math.round(competitorNet).toLocaleString()} adjusted net income)`,
+    impactOnViability: 'Remains viable provided brand establishes localized customer loyalty and service differentiation.',
     resilienceRating: 'ROBUST'
   };
 
-  const shocks = [rentShock, volumeShock, foodShock, deliveryShock, competitorShock];
+  const shocks = [rentShock, volumeShock, cogsShock, channelShock, compShock];
 
-  // Deterministic Switching Conditions (Requirement 7)
+  // Deterministic Switching Conditions from Candidate-Specific Economics
   const switchingConditions: SwitchingCondition[] = [];
 
   if (runnerUpCandidate) {
-    // Condition 1: Occupancy Cost Switch
-    const rentDifference = topCandidate.commercialGrossRentSqft - runnerUpCandidate.commercialGrossRentSqft;
-    const thresholdRent = topCandidate.commercialGrossRentSqft + 4.80;
+    const topSqft = topCandidate.squareFootage || profile.typicalSqftMin;
+    const runnerSqft = runnerUpCandidate.squareFootage || profile.typicalSqftMin;
+    const runnerRentAnnual = runnerSqft * runnerUpCandidate.commercialGrossRentSqft;
+    const netIncomeDifference = Math.max(0, baseNet - (annualRev * 0.90 - runnerRentAnnual - (profile.fixedMonthlyOverhead * 12)));
+    
+    // Exact mathematical rent threshold where top candidate net income equals runner up net income
+    const allowableRentIncrease = netIncomeDifference / Math.max(1, topSqft);
+    const thresholdRentSqft = topCandidate.commercialGrossRentSqft + allowableRentIncrease;
+
     switchingConditions.push({
-      conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) becomes preferable if ${topCandidate.name}'s negotiated gross lease rate exceeds $${thresholdRent.toFixed(2)}/sqft.`,
-      formulaTrigger: `Gross Rent > $${thresholdRent.toFixed(2)}/sqft (Rent-to-sales ratio exceeds 9.5%)`,
-      switchingThresholdValue: `$${thresholdRent.toFixed(2)}/sqft`,
+      conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) ranks higher if ${topCandidate.name}'s negotiated lease rate exceeds $${thresholdRentSqft.toFixed(2)}/sqft gross.`,
+      formulaTrigger: `Gross Lease Rate > $${thresholdRentSqft.toFixed(2)}/sqft (Net income advantage of $${Math.round(netIncomeDifference).toLocaleString()} is erased)`,
+      switchingThresholdValue: `$${thresholdRentSqft.toFixed(2)}/sqft/yr`,
       alternativeTarget: runnerUpCandidate.name
     });
 
-    // Condition 2: Delivery vs Walk-in Mix Switch
     switchingConditions.push({
-      conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) becomes preferable if delivery order volume exceeds 68% of total transactions.`,
-      formulaTrigger: 'Delivery Mix > 68% (Higher delivery commission cannibalizes urban footfall premium)',
-      switchingThresholdValue: '68% delivery mix',
+      conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) ranks higher if direct customer capture falls below 45% of total volume.`,
+      formulaTrigger: 'Direct Capture < 45% (Intermediary commission burden eliminates location density premium)',
+      switchingThresholdValue: '45% direct customer share',
       alternativeTarget: runnerUpCandidate.name
     });
   } else {
+    const capitalCeiling = model.investmentCapital;
     switchingConditions.push({
-      conditionStatement: 'Switch to turnkey franchise acquisition if physical commercial buildout quotation exceeds $110,000.',
-      formulaTrigger: 'Leasehold Improvement Quote > $110,000 (Exceeds unamortized independent capital ceiling)',
-      switchingThresholdValue: '$110,000 Fit-out CapEx',
-      alternativeTarget: 'Turnkey Franchise System'
+      conditionStatement: `Alternative market investigation triggered if turnkey build-out quote exceeds $${capitalCeiling.toLocaleString()}.`,
+      formulaTrigger: `Buildout CapEx > $${capitalCeiling.toLocaleString()} (Exceeds available equity buffer)`,
+      switchingThresholdValue: `$${capitalCeiling.toLocaleString()} CapEx`,
+      alternativeTarget: 'Adjacent Municipality or Turnkey Asset Acquisition'
     });
   }
 

@@ -4,49 +4,55 @@ import type {
   FinancialEconomics,
   FunnelCandidate,
 } from './types.js';
+import { getCategoryProfile } from './category-profiles.js';
 
 export function calculateFinancialEconomics(
   candidate: FunnelCandidate,
   model: DecisionModel
 ): FinancialEconomics {
-  const sqft = candidate.squareFootage || 1400;
+  const profile = getCategoryProfile(model.categoryId);
+  const sqft = candidate.squareFootage || profile.typicalSqftMin;
   const grossRentAnnual = sqft * candidate.commercialGrossRentSqft;
   const monthlyRent = candidate.monthlyRent || (grossRentAnnual / 12);
   const annualRent = monthlyRent * 12;
 
-  // Initial Capital Breakdown
-  const equipment = model.format === 'TAKEOUT_DELIVERY' ? 85000 : 120000;
-  const leaseholdImprovements = model.format === 'TAKEOUT_DELIVERY' ? 65000 : 95000;
-  const initialInventory = 15000;
-  const rentDeposit = monthlyRent * 3; // First, last, and security
-  const buildoutEquipmentCapEx = equipment + leaseholdImprovements + initialInventory + rentDeposit;
+  // Capital Expenditure & Setup
+  const rentDeposit = monthlyRent * 3; // First, last, and damage security
+  const fitoutMultiplier = model.categoryId === 'logistics_warehouse' ? 25 : 65; // Industrial vs Commercial retail fitout $/sqft
+  const equipmentBase = model.categoryId === 'logistics_warehouse' ? 75000 : 95000;
+  const buildoutEquipmentCapEx = (sqft * fitoutMultiplier) + equipmentBase + rentDeposit;
   const workingCapitalBuffer = model.workingCapital;
   const totalInitialCapital = buildoutEquipmentCapEx + workingCapitalBuffer;
 
-  const aov = model.targetPricePointAov;
+  const aov = model.targetPricePointAov || profile.benchmarkUnitRevenue;
+  const unitLabel = model.volumeUnit || profile.volumeUnit;
 
-  // Fixed Monthly Operating Expenses (Excluding Food & Labor)
-  // Utilities ($1,100), Insurance ($450), POS/Tech/Telecom ($600), Maintenance & Misc ($650)
-  const fixedUtilitiesTechAnnual = (1100 + 450 + 600 + 650) * 12;
+  // Fixed overhead: Utilities, property insurance, software/telecom, maintenance
+  const fixedAnnualOverhead = profile.fixedMonthlyOverhead * 12;
 
   // Helper for computing financial bands
-  function buildBand(dailyOrders: number, deliveryShare: number, foodCostPct: number, laborCostPct: number): FinancialBand {
-    const annualRevenue = dailyOrders * aov * 360;
-    const foodCostCogs = annualRevenue * foodCostPct;
-    const laborCost = annualRevenue * laborCostPct;
+  function buildBand(
+    unitsPerDay: number,
+    channelPct: number,
+    cogsPct: number,
+    laborPct: number
+  ): FinancialBand {
+    const annualRevenue = unitsPerDay * aov * 360;
+    const foodCostCogs = annualRevenue * cogsPct;
+    const laborCost = annualRevenue * laborPct;
     const occupancyCostRent = annualRent;
     
-    // Delivery commission: Third party platforms take ~24% on delivery orders
-    const deliveryCommissions = (annualRevenue * deliveryShare) * 0.24;
+    // Channel / commissions (third-party delivery apps or freight brokerage commissions)
+    const deliveryCommissions = annualRevenue * channelPct;
     
     // Franchise royalty if franchise model
     const royaltyCost = model.ownership === 'FRANCHISE' ? annualRevenue * 0.055 : 0;
     
-    const operatingExpenses = fixedUtilitiesTechAnnual + royaltyCost;
+    const operatingExpenses = fixedAnnualOverhead + royaltyCost;
     const totalExpenses = foodCostCogs + laborCost + occupancyCostRent + deliveryCommissions + operatingExpenses;
     const netOperatingIncome = annualRevenue - totalExpenses;
     
-    // Owner Cash Flow: If full-time operator, includes owner-manager draw
+    // Owner Cash Flow: If full-time operator, includes owner draw; debt service accounted if leveraged
     const ownerCashFlow = netOperatingIncome;
     
     const paybackMonths = ownerCashFlow > 0 
@@ -54,7 +60,9 @@ export function calculateFinancialEconomics(
       : 999;
 
     return {
-      dailyOrders,
+      dailyOrders: unitsPerDay,
+      dailyUnitVolume: unitsPerDay,
+      unitName: unitLabel,
       annualRevenue: Math.round(annualRevenue),
       foodCostCogs: Math.round(foodCostCogs),
       laborCost: Math.round(laborCost),
@@ -67,44 +75,67 @@ export function calculateFinancialEconomics(
     };
   }
 
-  // Conservative (P20): Slower ramp, higher delivery dependence, slightly higher food waste
+  // Base variable cost ratios
+  const baseCogs = profile.cogsRatio;
+  const baseLabor = profile.variableLaborRatio;
+  const baseChannel = profile.channelOrCommissionRatio;
+
+  // 1. Conservative: Slower market penetration, higher channel/waste costs
   const conservative = buildBand(
-    Math.round(model.minDailyOrdersNeeded * 0.82), // 82% of target volume
-    0.65, // 65% delivery orders
-    0.32, // 32% food cost
-    0.31  // 31% labor
+    Math.round(model.minDailyOrdersNeeded * 0.80),
+    baseChannel * 1.35,
+    baseCogs + 0.03,
+    baseLabor + 0.03
   );
 
-  // Base Case (P50): Target operating model
+  // 2. Base Case: Target operating model parameters
   const baseCase = buildBand(
     model.minDailyOrdersNeeded,
-    0.48, // 48% delivery orders
-    0.29, // 29% food cost
-    0.28  // 28% labor
+    baseChannel,
+    baseCogs,
+    baseLabor
   );
 
-  // Optimistic (P80): Mature operating cadence, strong direct/pickup volume
+  // 3. Optimistic: High operational throughput, strong direct/repeat customer base
   const optimistic = buildBand(
-    Math.round(model.minDailyOrdersNeeded * 1.30), // 130% of target volume
-    0.35, // 35% delivery orders (65% pickup/direct, zero commission)
-    0.27, // 27% food cost
-    0.25  // 25% labor
+    Math.round(model.minDailyOrdersNeeded * 1.30),
+    baseChannel * 0.70,
+    Math.max(0.12, baseCogs - 0.02),
+    Math.max(0.18, baseLabor - 0.03)
   );
 
-  // Deterministic Break-Even Calculation
-  // Contribution Margin = 1 - (Food Cost 29% + Delivery Commission Blend 11.5% + Variable Labor 14%) = 45.5%
-  const contributionMarginRatio = 0.455;
-  const fixedAnnualCosts = annualRent + fixedUtilitiesTechAnnual + (model.ownerInvolvement === 'INVESTOR' ? 55000 : 0);
-  const breakEvenAnnualRevenue = fixedAnnualCosts / contributionMarginRatio;
+  // Deterministic Contribution Margin calculation
+  const totalVariableCostRatio = baseCogs + baseLabor + baseChannel;
+  const contributionMarginRatio = 1 - totalVariableCostRatio;
+
+  const fixedAnnualCosts = annualRent + fixedAnnualOverhead + (model.ownerInvolvement === 'INVESTOR' ? 55000 : 0);
+
+  // Handle zero/negative contribution margin boundary safely
+  let breakEvenFeasible = true;
+  let marginWarning: string | undefined;
+  let breakEvenAnnualRevenue = 0;
+  let breakEvenDailyUnits = 0;
+
+  if (contributionMarginRatio <= 0.05) {
+    breakEvenFeasible = false;
+    marginWarning = `Variable costs (${(totalVariableCostRatio * 100).toFixed(1)}%) leave insufficient contribution margin (${(contributionMarginRatio * 100).toFixed(1)}%). Break-even cannot be reached under current unit cost structure.`;
+    breakEvenDailyUnits = 999999;
+  } else {
+    breakEvenAnnualRevenue = fixedAnnualCosts / contributionMarginRatio;
+    breakEvenDailyUnits = Math.ceil(breakEvenAnnualRevenue / (aov * 360));
+  }
+
   const breakEvenMonthlyRevenue = Math.round(breakEvenAnnualRevenue / 12);
-  const breakEvenDailyOrders = Math.ceil(breakEvenAnnualRevenue / (aov * 360));
 
   return {
     totalInitialCapital: Math.round(totalInitialCapital),
     buildoutEquipmentCapEx: Math.round(buildoutEquipmentCapEx),
     workingCapitalBuffer: Math.round(workingCapitalBuffer),
-    breakEvenDailyOrders,
+    breakEvenDailyOrders: breakEvenDailyUnits,
+    breakEvenDailyUnits,
     breakEvenMonthlyRevenue,
+    breakEvenFeasible,
+    marginWarning,
     bands: {
       conservative,
       baseCase,

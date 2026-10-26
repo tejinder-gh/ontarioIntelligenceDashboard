@@ -857,6 +857,8 @@ CREATE TABLE IF NOT EXISTS decision_engine_runs (
     scenario_label VARCHAR(128) NOT NULL,
     selected_candidate_id VARCHAR(64),
     recommendation_outcome VARCHAR(64) NOT NULL,
+    workspace_id VARCHAR(64) DEFAULT 'default_workspace',
+    user_id UUID REFERENCES users(id),
     decision_model_snapshot JSONB NOT NULL,
     funnel_snapshot JSONB NOT NULL,
     hypotheses_snapshot JSONB NOT NULL,
@@ -869,4 +871,6 @@ CREATE TABLE IF NOT EXISTS decision_engine_runs (
 
 CREATE INDEX IF NOT EXISTS idx_decision_runs_cat ON decision_engine_runs(category_id);
 CREATE INDEX IF NOT EXISTS idx_decision_runs_created ON decision_engine_runs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_decision_runs_workspace ON decision_engine_runs(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_decision_runs_user ON decision_engine_runs(user_id);
 

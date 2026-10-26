@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express';
 import { sql } from '../db/index.js';
 import { DecisionInquirySchema } from '../decision-engine/types.js';
-import { runDecisionEngine } from '../decision-engine/engine.js';
+import { runDecisionEngine, replayDecisionRun } from '../decision-engine/engine.js';
 import { OPERATING_SCENARIOS } from '../decision-engine/decision-modeler.js';
 import { evaluateSourceRegistry } from '../decision-engine/source-evaluator.js';
 
@@ -13,10 +13,30 @@ const sanitizeError = (res: Response, logPrefix: string, err: unknown) => {
   res.status(500).json({ success: false, error: msg });
 };
 
+function extractWorkspaceId(req: { headers: Record<string, string | string[] | undefined>; query: Record<string, unknown>; body?: Record<string, unknown> }): string {
+  const headerWs = req.headers['x-workspace-id'];
+  if (typeof headerWs === 'string' && headerWs.trim().length > 0) {
+    return headerWs.trim();
+  }
+  if (typeof req.query.workspaceId === 'string' && req.query.workspaceId.trim().length > 0) {
+    return req.query.workspaceId.trim();
+  }
+  if (req.body && typeof req.body.workspaceId === 'string' && req.body.workspaceId.trim().length > 0) {
+    return req.body.workspaceId.trim();
+  }
+  return 'workspace_default';
+}
+
 // 1. Run Decision Engine Analysis
 decisionEngineRouter.post('/analyze', async (req, res) => {
   try {
-    const parseResult = DecisionInquirySchema.safeParse(req.body);
+    const workspaceId = extractWorkspaceId(req);
+    const rawBody = {
+      ...req.body,
+      workspaceId: req.body?.workspaceId || workspaceId
+    };
+
+    const parseResult = DecisionInquirySchema.safeParse(rawBody);
     if (!parseResult.success) {
       res.status(400).json({
         success: false,
@@ -48,36 +68,74 @@ decisionEngineRouter.get('/sources', async (_req, res) => {
   }
 });
 
-// 4. List Recent Saved Auditable Runs
+// 4. List Saved Auditable Runs with Workspace Isolation
 decisionEngineRouter.get('/runs', async (req, res) => {
   try {
+    const workspaceId = extractWorkspaceId(req);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string || '20', 10)));
     const runs = await sql`
       SELECT 
         id, engine_version, category_id, inquiry_text, operating_format, 
-        scenario_label, selected_candidate_id, recommendation_outcome, created_at
+        scenario_label, selected_candidate_id, recommendation_outcome, 
+        workspace_id, user_id, created_at
       FROM decision_engine_runs
+      WHERE workspace_id = ${workspaceId}
       ORDER BY created_at DESC
       LIMIT ${limit};
     `;
-    res.json({ success: true, count: runs.length, data: runs });
+    res.json({ success: true, workspaceId, count: runs.length, data: runs });
   } catch (err: unknown) {
     sanitizeError(res, 'Error fetching decision engine runs', err);
   }
 });
 
-// 5. Get Single Versioned Run by ID for Auditable Playback
+// 5. Get Single Versioned Run by ID with Workspace Isolation Verification
 decisionEngineRouter.get('/runs/:id', async (req, res) => {
   try {
-    const [run] = await sql`
-      SELECT * FROM decision_engine_runs WHERE id = ${req.params.id};
+    const workspaceId = extractWorkspaceId(req);
+    const [anyRun] = await sql`
+      SELECT id, workspace_id FROM decision_engine_runs WHERE id = ${req.params.id};
     `;
-    if (!run) {
+
+    if (!anyRun) {
       res.status(404).json({ success: false, error: 'Decision run snapshot not found' });
       return;
     }
+
+    if (anyRun.workspace_id !== workspaceId) {
+      res.status(403).json({
+        success: false,
+        error: 'Access denied: Decision run belongs to an isolated workspace'
+      });
+      return;
+    }
+
+    const [run] = await sql`
+      SELECT * FROM decision_engine_runs WHERE id = ${req.params.id} AND workspace_id = ${workspaceId};
+    `;
+
     res.json({ success: true, data: run });
   } catch (err: unknown) {
     sanitizeError(res, 'Error fetching decision run snapshot', err);
+  }
+});
+
+// 6. Replay Saved Run Reproducibly
+decisionEngineRouter.post('/runs/:id/replay', async (req, res) => {
+  try {
+    const workspaceId = extractWorkspaceId(req);
+    const replayed = await replayDecisionRun(req.params.id, workspaceId);
+    res.json({ success: true, data: replayed });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error replaying run';
+    if (msg.includes('Access denied') || msg.includes('unauthorized')) {
+      res.status(403).json({ success: false, error: msg });
+      return;
+    }
+    if (msg.includes('not found')) {
+      res.status(404).json({ success: false, error: msg });
+      return;
+    }
+    sanitizeError(res, 'Error replaying decision run', err);
   }
 });

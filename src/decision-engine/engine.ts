@@ -4,8 +4,11 @@ import type {
   CandidateComparison,
   DecisionEngineResult,
   DecisionInquiry,
+  DecisionModel,
+  EvidenceRecordItem,
   FunnelCandidate,
 } from './types.js';
+import type { MetricProvenance } from './provenance.js';
 import { buildDecisionModel } from './decision-modeler.js';
 import { executeStagedFunnel } from './staged-funnel.js';
 import { evaluateBusinessHypotheses } from './hypothesis-evaluator.js';
@@ -14,15 +17,19 @@ import { calculateFinancialEconomics } from './financial-scenarios.js';
 import { runSensitivityAnalysis } from './sensitivity-matrix.js';
 import { prioritizeMaterialUnknowns } from './unknowns-priority.js';
 import { generateDecisionBrief } from './decision-brief-generator.js';
+import { getCategoryProfile } from './category-profiles.js';
 
 export const ENGINE_VERSION = '2.0.0';
 
 export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<DecisionEngineResult> {
   const timestamp = new Date().toISOString();
   const runId = `run_${createHash('md5').update(`${inquiry.inquiry}_${timestamp}`).digest('hex').substring(0, 12)}`;
+  const workspaceId = inquiry.workspaceId || 'workspace_default';
+  const userId = inquiry.userId || 'analyst_default';
 
   // 1. Build Decision Model & Selected Scenario
   const { decisionModel, activeScenario } = buildDecisionModel(inquiry);
+  const profile = getCategoryProfile(decisionModel.categoryId);
 
   // 2. Execute Staged Geographic Search Funnel
   const geographicFunnel = await executeStagedFunnel(decisionModel);
@@ -41,10 +48,11 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
   // 4. Test Business Hypotheses (H1 - H5)
   const hypotheses = evaluateBusinessHypotheses(topCandidate, decisionModel);
 
-  // 5. Build Auditable Evidence Record
+  // 5. Build Auditable Evidence Record & Provenance Ledger
   const evidenceLedger = buildEvidenceLedger(topCandidate, decisionModel);
+  const provenanceLedger = evidenceLedger.flatMap(e => e.provenance ? [e.provenance] : []);
 
-  // 6. Compare Real Alternatives (Requirement 6)
+  // 6. Compare Real Alternatives with Category-Specific Drivers
   const rankedAlternatives: CandidateComparison[] = candidates.slice(0, 4).map((cand, idx) => {
     const isTop = idx === 0;
     const candEconomics = calculateFinancialEconomics(cand, decisionModel);
@@ -56,33 +64,33 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
       const rentDelta = cand.commercialGrossRentSqft - topCandidate.commercialGrossRentSqft;
       const rentDesc = rentDelta > 0 
         ? `$${Math.abs(rentDelta).toFixed(2)}/sqft higher gross lease rate`
-        : `$${Math.abs(rentDelta).toFixed(2)}/sqft lower lease rate but lower median household density`;
-      rankingRationale = `Rank #${idx + 1}: ${rentDesc}; requires higher transaction frequency to match Rank #1 net profitability.`;
+        : `$${Math.abs(rentDelta).toFixed(2)}/sqft lower lease rate but lower localized density`;
+      rankingRationale = `Rank #${idx + 1}: ${rentDesc}; requires higher volume capture to match Rank #1 net profitability.`;
     }
 
     return {
       candidate: cand,
       rank: idx + 1,
-      whyItFits: `${cand.city} demonstrates ${cand.populationGrowthPct > 0 ? 'expanding' : 'stable'} residential demand suitable for a ${decisionModel.format.toLowerCase().replace('_', ' ')} format.`,
+      whyItFits: `${cand.city} demonstrates ${cand.populationGrowthPct > 0 ? 'expanding' : 'stable'} demand suitable for a ${decisionModel.format.toLowerCase().replace('_', ' ')} format.`,
       strongestSupportingEvidence: [
         `Median after-tax income: $${cand.medianIncome.toLocaleString()}`,
         `Gross commercial lease benchmark: $${cand.commercialGrossRentSqft.toFixed(2)}/sqft`,
-        `Premises: ${cand.propertyAddress || 'Commercial Unit'} (${cand.squareFootage || 1400} sqft)`
+        `Premises: ${cand.propertyAddress || cand.neighbourhood || 'Commercial Hub'} (${cand.squareFootage || profile.typicalSqftMin} sqft)`
       ],
       mainDisadvantages: [
-        idx === 1 ? 'Higher initial rent burden or suburban commuter outflow' : 'Lower foot-traffic pedestrian density during weekday lunch hours'
+        idx === 1 ? 'Higher initial rent burden or suburban commuter outflow' : 'Lower foot-traffic pedestrian density during weekday hours'
       ],
       contradictoryEvidence: [
-        `${cand.estimatedDirectCompetitors} licensed food service competitors in local quadrant`
+        `${cand.estimatedDirectCompetitors} licensed NAICS ${decisionModel.naicsCode} competitors in municipality`
       ],
       scenarioEconomics: {
-        breakEvenDailyOrders: candEconomics.breakEvenDailyOrders,
+        breakEvenDailyOrders: candEconomics.breakEvenDailyUnits,
         baseAnnualNetIncome: candEconomics.bands.baseCase.netOperatingIncome,
         conservativeAnnualNetIncome: candEconomics.bands.conservative.netOperatingIncome
       },
       keyUnknowns: [
-        'Zoning permitted use certification',
-        'HVAC Type 1 commercial hood chase status'
+        `Zoning permitted use certification for ${profile.canonicalName}`,
+        profile.essentialInfrastructure[0] || 'Electrical / Mechanical service load'
       ],
       rankingRationale,
       nextVerificationStep: `Conduct physical inspection and request municipal zoning compliance letter for ${cand.propertyAddress || cand.city}.`
@@ -98,7 +106,7 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
   );
 
   // 8. Prioritize Material Unknowns
-  const materialUnknowns = prioritizeMaterialUnknowns(topCandidate);
+  const materialUnknowns = prioritizeMaterialUnknowns(topCandidate, decisionModel.categoryId);
 
   // 9. Generate Standard 7-Section Decision Brief
   const decisionBrief = generateDecisionBrief(
@@ -114,11 +122,14 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
     runId,
     version: ENGINE_VERSION,
     timestamp,
+    workspaceId,
+    userId,
     decisionModel,
     activeScenario,
     geographicFunnel,
     hypotheses,
     evidenceLedger,
+    provenanceLedger,
     rankedAlternatives,
     financialEconomics,
     sensitivityShocks,
@@ -127,15 +138,19 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
     decisionBrief
   };
 
-  // 10. Persist Versioned Run to PostgreSQL for Auditable Playback
+  // 10. Persist Versioned Run to PostgreSQL with Workspace Isolation
   try {
+    const isUuid = (val: string | undefined): boolean => 
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+    const dbUserId: string | null = (inquiry.userId && isUuid(inquiry.userId)) ? inquiry.userId : null;
+
     await sql`
       INSERT INTO decision_engine_runs (
         id, engine_version, category_id, inquiry_text, operating_format, 
         scenario_label, selected_candidate_id, recommendation_outcome,
         decision_model_snapshot, funnel_snapshot, hypotheses_snapshot,
         evidence_snapshot, alternatives_snapshot, sensitivity_snapshot,
-        decision_brief
+        decision_brief, workspace_id, user_id
       ) VALUES (
         ${runId},
         ${ENGINE_VERSION},
@@ -151,7 +166,9 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
         ${JSON.stringify(evidenceLedger)},
         ${JSON.stringify(rankedAlternatives)},
         ${JSON.stringify({ sensitivityShocks, switchingConditions })},
-        ${JSON.stringify(decisionBrief)}
+        ${JSON.stringify(decisionBrief)},
+        ${workspaceId},
+        ${dbUserId}
       );
     `;
   } catch (dbErr) {
@@ -159,4 +176,88 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
   }
 
   return result;
+}
+
+export async function replayDecisionRun(runId: string, workspaceId: string): Promise<DecisionEngineResult> {
+  const rows = await sql`
+    SELECT * FROM decision_engine_runs 
+    WHERE id = ${runId} AND workspace_id = ${workspaceId}
+    LIMIT 1;
+  `;
+
+  if (rows.length === 0) {
+    throw new Error(`Run ${runId} not found or unauthorized access for workspace ${workspaceId}`);
+  }
+
+  const row = rows[0]!;
+
+  const safeParse = <T>(val: unknown, fallback: T): T => {
+    if (!val) return fallback;
+    if (typeof val === 'string') {
+      try { return JSON.parse(val) as T; } catch { return fallback; }
+    }
+    return val as T;
+  };
+
+  const decisionModel = safeParse<DecisionModel>(row.decision_model_snapshot, {} as DecisionModel);
+  const evidenceLedger = safeParse<EvidenceRecordItem[]>(row.evidence_snapshot, []);
+  const provenanceLedger: MetricProvenance[] = Array.isArray(evidenceLedger)
+    ? evidenceLedger.flatMap(e => e.provenance ? [e.provenance] : [])
+    : [];
+  const sensitivitySnapshot = safeParse<any>(row.sensitivity_snapshot, {});
+  const alternatives = safeParse<CandidateComparison[]>(row.alternatives_snapshot, []);
+  const topCandidate = alternatives[0]?.candidate;
+
+  const financialEconomics = topCandidate 
+    ? calculateFinancialEconomics(topCandidate, decisionModel)
+    : calculateFinancialEconomics({
+        id: 'placeholder',
+        name: 'Snapshot Candidate',
+        city: 'Snapshot City',
+        parentGeoId: 'snapshot_csd',
+        resolutionTier: 'PROSPECTIVE_MARKET',
+        population2021: 100000,
+        populationGrowthPct: 3.5,
+        medianIncome: 80000,
+        annualFoodAwayExpenditure: 4200,
+        commercialGrossRentSqft: 32.0,
+        commercialNetRentSqft: 22.0,
+        commercialTmiSqft: 10.0,
+        estimatedDirectCompetitors: 10,
+        competitorDataSource: 'StatCan Business Counts',
+        attractivenessScore: 75,
+        confidenceScore: 80,
+        suitabilityScore: 78,
+        zoningFeasibilityStatus: 'UNVERIFIED_PENDING_REVIEW',
+        buildingSuitabilityStatus: 'UNVERIFIED_MEP_CHECK_NEEDED'
+      }, decisionModel);
+
+  return {
+    runId: row.id,
+    version: row.engine_version,
+    timestamp: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    workspaceId: row.workspace_id,
+    userId: row.user_id,
+    decisionModel,
+    activeScenario: {
+      key: 'replayed_scenario',
+      label: row.scenario_label,
+      format: row.operating_format,
+      ownership: decisionModel.ownership || 'INDEPENDENT',
+      investmentCapital: decisionModel.investmentCapital,
+      workingCapital: decisionModel.workingCapital,
+      targetAov: decisionModel.targetPricePointAov,
+      rationale: 'Replayed from immutable run snapshot'
+    },
+    geographicFunnel: safeParse(row.funnel_snapshot, row.funnel_snapshot),
+    hypotheses: safeParse(row.hypotheses_snapshot, row.hypotheses_snapshot),
+    evidenceLedger,
+    provenanceLedger,
+    rankedAlternatives: alternatives,
+    financialEconomics,
+    sensitivityShocks: sensitivitySnapshot.sensitivityShocks || [],
+    switchingConditions: sensitivitySnapshot.switchingConditions || [],
+    materialUnknowns: topCandidate ? prioritizeMaterialUnknowns(topCandidate, decisionModel.categoryId) : [],
+    decisionBrief: safeParse(row.decision_brief, row.decision_brief)
+  };
 }

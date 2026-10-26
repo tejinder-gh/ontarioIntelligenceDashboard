@@ -1,16 +1,18 @@
 import { z } from 'zod';
+import type { MetricProvenance } from './provenance.js';
 
 export type OperatingFormat = 'TAKEOUT_DELIVERY' | 'FAST_CASUAL' | 'DINE_IN' | 'GHOST_KITCHEN';
 export type OwnershipType = 'INDEPENDENT' | 'FRANCHISE';
 export type OwnerInvolvement = 'FULL_TIME_OPERATOR' | 'SEMI_ABSENTEE' | 'INVESTOR';
 export type ResolutionTier = 'PROSPECTIVE_MARKET' | 'PROMISING_NEIGHBOURHOOD' | 'POTENTIALLY_SUITABLE_PROPERTY' | 'FEASIBILITY_VERIFIED_PROPERTY';
-export type EvidenceClassification = 'OBSERVED' | 'AUDITED' | 'BENCHMARK' | 'DERIVED' | 'UNAVAILABLE';
+export type EvidenceClassification = 'OBSERVED' | 'AUDITED' | 'BENCHMARK' | 'DERIVED' | 'UNAVAILABLE' | 'UNVERIFIED_ASSUMPTION';
 export type HypothesisStatus = 'SUPPORTED' | 'CONTRADICTED' | 'INCONCLUSIVE';
 export type RecommendationOutcome = 'PROCEED_WITH_VERIFICATION' | 'DO_NOT_PROCEED' | 'INVESTIGATE_ALTERNATIVE';
+export type FeasibilityGateStatus = 'VERIFIED_PERMITTED' | 'UNVERIFIED_PENDING_REVIEW' | 'DISALLOWED';
 
 export const DecisionInquirySchema = z.object({
   inquiry: z.string().min(3),
-  categoryId: z.string().default('pizza_store'),
+  categoryId: z.string().optional(),
   format: z.enum(['TAKEOUT_DELIVERY', 'FAST_CASUAL', 'DINE_IN', 'GHOST_KITCHEN']).optional(),
   ownership: z.enum(['INDEPENDENT', 'FRANCHISE']).optional(),
   investmentCapital: z.number().positive().optional(),
@@ -20,7 +22,9 @@ export const DecisionInquirySchema = z.object({
   targetRegions: z.array(z.string()).optional(),
   targetTimelineMonths: z.number().int().positive().optional(),
   desiredDiscretionaryIncome: z.number().positive().optional(),
-  selectedScenarioKey: z.string().optional()
+  selectedScenarioKey: z.string().optional(),
+  workspaceId: z.string().optional(),
+  userId: z.string().optional()
 });
 
 export type DecisionInquiry = z.infer<typeof DecisionInquirySchema>;
@@ -28,12 +32,16 @@ export type DecisionInquiry = z.infer<typeof DecisionInquirySchema>;
 export interface DecisionModel {
   categoryId: string;
   categoryName: string;
+  naicsCode: string;
+  naicsTitle: string;
   format: OperatingFormat;
   ownership: OwnershipType;
   investmentCapital: number;
   workingCapital: number;
   totalRequiredCapital: number;
   targetPricePointAov: number;
+  unitRevenueLabel: string;
+  volumeUnit: string;
   ownerInvolvement: OwnerInvolvement;
   geographicScope: string;
   targetTimelineMonths: number;
@@ -42,6 +50,7 @@ export interface DecisionModel {
   minCatchmentHouseholds: number;
   maxGrossRentPctRevenue: number;
   unspecifiedPreferencesExplored: string[];
+  categoryLimitations?: string;
 }
 
 export interface OperatingScenario {
@@ -71,8 +80,12 @@ export interface FunnelCandidate {
   commercialTmiSqft: number;
   commercialGrossRentSqft: number;
   estimatedDirectCompetitors: number;
-  suitabilityScore: number;
-  confidenceScore: number;
+  competitorDataSource: string;
+  attractivenessScore: number; // 0-100 market demand score
+  confidenceScore: number;     // 0-100 evidence completeness (strictly separate)
+  suitabilityScore: number;    // composite ranking score
+  zoningFeasibilityStatus: FeasibilityGateStatus;
+  buildingSuitabilityStatus: 'VERIFIED_COMPLIANT' | 'UNVERIFIED_MEP_CHECK_NEEDED' | 'NON_COMPLIANT';
   listingId?: number;
   askingPrice?: number;
   monthlyRent?: number;
@@ -113,10 +126,13 @@ export interface EvidenceRecordItem {
   uncertaintyEstimate: string;
   decisionImplication: string;
   verificationSource: string;
+  provenance?: MetricProvenance;
 }
 
 export interface FinancialBand {
   dailyOrders: number;
+  dailyUnitVolume: number;
+  unitName: string;
   annualRevenue: number;
   foodCostCogs: number;
   laborCost: number;
@@ -133,7 +149,10 @@ export interface FinancialEconomics {
   buildoutEquipmentCapEx: number;
   workingCapitalBuffer: number;
   breakEvenDailyOrders: number;
+  breakEvenDailyUnits: number;
   breakEvenMonthlyRevenue: number;
+  breakEvenFeasible: boolean;
+  marginWarning?: string;
   bands: {
     conservative: FinancialBand;
     baseCase: FinancialBand;
@@ -192,12 +211,14 @@ export interface DecisionBrief {
     ownershipModel: OwnershipType;
     outcome: RecommendationOutcome;
     summaryHeadline: string;
+    feasibilityGateNote: string;
   };
   whyThisLocation: string[];
   whyNotAlternatives: Array<{ candidateName: string; tradeOffReason: string }>;
   economics: {
     requiredCapital: number;
     breakEvenDailyOrders: number;
+    breakEvenUnitsLabel: string;
     baseNetIncome: number;
     scenarioRanges: string;
   };
@@ -210,11 +231,14 @@ export interface DecisionEngineResult {
   runId: string;
   version: string;
   timestamp: string;
+  workspaceId: string;
+  userId?: string;
   decisionModel: DecisionModel;
   activeScenario: OperatingScenario;
   geographicFunnel: GeographicFunnelResult;
   hypotheses: BusinessHypothesis[];
   evidenceLedger: EvidenceRecordItem[];
+  provenanceLedger: MetricProvenance[];
   rankedAlternatives: CandidateComparison[];
   financialEconomics: FinancialEconomics;
   sensitivityShocks: SensitivityShock[];

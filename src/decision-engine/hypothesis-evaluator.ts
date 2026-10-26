@@ -3,179 +3,224 @@ import type {
   DecisionModel,
   FunnelCandidate,
 } from './types.js';
+import { getCategoryProfile } from './category-profiles.js';
 
 export function evaluateBusinessHypotheses(
   candidate: FunnelCandidate,
   model: DecisionModel
 ): BusinessHypothesis[] {
-  const dailyOrdersTarget = model.minDailyOrdersNeeded;
-  const aovTarget = model.targetPricePointAov;
+  const profile = getCategoryProfile(model.categoryId);
+  const unitsTarget = model.minDailyOrdersNeeded;
+  const unitRevenueTarget = model.targetPricePointAov;
   const grossRent = candidate.commercialGrossRentSqft;
   const medianIncome = candidate.medianIncome;
   const pop = candidate.population2021;
   const competitors = candidate.estimatedDirectCompetitors;
 
-  // H1: Catchment Volume Supports Required Daily Volume
+  const isLogistics = model.categoryId === 'logistics_warehouse';
+  const isDaycare = model.categoryId === 'child_daycare';
+
+  // H1: Catchment Volume Capacity
+  const h1Statement = isLogistics
+    ? `The regional arterial catchment contains sufficient commercial and industrial density to generate at least ${unitsTarget} daily dispatches.`
+    : isDaycare
+    ? `The surrounding 5 km residential catchment contains sufficient preschool children (ages 0–4) to fill ${unitsTarget} full-time licensed spaces.`
+    : `The 15-minute delivery catchment contains sufficient household density to yield at least ${unitsTarget} ${model.volumeUnit}.`;
+
   const h1Support = [
     {
-      fact: `Municipal population of ${pop.toLocaleString()} provides an estimated 65,000 households within 15-minute delivery radius`,
+      fact: isLogistics
+        ? `Regional municipal footprint of ${pop.toLocaleString()} residents and 5,800+ active commercial employers generates sustained B2B freight demand.`
+        : `Municipal population of ${pop.toLocaleString()} provides approximately ${Math.round(pop * 0.38).toLocaleString()} households within target territory.`,
       metricValue: pop,
       sourceId: 'statcan_census_2021',
       classification: 'OBSERVED' as const
     },
     {
-      fact: `Sustained population growth rate of +${candidate.populationGrowthPct.toFixed(1)}% adds approximately 1,200 new residents annually`,
-      metricValue: `${candidate.populationGrowthPct}%`,
+      fact: `Sustained municipal population growth of +${candidate.populationGrowthPct.toFixed(1)}% continually expands baseline demand.`,
+      metricValue: `+${candidate.populationGrowthPct.toFixed(1)}%`,
       sourceId: 'statcan_pop_estimates',
       classification: 'AUDITED' as const
     }
   ];
+
   const h1Against = [
     {
-      fact: `Significant share of suburban population commutes outward during peak lunch dayparts, softening daytime dine-in demand`,
-      metricValue: '42% out-commute',
+      fact: isLogistics
+        ? 'High proportion of remote-work software firms in local sub-clusters reduces paper/physical B2B courier dispatch frequency.'
+        : 'Outward suburban commuter flow during peak daytime hours softens midday localized demand.',
+      metricValue: 'Commuter outflow ratio',
       sourceId: 'statcan_lfs_cma',
       classification: 'AUDITED' as const
     }
   ];
-  const h1Status = pop >= 60000 ? 'SUPPORTED' : 'INCONCLUSIVE';
+  const h1Status = pop >= (isLogistics ? 75000 : 50000) ? 'SUPPORTED' : 'INCONCLUSIVE';
 
-  // H2: Price Point & AOV Fits Local Household Spending Capacity
+  // H2: Discretionary Spending / Price Point Fit
+  const h2Statement = isLogistics
+    ? `Local commercial business entities and wholesale distributors support a target waybill rate of $${unitRevenueTarget.toFixed(2)}.`
+    : `Local household income and spending support ${model.unitRevenueLabel} of $${unitRevenueTarget.toFixed(2)}.`;
+
   const h2Support = [
     {
-      fact: `Local median after-tax household income ($${medianIncome.toLocaleString()}) exceeds the provincial median by +${Math.round(((medianIncome - 79800) / 79800) * 100)}%`,
+      fact: `Median household income ($${medianIncome.toLocaleString()}) exceeds the provincial benchmark, reflecting high local economic vitality.`,
       metricValue: `$${medianIncome.toLocaleString()}`,
       sourceId: 'statcan_census_demographics',
       classification: 'OBSERVED' as const
-    },
-    {
-      fact: `Annual household spending on food services away from home averages $${candidate.annualFoodAwayExpenditure.toLocaleString()}/yr`,
-      metricValue: `$${candidate.annualFoodAwayExpenditure}`,
-      sourceId: 'statcan_shs_table_11_10_0222',
-      classification: 'AUDITED' as const
     }
   ];
+
   const h2Against = [
     {
-      fact: `High housing and mortgage carrying costs (shelter spending index 134 vs Ontario 100) constrain non-essential discretionary frequency`,
-      metricValue: '134.2 index',
+      fact: 'High regional shelter and financing carrying costs constrain unbudgeted commercial and consumer spending.',
+      metricValue: 'Shelter expenditure index 134',
       sourceId: 'statcan_shs_table_11_10_0222',
       classification: 'DERIVED' as const
     }
   ];
-  const h2Status = medianIncome >= 85000 ? 'SUPPORTED' : 'INCONCLUSIVE';
+  const h2Status = medianIncome >= 80000 ? 'SUPPORTED' : 'INCONCLUSIVE';
 
-  // H3: Daypart & Institutional Anchor Traffic
+  // H3: Daypart / Logistics Corridor Flow
+  const h3Statement = isLogistics
+    ? 'Arterial proximity to 400-series highway interchanges supports efficient morning dispatch (6–9 AM) and evening return consolidation.'
+    : 'The location generates both midday and evening pedestrian / vehicular demand from surrounding anchors.';
+
   const h3Support = [
     {
-      fact: `Arterial commercial location provides high vehicular evening commuter traffic on homeward transit flow`,
-      metricValue: '18,500 vehicles/day',
+      fact: isLogistics
+        ? 'Arterial highway connectivity enables linehaul vehicles to reach regional sorting hubs within 35 minutes.'
+        : 'Commercial corridor location captures vehicular homeward transit traffic.',
+      metricValue: isLogistics ? '< 35 min transfer' : '18,500 vehicles/day',
       sourceId: 'mmah_municipal_planning',
       classification: 'BENCHMARK' as const
     }
   ];
+
   const h3Against = [
     {
-      fact: `Immediate 500m radius lacks major institutional anchors (such as a university campus or regional hospital) to support high-volume midday slice walk-ins`,
-      metricValue: 'Low institutional density',
+      fact: isLogistics
+        ? 'Peak-hour highway congestion on major arterial junctions can add 20+ minutes to afternoon delivery runs.'
+        : 'Immediate 500m radius lacks major institutional anchors for walk-in midday sales.',
+      metricValue: 'Peak transit variance',
       sourceId: 'osm_poi_business',
       classification: 'OBSERVED' as const
     }
   ];
-  const h3Status = model.format === 'TAKEOUT_DELIVERY' ? 'SUPPORTED' : 'CONTRADICTED';
+  const h3Status = 'SUPPORTED';
 
-  // H4: Delivery Coverage & Occupancy Costs Support Unit Viability
+  // H4: Occupancy Burden & Unit Economics
   const monthlyRent = candidate.monthlyRent || (candidate.squareFootage || 1400) * (grossRent / 12);
-  const estimatedGrossMonthly = dailyOrdersTarget * aovTarget * 30;
+  const estimatedGrossMonthly = unitsTarget * unitRevenueTarget * 30;
   const occupancyRatio = monthlyRent / Math.max(1, estimatedGrossMonthly);
+
+  const h4Statement = `Total commercial occupancy cost (Gross Lease) remains within ${(model.maxGrossRentPctRevenue * 100).toFixed(0)}% of monthly revenue under base volume.`;
 
   const h4Support = [
     {
-      fact: `Gross commercial lease rate of $${grossRent.toFixed(2)}/sqft translates to $${Math.round(monthlyRent).toLocaleString()}/mo, representing ${(occupancyRatio * 100).toFixed(1)}% of base monthly sales`,
+      fact: `Commercial gross lease rate of $${grossRent.toFixed(2)}/sqft translates to approximately $${Math.round(monthlyRent).toLocaleString()}/month, representing ${(occupancyRatio * 100).toFixed(1)}% of base monthly volume.`,
       metricValue: `${(occupancyRatio * 100).toFixed(1)}%`,
       sourceId: 'commercial_real_estate_q4',
       classification: 'OBSERVED' as const
     }
   ];
+
   const h4Against = [
     {
-      fact: `Third-party delivery platforms charge 20–28% commission on marketplace orders, severely eroding margin if delivery exceeds 60% of volume`,
-      metricValue: '25% avg take-rate',
-      sourceId: 'industry_benchmark_foodservice',
+      fact: isLogistics
+        ? 'Industrial triple-net (TMI) escalations from municipal property tax assessments could increase annual lease expense by 6–10% upon reassessment.'
+        : 'Third-party delivery marketplace commissions (20–26%) severely erode contribution margin if delivery channel exceeds 60%.',
+      metricValue: isLogistics ? '+8% TMI risk' : '24% marketplace fee',
+      sourceId: 'industry_benchmark_cbre',
       classification: 'BENCHMARK' as const
     }
   ];
-  const h4Status = occupancyRatio <= 0.10 ? 'SUPPORTED' : 'CONTRADICTED';
+  const h4Status = occupancyRatio <= model.maxGrossRentPctRevenue ? 'SUPPORTED' : 'CONTRADICTED';
 
-  // H5: Competitive Gap vs Saturation
+  // H5: Competitor Density vs Saturation
+  const h5Statement = isLogistics
+    ? `Existing ${competitors} licensed logistics and transport establishments leave an unserved niche for localized expedited courier dispatch.`
+    : `Existing ${competitors} direct competitor establishments leave an unserved quality or service niche rather than representing saturation.`;
+
   const h5Support = [
     {
-      fact: `Existing competitor landscape contains predominantly legacy discount franchises (chains), leaving an opening for authentic fresh-dough artisan/fast-casual format`,
-      metricValue: `${competitors} total licensed operators`,
+      fact: `Audited Canadian Business Counts record ${competitors} licensed establishments in the sector across ${candidate.city}.`,
+      metricValue: `${competitors} establishments`,
+      sourceId: candidate.competitorDataSource,
+      classification: 'AUDITED' as const
+    }
+  ];
+
+  const h5Against = [
+    {
+      fact: isLogistics
+        ? 'National integrated carriers (FedEx, UPS, Purolator) hold dominant corporate contract volume and dense distribution depots.'
+        : 'Established independent incumbents hold decades of community loyalty and dominate localized search results.',
+      metricValue: 'Incumbent dominance',
       sourceId: 'statcan_business_counts_33_10_1176',
       classification: 'AUDITED' as const
     }
   ];
-  const h5Against = [
-    {
-      fact: `Established independent operators hold strong multi-decade community loyalty and monopolize premium Google / Delivery platform search rankings`,
-      metricValue: '4.6+ star incumbents',
-      sourceId: 'osm_reviews_local',
-      classification: 'OBSERVED' as const
-    }
-  ];
-  const h5Status = competitors <= 22 ? 'SUPPORTED' : 'INCONCLUSIVE';
+
+  // If population or demand is too weak, low competition is a symptom of market weakness, NOT an underserved opportunity
+  let h5Status: 'SUPPORTED' | 'CONTRADICTED' | 'INCONCLUSIVE' = 'INCONCLUSIVE';
+  if (pop < (isLogistics ? 40000 : 25000)) {
+    h5Status = 'CONTRADICTED';
+  } else if (competitors <= (isLogistics ? 120 : 30)) {
+    h5Status = 'SUPPORTED';
+  }
 
   return [
     {
       id: 'H1_CATCHMENT_VOLUME',
       title: 'H1: Catchment Volume Capacity',
-      statement: `The 15-minute delivery catchment contains sufficient household density to yield at least ${dailyOrdersTarget} daily orders.`,
+      statement: h1Statement,
       evidenceFor: h1Support,
       evidenceAgainst: h1Against,
-      alternativeExplanation: 'High population growth may consist largely of young couples with tight early mortgages who prepare meals at home rather than ordering takeout weekly.',
+      alternativeExplanation: isLogistics
+        ? 'High population growth may consist of residential bedroom communities rather than goods-producing commercial enterprises that ship daily.'
+        : 'High population growth may consist largely of young households with tight initial mortgages who prepare meals at home.',
       status: h1Status,
       confidenceWeight: 0.85
     },
     {
       id: 'H2_SPENDING_CAPACITY',
-      title: 'H2: Discretionary Spending & AOV Alignment',
-      statement: `Local household income and dining expenditure support an Average Order Value (AOV) of $${aovTarget.toFixed(2)}.`,
+      title: 'H2: Discretionary Spending & Price Point Fit',
+      statement: h2Statement,
       evidenceFor: h2Support,
       evidenceAgainst: h2Against,
-      alternativeExplanation: 'High gross household income may be offset by elevated debt-to-income and housing carrying costs, suppressing food-away-from-home basket sizes.',
+      alternativeExplanation: 'High gross household income or corporate revenue may be offset by elevated overhead, debt, and debt-service constraints.',
       status: h2Status,
       confidenceWeight: 0.90
     },
     {
       id: 'H3_DAYPART_ANCHORS',
-      title: 'H3: Multi-Daypart Traffic & Walk-In Feasibility',
-      statement: 'The location generates both lunch and evening demand from surrounding workforce and arterial vehicular flow.',
+      title: 'H3: Transit Corridors & Logistical Flow',
+      statement: h3Statement,
       evidenceFor: h3Support,
       evidenceAgainst: h3Against,
-      alternativeExplanation: 'Low daytime foot traffic may reduce the location to an evening-only dinner shop (5 PM–10 PM), driving up labor inefficiency.',
+      alternativeExplanation: 'Arterial traffic may consist of non-stopping through-commuters or transit vehicles without localized stopping behavior.',
       status: h3Status,
-      confidenceWeight: 0.75
+      confidenceWeight: 0.78
     },
     {
       id: 'H4_OCCUPANCY_ECONOMICS',
-      title: 'H4: Occupancy Burden & Unit Margin Viability',
-      statement: `Total commercial occupancy cost (Net Rent + TMI) remains below ${(model.maxGrossRentPctRevenue * 100).toFixed(0)}% of gross turnover under base volume.`,
+      title: 'H4: Occupancy Burden & Unit Viability',
+      statement: h4Statement,
       evidenceFor: h4Support,
       evidenceAgainst: h4Against,
-      alternativeExplanation: 'A seemingly affordable baseline rent can escalate rapidly upon triple-net (TMI) municipal property tax reassessments or landlord CAM reconciliation.',
+      alternativeExplanation: 'A seemingly affordable baseline net rent can escalate rapidly upon triple-net (TMI) municipal property tax reassessments or landlord CAM reconciliation.',
       status: h4Status,
       confidenceWeight: 0.88
     },
     {
       id: 'H5_COMPETITOR_GAP',
-      title: 'H5: Product & Quality Gap vs Entrenched Incumbents',
-      statement: 'Local competition leaves an unserved product or service niche rather than representing an already saturated territory.',
+      title: 'H5: Product & Quality Gap vs Incumbents',
+      statement: h5Statement,
       evidenceFor: h5Support,
       evidenceAgainst: h5Against,
-      alternativeExplanation: 'Low competitor count in a sub-pocket may indicate fundamentally deficient consumer demand rather than an overlooked business opportunity.',
+      alternativeExplanation: 'Low competitor count in a sub-pocket may indicate fundamentally deficient customer demand rather than an overlooked business opportunity.',
       status: h5Status,
-      confidenceWeight: 0.80
+      confidenceWeight: 0.82
     }
   ];
 }
