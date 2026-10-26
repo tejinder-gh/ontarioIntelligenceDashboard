@@ -9,6 +9,7 @@ export type ActiveTab =
   | 'municipality_finances'
   | 'city_rankings'
   | 'opportunity_lab'
+  | 'decision_engine'
   | 'competition'
   | 'business_listings'
   | 'outliers'

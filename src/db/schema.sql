@@ -846,3 +846,27 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
+
+-- 34. Intelligent Research and Decision Engine Versioned Runs
+CREATE TABLE IF NOT EXISTS decision_engine_runs (
+    id VARCHAR(64) PRIMARY KEY,
+    engine_version VARCHAR(32) NOT NULL,
+    category_id VARCHAR(64) NOT NULL,
+    inquiry_text TEXT NOT NULL,
+    operating_format VARCHAR(64) NOT NULL,
+    scenario_label VARCHAR(128) NOT NULL,
+    selected_candidate_id VARCHAR(64),
+    recommendation_outcome VARCHAR(64) NOT NULL,
+    decision_model_snapshot JSONB NOT NULL,
+    funnel_snapshot JSONB NOT NULL,
+    hypotheses_snapshot JSONB NOT NULL,
+    evidence_snapshot JSONB NOT NULL,
+    alternatives_snapshot JSONB NOT NULL,
+    sensitivity_snapshot JSONB NOT NULL,
+    decision_brief JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_decision_runs_cat ON decision_engine_runs(category_id);
+CREATE INDEX IF NOT EXISTS idx_decision_runs_created ON decision_engine_runs(created_at DESC);
+
