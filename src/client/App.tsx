@@ -192,6 +192,12 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    const handleOpenLogin = () => setIsLoginOpen(true);
+    window.addEventListener('open-login-modal', handleOpenLogin);
+    return () => window.removeEventListener('open-login-modal', handleOpenLogin);
+  }, []);
+
   const handleSignOut = () => {
     setAuthToken('');
     localStorage.removeItem('auth_token');

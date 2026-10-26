@@ -46,7 +46,10 @@ export const DecisionEngineView: React.FC = () => {
       .catch(err => console.error('Failed to load engine scenarios:', err));
 
     // Auto-run default inquiry if token is available, or allow manual execution
-    executeAnalysis('lean_takeout_delivery');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (token) {
+      executeAnalysis('lean_takeout_delivery');
+    }
   }, []);
 
   const executeAnalysis = async (scenarioKey?: string) => {
@@ -129,13 +132,20 @@ export const DecisionEngineView: React.FC = () => {
 
       {/* Guest Mode Notice */}
       {!authToken && (
-        <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-2xl flex items-center justify-between gap-4 text-xs text-amber-200">
+        <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-amber-200">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 shrink-0 text-amber-400" />
             <span>
               <strong>Guest Session:</strong> You are exploring in unauthenticated mode. Sign in to save versioned decision snapshots to your private workspace.
             </span>
           </div>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-login-modal'))}
+            className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 rounded-xl font-semibold transition-colors shrink-0 cursor-pointer text-center"
+          >
+            Sign In
+          </button>
         </div>
       )}
 
