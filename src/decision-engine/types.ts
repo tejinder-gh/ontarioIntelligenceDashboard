@@ -50,6 +50,7 @@ export interface DecisionModel {
   minCatchmentHouseholds: number;
   maxGrossRentPctRevenue: number;
   unspecifiedPreferencesExplored: string[];
+  allowedGeographyIds?: string[];
   categoryLimitations?: string;
 }
 
@@ -75,12 +76,15 @@ export interface FunnelCandidate {
   population2021: number;
   populationGrowthPct: number;
   medianIncome: number;
-  annualFoodAwayExpenditure: number;
+  medianIncomeSource: 'OBSERVED_CENSUS' | 'IMPUTED_DEFAULT';
+  annualFoodAwayExpenditure?: number;
+  spendingSource?: 'OBSERVED_SURVEY' | 'BENCHMARK_PROVINCIAL';
   commercialNetRentSqft: number;
   commercialTmiSqft: number;
   commercialGrossRentSqft: number;
   estimatedDirectCompetitors?: number;
   competitorDataSource: string;
+  competitorClassification: 'OBSERVED' | 'BENCHMARK' | 'UNAVAILABLE';
   attractivenessScore: number; // 0-100 market demand score
   confidenceScore: number;     // 0-100 evidence completeness (strictly separate)
   suitabilityScore: number;    // composite ranking score
@@ -144,25 +148,42 @@ export interface FinancialBand {
   paybackMonths: number;
 }
 
-export interface FinancialEconomics {
-  totalInitialCapital: number;
-  buildoutEquipmentCapEx: number;
-  acquisitionCost?: number;
-  isAcquisition: boolean;
-  workingCapitalBuffer: number;
-  fundingGap: number;
-  isFullyFunded: boolean;
-  breakEvenDailyOrders: number;
-  breakEvenDailyUnits: number;
-  breakEvenMonthlyRevenue: number;
-  breakEvenFeasible: boolean;
-  marginWarning?: string;
-  bands: {
-    conservative: FinancialBand;
-    baseCase: FinancialBand;
-    optimistic: FinancialBand;
-  };
-}
+export const FinancialBandSchema = z.object({
+  dailyOrders: z.number(),
+  dailyUnitVolume: z.number(),
+  unitName: z.string(),
+  annualRevenue: z.number(),
+  foodCostCogs: z.number(),
+  laborCost: z.number(),
+  occupancyCostRent: z.number(),
+  deliveryCommissions: z.number(),
+  operatingExpenses: z.number(),
+  netOperatingIncome: z.number(),
+  ownerCashFlow: z.number(),
+  paybackMonths: z.number()
+});
+
+export const FinancialEconomicsSchema = z.object({
+  totalInitialCapital: z.number().positive(),
+  buildoutEquipmentCapEx: z.number(),
+  acquisitionCost: z.number().optional(),
+  isAcquisition: z.boolean(),
+  workingCapitalBuffer: z.number(),
+  fundingGap: z.number(),
+  isFullyFunded: z.boolean(),
+  breakEvenDailyOrders: z.number(),
+  breakEvenDailyUnits: z.number(),
+  breakEvenMonthlyRevenue: z.number(),
+  breakEvenFeasible: z.boolean(),
+  marginWarning: z.string().optional(),
+  bands: z.object({
+    conservative: FinancialBandSchema,
+    baseCase: FinancialBandSchema,
+    optimistic: FinancialBandSchema
+  })
+});
+
+export type FinancialEconomics = z.infer<typeof FinancialEconomicsSchema>;
 
 export interface SensitivityShock {
   parameter: string;

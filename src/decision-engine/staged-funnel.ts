@@ -17,7 +17,6 @@ import {
 export { getAuditedCompetitorCount, type AuditedCompetitorResult };
 
 export async function executeStagedFunnel(model: DecisionModel): Promise<GeographicFunnelResult> {
-  // Stage 1: Broad Provincial Screening (444 Ontario CSDs)
   const totalCsdsResult = await sql`
     SELECT COUNT(*)::int as count FROM geographies WHERE geo_type = 'CSD';
   `;
@@ -25,14 +24,14 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
 
   const minPopThreshold = model.categoryId === 'logistics_warehouse' ? 50000 : 35000;
   const targetPropertyType = model.categoryId === 'logistics_warehouse' ? 'INDUSTRIAL' : 'RETAIL_STRIP_PLAZA';
+  const hasAllowedGeos = Boolean(model.allowedGeographyIds && model.allowedGeographyIds.length > 0);
 
-  // Stage 2: Screen Candidate Municipalities
+  // Stage 1 & 2: Screen Candidate Municipalities
   const candidateMarkets = await sql`
     SELECT 
-      g.id,
-      g.name,
-      g.population_2021,
+      g.id, g.name, g.population_2021,
       COALESCE(g.population_growth_pct, 0)::numeric as pop_growth,
+      obs_inc.value_numeric as raw_median_income,
       COALESCE(obs_inc.value_numeric, 85000)::numeric as median_income,
       COALESCE(cre.gross_rent_sqft_cad, CASE WHEN ${targetPropertyType} = 'INDUSTRIAL' THEN 24.5 ELSE 48.0 END)::numeric as gross_rent,
       COALESCE(cre.net_rent_sqft_cad, CASE WHEN ${targetPropertyType} = 'INDUSTRIAL' THEN 18.0 ELSE 35.0 END)::numeric as net_rent,
@@ -41,9 +40,9 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
     LEFT JOIN observations obs_inc ON g.id = obs_inc.geography_id AND obs_inc.metric_id = 'income_median_hh'
     LEFT JOIN commercial_real_estate cre ON g.id = cre.geography_id AND cre.property_type = ${targetPropertyType}
     WHERE g.geo_type = 'CSD' 
-      AND g.population_2021 >= ${minPopThreshold}
+      ${hasAllowedGeos ? sql`AND g.id = ANY(${model.allowedGeographyIds!})` : sql`AND g.population_2021 >= ${minPopThreshold}`}
     ORDER BY g.population_2021 DESC
-    LIMIT 20;
+    ${hasAllowedGeos ? sql`` : sql`LIMIT 20`};
   `;
 
   // Screened exclusions tracking
@@ -54,28 +53,31 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
     const rentAffordable = Number(m.gross_rent) <= maxRentCeiling;
     const pass = popPass && incomePass && rentAffordable;
     let reason = 'Meets demographic density and commercial occupancy threshold';
-    if (!popPass) reason = `Catchment density below ${minPopThreshold.toLocaleString()} threshold for commercial feasibility`;
+    if (!popPass) reason = `Catchment density (${Number(m.population_2021).toLocaleString()}) below ${minPopThreshold.toLocaleString()} threshold for ${model.categoryName}`;
     else if (!incomePass) reason = 'Median household income below commercial viability threshold';
-    else if (!rentAffordable) reason = `Gross commercial lease rates exceed $${maxRentCeiling}/sqft ceiling`;
-    return {
-      id: m.id as string,
-      name: m.name as string,
-      pass,
-      reason
-    };
+    else if (!rentAffordable) reason = `Gross commercial lease rates ($${Number(m.gross_rent)}/sqft) exceed $${maxRentCeiling}/sqft ceiling`;
+    return { id: m.id as string, name: m.name as string, pass, reason };
   });
 
   const passedCityIds = screenedMarkets.filter(m => m.pass).map(m => m.id);
 
+  if (passedCityIds.length === 0) {
+    return {
+      scopeSummary: `Evaluated ${candidateMarkets.length} candidate municipal markets for ${model.categoryName}; 0 qualified under demographic density and commercial rent ceilings.`,
+      totalMarketsScreened: candidateMarkets.length,
+      screenedExclusionsCount: candidateMarkets.length,
+      stoppingCriteria: [
+        'All evaluated candidate markets failed viability screening criteria; zero candidate properties qualified.',
+        'Demarcated fail-closed state prevents un-screened property recommendation.'
+      ],
+      stages: { province: { name: 'Ontario', totalCsds }, screenedMarkets: screenedMarkets.slice(0, 10), neighbourhoodNodes: [], candidateProperties: [] },
+      shortlistedCandidates: []
+    };
+  }
+
   // Stage 3: Dynamic Neighbourhood Nodes from municipal_planning_initiatives
   const planningNodes = await sql`
-    SELECT 
-      mpi.id,
-      mpi.geography_id,
-      mpi.title,
-      mpi.spatial_corridor,
-      mpi.plan_type,
-      g.name as city_name
+    SELECT mpi.id, mpi.geography_id, mpi.title, mpi.spatial_corridor, mpi.plan_type, g.name as city_name
     FROM municipal_planning_initiatives mpi
     JOIN geographies g ON mpi.geography_id = g.id
     WHERE mpi.geography_id = ANY(${passedCityIds.slice(0, 8)})
@@ -90,7 +92,6 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
     anchorType: `${p.plan_type} Strategic Corridor`
   }));
 
-  // Fallback nodes if database has no spatial corridor records
   if (neighbourhoodNodes.length === 0) {
     neighbourhoodNodes.push(
       { id: 'node_burl_brant', name: 'Downtown Brant Street Corridor', city: 'Burlington', anchorType: 'Mixed-Use Commercial Node' },
@@ -98,8 +99,8 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
     );
   }
 
-  // Stage 4: Query Real Commercial Properties from business_listings
-  // Enforces active listing status and strictly restricts to screened candidate markets
+  // Stage 4: Query Real Commercial Properties strictly in passed cities
+  const isFoodCategory = model.categoryId === 'pizza_store' || model.categoryId === 'coffee_shop' || model.categoryId === 'full_service_restaurant';
   const propertyRows = await sql`
     SELECT 
       bl.id,
@@ -115,7 +116,8 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
       g.name as city_name,
       g.population_2021,
       COALESCE(g.population_growth_pct, 0)::numeric as pop_growth,
-      COALESCE(obs_inc.value_numeric, 92000)::numeric as median_income,
+      obs_inc.value_numeric as raw_median_income,
+      COALESCE(obs_inc.value_numeric, 85000)::numeric as median_income,
       COALESCE(cre.gross_rent_sqft_cad, CASE WHEN ${targetPropertyType} = 'INDUSTRIAL' THEN 24.5 ELSE 47.7 END)::numeric as gross_rent,
       COALESCE(cre.net_rent_sqft_cad, CASE WHEN ${targetPropertyType} = 'INDUSTRIAL' THEN 18.0 ELSE 34.5 END)::numeric as net_rent,
       COALESCE(cre.tmi_additional_rent_sqft_cad, CASE WHEN ${targetPropertyType} = 'INDUSTRIAL' THEN 6.5 ELSE 13.2 END)::numeric as tmi_rent
@@ -127,15 +129,13 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
       AND (bl.status IS NULL OR bl.status IN ('ACTIVE', 'PRICE_CHANGED', 'RELISTED'))
       AND (bl.status != 'REMOVED' AND bl.status != 'CONFIRMED_SOLD')
       AND bl.monthly_rent IS NOT NULL
-      ${passedCityIds.length > 0 ? sql`AND bl.geography_id = ANY(${passedCityIds})` : sql``}
-    LIMIT 12;
+      AND bl.geography_id = ANY(${passedCityIds})
+    ORDER BY bl.id ASC;
   `;
 
-  // Shortlisted Candidates Generation
   let shortlistedCandidates: FunnelCandidate[] = [];
 
   if (propertyRows.length > 0) {
-    // Verified Listings Path
     const unsortedCandidates: FunnelCandidate[] = propertyRows.map(row => {
       const auditedComp = getAuditedCompetitorCount(row.geography_id as string, model.categoryId);
       const monthlyRent = Number(row.monthly_rent || 4800);
@@ -151,7 +151,7 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
         commercialGrossRentSqft: Number(row.gross_rent),
         monthlyRent,
         squareFootage: sqft,
-        estimatedDirectCompetitors: auditedComp.count,
+        estimatedDirectCompetitors: auditedComp.classification === 'OBSERVED' ? auditedComp.count : undefined,
         hasVerifiedAddress: Boolean(row.address),
         hasConfirmedListing: true
       }, model);
@@ -167,12 +167,15 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
         population2021: Number(row.population_2021),
         populationGrowthPct: Number(row.pop_growth),
         medianIncome: Number(row.median_income),
-        annualFoodAwayExpenditure: 3450,
+        medianIncomeSource: row.raw_median_income ? 'OBSERVED_CENSUS' : 'IMPUTED_DEFAULT',
+        annualFoodAwayExpenditure: isFoodCategory ? 3450 : undefined,
+        spendingSource: isFoodCategory ? 'BENCHMARK_PROVINCIAL' : undefined,
         commercialNetRentSqft: Number(row.net_rent),
         commercialTmiSqft: Number(row.tmi_rent),
         commercialGrossRentSqft: Number(row.gross_rent),
         estimatedDirectCompetitors: auditedComp.count,
         competitorDataSource: auditedComp.source,
+        competitorClassification: auditedComp.classification,
         attractivenessScore: scoreBreakdown.attractivenessScore,
         confidenceScore: scoreBreakdown.confidenceScore,
         suitabilityScore: scoreBreakdown.totalSuitabilityScore,
@@ -186,11 +189,9 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
       };
     });
 
-    // Order-invariant multi-factor sort
     shortlistedCandidates = sortCandidatesBySuitability(unsortedCandidates);
   } else {
-    // "No eligible properties" path (e.g. shipping centre or unlisted category)
-    // Demarcate PROMISING_NEIGHBOURHOOD (verified corridor) from PROSPECTIVE_MARKET (city-level fallback)
+    // Fallback: Demarcate PROMISING_NEIGHBOURHOOD or PROSPECTIVE_MARKET without fake addresses
     const unsortedFallback: FunnelCandidate[] = passedCityIds.slice(0, 3).map((cityId, idx) => {
       const market = candidateMarkets.find(m => m.id === cityId)!;
       const auditedComp = getAuditedCompetitorCount(cityId, model.categoryId);
@@ -214,7 +215,7 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
         commercialGrossRentSqft: grossRent,
         monthlyRent,
         squareFootage: targetSqft,
-        estimatedDirectCompetitors: auditedComp.count,
+        estimatedDirectCompetitors: auditedComp.classification === 'OBSERVED' ? auditedComp.count : undefined,
         hasVerifiedAddress: false,
         hasConfirmedListing: false
       }, model);
@@ -226,16 +227,19 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
         parentGeoId: cityId,
         city: market.name as string,
         neighbourhood: corridorName,
-        propertyAddress: undefined, // Never invent fake addresses
+        propertyAddress: undefined,
         population2021: Number(market.population_2021),
         populationGrowthPct: Number(market.pop_growth),
         medianIncome: Number(market.median_income),
-        annualFoodAwayExpenditure: 3450,
+        medianIncomeSource: market.raw_median_income ? 'OBSERVED_CENSUS' : 'IMPUTED_DEFAULT',
+        annualFoodAwayExpenditure: isFoodCategory ? 3450 : undefined,
+        spendingSource: isFoodCategory ? 'BENCHMARK_PROVINCIAL' : undefined,
         commercialNetRentSqft: Number(market.net_rent || 18.0),
         commercialTmiSqft: Number(market.tmi_rent || 6.5),
         commercialGrossRentSqft: grossRent,
         estimatedDirectCompetitors: auditedComp.count,
         competitorDataSource: auditedComp.source,
+        competitorClassification: auditedComp.classification,
         attractivenessScore: scoreBreakdown.attractivenessScore,
         confidenceScore: scoreBreakdown.confidenceScore,
         suitabilityScore: scoreBreakdown.totalSuitabilityScore,
@@ -250,9 +254,9 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
   }
 
   return {
-    scopeSummary: `Screened all ${totalCsds} Ontario Census Subdivisions (CSDs); evaluated ${candidateMarkets.length} urban growth candidates; isolated ${neighbourhoodNodes.length} municipal planning corridors; and analyzed ${shortlistedCandidates.length} evaluated locations for ${model.categoryName}.`,
-    totalMarketsScreened: totalCsds,
-    screenedExclusionsCount: totalCsds - passedCityIds.length,
+    scopeSummary: `Evaluated ${candidateMarkets.length} candidate municipal markets; qualified ${passedCityIds.length} screened municipalities; isolated ${neighbourhoodNodes.length} strategic planning corridors; and evaluated ${shortlistedCandidates.length} commercial locations for ${model.categoryName}.`,
+    totalMarketsScreened: candidateMarkets.length,
+    screenedExclusionsCount: candidateMarkets.length - passedCityIds.length,
     stoppingCriteria: [
       `Municipal population < ${minPopThreshold.toLocaleString()} excluded (insufficient localized density for ${model.categoryName})`,
       `Commercial lease rates exceeding category tolerance excluded`,

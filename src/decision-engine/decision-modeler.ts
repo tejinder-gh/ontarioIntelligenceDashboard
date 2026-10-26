@@ -55,17 +55,66 @@ export function resolveCategoryIdFromInquiry(inquiry: string, explicitCategory?:
 }
 
 export function extractBudgetFromText(text: string): number | undefined {
-  const match = text.match(/\$\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\s*(k|thousand))?/i)
-    || text.match(/(?:budget|capital|invest(?:ment)?|have)\s*(?:of|is|around|approx|approximately|up to)?\s*\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\s*(k|thousand))?/i);
+  const prefixRegex = /(?:budget|capital|equity|invest(?:ment)?|savings|funds|have)\s*(?:of|is|around|approx|approximately|up to|about|=|:)?\s*\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(k|thousand|m|million|b|billion)?\b/i;
+  const suffixRegex = /\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(k|thousand|m|million|b|billion)?\s*(?:dollar(?:s)?)?\s*(?:in\s+)?(?:budget|capital|equity|investment|funds|savings)\b/i;
+
+  const match = text.match(prefixRegex) || text.match(suffixRegex);
   if (!match) return undefined;
+
   const rawNum = match[1]!.replace(/,/g, '');
   let val = parseFloat(rawNum);
-  if (match[2] && (match[2].toLowerCase() === 'k' || match[2].toLowerCase() === 'thousand')) {
+  if (isNaN(val) || val <= 0) return undefined;
+
+  const unit = match[2]?.toLowerCase();
+  if (unit === 'k' || unit === 'thousand') {
     val *= 1000;
-  } else if (val < 1000 && val > 0) {
-    val *= 1000;
+  } else if (unit === 'm' || unit === 'million') {
+    val *= 1000000;
+  } else if (unit === 'b' || unit === 'billion') {
+    val *= 1000000000;
   }
-  return val >= 10000 ? val : undefined;
+  return Math.round(val);
+}
+
+export const MUNICIPALITY_GEO_ID_MAP: Record<string, string> = {
+  'toronto': 'CSD_toronto',
+  'mississauga': 'CSD_mississauga',
+  'brampton': 'CSD_brampton',
+  'hamilton': 'CSD_hamilton',
+  'burlington': 'CSD_burlington',
+  'oakville': 'CSD_oakville',
+  'milton': 'CSD_milton',
+  'vaughan': 'CSD_vaughan',
+  'markham': 'CSD_markham',
+  'richmond hill': 'CSD_richmond_hill',
+  'ottawa': 'CSD_ottawa',
+  'london': 'CSD_london',
+  'kitchener': 'CSD_kitchener',
+  'waterloo': 'CSD_waterloo',
+  'cambridge': 'CSD_cambridge',
+  'guelph': 'CSD_guelph',
+  'barrie': 'CSD_barrie',
+  'oshawa': 'CSD_oshawa',
+  'whitby': 'CSD_whitby',
+  'ajax': 'CSD_ajax',
+  'pickering': 'CSD_pickering',
+  'halton hills': 'CSD_halton_hills'
+};
+
+export function resolveGeographyIds(regions: string[]): string[] {
+  const ids: string[] = [];
+  for (const r of regions) {
+    const trimmed = r.trim();
+    if (trimmed.startsWith('CSD_')) {
+      ids.push(trimmed);
+      continue;
+    }
+    const mapped = MUNICIPALITY_GEO_ID_MAP[trimmed.toLowerCase()];
+    if (mapped) {
+      ids.push(mapped);
+    }
+  }
+  return Array.from(new Set(ids));
 }
 
 export function extractLocationsFromText(text: string): string[] {
@@ -152,6 +201,10 @@ export function buildDecisionModel(input: DecisionInquiry): {
     ? input.targetRegions
     : (extractedLocations.length > 0 ? extractedLocations : undefined);
 
+  const allowedGeographyIds = targetRegions && targetRegions.length > 0
+    ? resolveGeographyIds(targetRegions)
+    : undefined;
+
   const geographicScope = targetRegions && targetRegions.length > 0
     ? targetRegions.join(', ')
     : 'Ontario Growth Corridors (GTA West & Golden Horseshoe Core)';
@@ -198,6 +251,7 @@ export function buildDecisionModel(input: DecisionInquiry): {
     volumeUnit: profile.volumeUnit,
     ownerInvolvement,
     geographicScope,
+    allowedGeographyIds,
     targetTimelineMonths,
     desiredAnnualIncome,
     minDailyOrdersNeeded,

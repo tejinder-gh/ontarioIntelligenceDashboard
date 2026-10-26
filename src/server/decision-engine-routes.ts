@@ -86,9 +86,14 @@ decisionEngineRouter.get('/runs', requireAuth, async (req, res) => {
     const userId = req.user!.id;
     const workspaceId = extractWorkspaceId(req, `ws_${userId}`);
 
-    const access = await ensureWorkspaceAccess(userId, workspaceId);
-    if (!access.allowed) {
-      res.status(403).json({ success: false, error: access.reason });
+    // Read-only membership verification: strictly prevents DB mutations on GET
+    const isPersonalWs = workspaceId === `ws_${userId}` || workspaceId === `workspace_${userId}`;
+    const isMember = isPersonalWs || await verifyWorkspaceMembership(userId, workspaceId);
+    if (!isMember) {
+      res.status(403).json({
+        success: false,
+        error: `Access denied: User does not have authorized membership in workspace '${workspaceId}'`
+      });
       return;
     }
 

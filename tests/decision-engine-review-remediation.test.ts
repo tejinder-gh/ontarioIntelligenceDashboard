@@ -9,7 +9,7 @@ import { buildEvidenceLedger } from '../src/decision-engine/evidence-ledger.js';
 import { generateDecisionBrief } from '../src/decision-engine/decision-brief-generator.js';
 import { prioritizeMaterialUnknowns } from '../src/decision-engine/unknowns-priority.js';
 import { replayDecisionRun, runDecisionEngine } from '../src/decision-engine/engine.js';
-import { ensureWorkspaceAccess, verifyWorkspaceMembership } from '../src/server/workspace-auth.js';
+import { ensureWorkspaceAccess, verifyWorkspaceMembership, createWorkspace } from '../src/server/workspace-auth.js';
 import type { FunnelCandidate } from '../src/decision-engine/types.js';
 
 describe('PR #1 Staff Review Remediation & Behavioral Verification Suite', () => {
@@ -36,8 +36,8 @@ describe('PR #1 Staff Review Remediation & Behavioral Verification Suite', () =>
         ON CONFLICT (id) DO NOTHING;
       `;
 
-      // 1. Owner initializes isolated workspace
-      const ownerAccess = await ensureWorkspaceAccess(ownerUserId, isolatedWs);
+      // 1. Owner explicitly creates isolated workspace under unique constraint
+      const ownerAccess = await createWorkspace(ownerUserId, isolatedWs);
       expect(ownerAccess.allowed).toBe(true);
 
       // Verify membership record in database
@@ -508,7 +508,7 @@ describe('PR #1 Staff Review Remediation & Behavioral Verification Suite', () =>
 
       await expect(
         replayDecisionRun(corruptedRunId, 'ws_malformed_test')
-      ).rejects.toThrow(/Malformed snapshot|missing/i);
+      ).rejects.toThrow(/Unsupported legacy run snapshot|Malformed snapshot|missing/i);
 
       // Clean up
       await sql`DELETE FROM decision_engine_runs WHERE id = ${corruptedRunId};`;

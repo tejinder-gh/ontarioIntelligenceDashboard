@@ -30,7 +30,8 @@ describe('Intelligent Research & Decision Engine Suite', () => {
     const { decisionModel } = buildDecisionModel({ inquiry: 'Open pizza store' });
     const funnel = await executeStagedFunnel(decisionModel);
 
-    expect(funnel.totalMarketsScreened).toBeGreaterThanOrEqual(400);
+    expect(funnel.stages.province.totalCsds).toBeGreaterThanOrEqual(400);
+    expect(funnel.totalMarketsScreened).toBeGreaterThan(0);
     expect(funnel.stages.screenedMarkets.length).toBeGreaterThan(0);
     expect(funnel.shortlistedCandidates.length).toBeGreaterThan(0);
     expect(funnel.stoppingCriteria.length).toBeGreaterThanOrEqual(3);

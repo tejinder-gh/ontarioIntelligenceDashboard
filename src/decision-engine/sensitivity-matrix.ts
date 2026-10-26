@@ -25,10 +25,25 @@ export function runSensitivityAnalysis(
   const unitLabel = model.volumeUnit || profile.volumeUnit;
   const isIndustrial = model.categoryId === 'logistics_warehouse';
 
+  const isFranchise = model.ownership === 'FRANCHISE';
+  const franchiseRoyaltyRatio = isFranchise ? 0.055 : 0;
+  const isInvestor = model.ownerInvolvement === 'INVESTOR';
+  const investorManagementFeeAnnual = isInvestor ? 55000 : 0;
+  const fixedAnnualOverhead = profile.fixedMonthlyOverhead * 12;
+  const fixedCosts = annualRent + fixedAnnualOverhead + investorManagementFeeAnnual;
+
+  const aov = model.targetPricePointAov || profile.benchmarkUnitRevenue;
+  const totalVariableCostRatio = profile.cogsRatio + profile.variableLaborRatio + profile.channelOrCommissionRatio + franchiseRoyaltyRatio;
+  const variableMarginRatio = Math.max(0.01, 1 - totalVariableCostRatio);
+  const contributionPerUnit = aov * variableMarginRatio;
+
   // 1. Occupancy Cost Shock: Gross Lease / TMI +20%
   const shockedRentDelta = annualRent * 0.20;
   const netAfterRentShock = baseNet - shockedRentDelta;
-  const rentShockBreakEven = Math.ceil(baseBreakEvenUnits * (annualRent * 1.20 + (annualRev * 0.18)) / Math.max(1, (annualRent + (annualRev * 0.18))));
+  const shockedFixedCosts = fixedCosts + shockedRentDelta;
+  const rentShockBreakEven = contributionPerUnit > 0
+    ? Math.ceil(shockedFixedCosts / (360 * contributionPerUnit))
+    : baseBreakEvenUnits;
   
   const rentShock: SensitivityShock = {
     parameter: isIndustrial ? 'Industrial Net Lease + TMI' : 'Commercial Retail Gross Lease Rate',
@@ -41,14 +56,15 @@ export function runSensitivityAnalysis(
     resilienceRating: netAfterRentShock > 45000 ? 'ROBUST' : 'SENSITIVE'
   };
 
-  // 2. Volume Demand Ramp Shock: -25% Slower Initial Volume
-  const shockedSalesRev = annualRev * 0.75;
-  const shockedSalesNet = (shockedSalesRev * (1 - (profile.cogsRatio + profile.variableLaborRatio + profile.channelOrCommissionRatio))) - (annualRent + (profile.fixedMonthlyOverhead * 12));
+  // 2. Volume Demand Ramp Shock: -25% Slower Initial Volume (unified with royalties & investor fees)
+  const baseDailyOrders = economics.bands.baseCase.dailyUnitVolume;
+  const shockedDailyOrders = Math.round(baseDailyOrders * 0.75);
+  const shockedSalesNet = (shockedDailyOrders * 360 * contributionPerUnit) - fixedCosts;
   const volumeShock: SensitivityShock = {
     parameter: 'First-Year Customer Ramp / Volume',
     shockApplied: `-25% lower transaction throughput than modelled base case`,
-    baseMetric: `${economics.bands.baseCase.dailyUnitVolume} ${unitLabel}/day ($${baseNet.toLocaleString()} net)`,
-    shockedMetric: `${Math.round(economics.bands.baseCase.dailyUnitVolume * 0.75)} ${unitLabel}/day ($${Math.round(shockedSalesNet).toLocaleString()} net)`,
+    baseMetric: `${baseDailyOrders} ${unitLabel}/day ($${baseNet.toLocaleString()} net)`,
+    shockedMetric: `${shockedDailyOrders} ${unitLabel}/day ($${Math.round(shockedSalesNet).toLocaleString()} net)`,
     impactOnViability: shockedSalesNet > 0 
       ? 'Survives initial ramp without cash call; working capital buffer covers early monthly cash flow deficit.' 
       : `Deficit requires drawing from working capital ($${model.workingCapital.toLocaleString()} reserves sustain approx ${Math.max(1, Math.round((model.workingCapital / Math.abs(shockedSalesNet || 1)) * 12))} months runway).`,
@@ -99,28 +115,23 @@ export function runSensitivityAnalysis(
     const runnerEconomics = calculateFinancialEconomics(runnerUpCandidate, model);
     const runnerBaseNet = runnerEconomics.bands.baseCase.netOperatingIncome;
     const topSqft = topCandidate.squareFootage || profile.typicalSqftMin;
-    const aov = model.targetPricePointAov || profile.benchmarkUnitRevenue;
-    const franchiseRoyaltyRatio = model.ownership === 'FRANCHISE' ? 0.055 : 0;
-    const totalVariableCostRatio = profile.cogsRatio + profile.variableLaborRatio + profile.channelOrCommissionRatio + franchiseRoyaltyRatio;
-    const contributionMarginRatio = Math.max(0.01, 1 - totalVariableCostRatio);
-    const isInvestor = model.ownerInvolvement === 'INVESTOR';
-    const investorManagementFeeAnnual = isInvestor ? 55000 : 0;
-    const topFixedCosts = annualRent + (profile.fixedMonthlyOverhead * 12) + investorManagementFeeAnnual;
+    const effectiveRentSqft = annualRent / Math.max(1, topSqft);
 
     // 1. Exact mathematical lease rate switching threshold: Net_1(R*) = Net_2
     const netIncomeDifference = baseNet - runnerBaseNet;
     const allowableRentDelta = netIncomeDifference / Math.max(1, topSqft);
-    const thresholdRentSqft = topCandidate.commercialGrossRentSqft + allowableRentDelta;
+    const thresholdRentSqft = effectiveRentSqft + allowableRentDelta;
+    const thresholdMonthlyRent = Math.round((thresholdRentSqft * topSqft) / 12);
 
     switchingConditions.push({
-      conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) ranks higher if ${topCandidate.name}'s negotiated lease rate exceeds $${thresholdRentSqft.toFixed(2)}/sqft gross.`,
+      conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) achieves net operating income parity if ${topCandidate.name}'s lease rate exceeds $${thresholdRentSqft.toFixed(2)}/sqft gross ($${thresholdMonthlyRent.toLocaleString()}/mo). Note: Net income parity differs from multi-factor suitability ranking.`,
       formulaTrigger: `Gross Lease Rate > $${thresholdRentSqft.toFixed(2)}/sqft (Erases $${Math.round(netIncomeDifference).toLocaleString()} net income advantage)`,
       switchingThresholdValue: `$${thresholdRentSqft.toFixed(2)}/sqft/yr`,
       alternativeTarget: runnerUpCandidate.name
     });
 
     // 2. Exact mathematical transaction volume switching threshold: Net_1(V*) = Net_2
-    const thresholdDailyVolume = Math.max(0, Math.round((topFixedCosts + runnerBaseNet) / (360 * aov * contributionMarginRatio)));
+    const thresholdDailyVolume = Math.max(0, Math.round((fixedCosts + runnerBaseNet) / (360 * aov * variableMarginRatio)));
 
     switchingConditions.push({
       conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) ranks higher if ${topCandidate.name}'s daily transaction volume drops below ${thresholdDailyVolume} ${unitLabel}/day.`,
@@ -167,15 +178,25 @@ export function verifySwitchingThresholds(
   const isInvestor = model.ownerInvolvement === 'INVESTOR';
   const investorManagementFeeAnnual = isInvestor ? 55000 : 0;
   const annualRent = topEconomics.bands.baseCase.occupancyCostRent;
+  const effectiveRentSqft = annualRent / Math.max(1, topSqft);
   const topFixedCosts = annualRent + (profile.fixedMonthlyOverhead * 12) + investorManagementFeeAnnual;
 
   const allowableRentDelta = (topBaseNet - runnerNet) / Math.max(1, topSqft);
-  const thresholdRentSqft = topCandidate.commercialGrossRentSqft + allowableRentDelta;
-  const topNetAtRentThreshold = topBaseNet - (allowableRentDelta * topSqft);
+  const thresholdRentSqft = effectiveRentSqft + allowableRentDelta;
+  const thresholdMonthlyRent = Math.round((thresholdRentSqft * topSqft) / 12);
+
+  // Synchronize both rent representations and verify through production calculateFinancialEconomics
+  const shockedRentCandidate: FunnelCandidate = {
+    ...topCandidate,
+    commercialGrossRentSqft: thresholdRentSqft,
+    monthlyRent: thresholdMonthlyRent
+  };
+  const shockedRentEconomics = calculateFinancialEconomics(shockedRentCandidate, model);
+  const topNetAtRentThreshold = shockedRentEconomics.bands.baseCase.netOperatingIncome;
 
   const exactVolume = (topFixedCosts + runnerNet) / (360 * aov * contributionMarginRatio);
   const thresholdDailyVolume = Math.round(exactVolume);
-  const topNetAtVolumeThreshold = (exactVolume * 360 * aov * contributionMarginRatio) - topFixedCosts;
+  const topNetAtVolumeThreshold = Math.round((exactVolume * 360 * aov * contributionMarginRatio) - topFixedCosts);
 
   return {
     thresholdRentSqft,

@@ -1,13 +1,14 @@
 import { createHash } from 'crypto';
 import { sql } from '../db/index.js';
-import type {
-  CandidateComparison,
-  DecisionEngineResult,
-  DecisionInquiry,
-  DecisionModel,
-  EvidenceRecordItem,
-  FinancialEconomics,
-  FunnelCandidate,
+import {
+  FinancialEconomicsSchema,
+  type CandidateComparison,
+  type DecisionEngineResult,
+  type DecisionInquiry,
+  type DecisionModel,
+  type EvidenceRecordItem,
+  type FinancialEconomics,
+  type FunnelCandidate,
 } from './types.js';
 import type { MetricProvenance } from './provenance.js';
 import { buildDecisionModel } from './decision-modeler.js';
@@ -199,31 +200,43 @@ export async function replayDecisionRun(runId: string, workspaceId: string): Pro
     throw new Error(`Malformed snapshot for run ${runId}: missing essential decision or alternatives payload`);
   }
 
-  const safeParse = <T>(val: unknown, fallback: T): T => {
-    if (!val) return fallback;
+  // Reject legacy records without financial_snapshot: do not claim recalculation under current constants is immutable
+  if (!row.financial_snapshot) {
+    throw new Error(`Unsupported legacy run snapshot for run ${runId}: record was created under legacy engine version ${row.engine_version} before immutable financial snapshots were versioned.`);
+  }
+
+  const parseJson = (val: unknown, fieldName: string) => {
+    if (!val) return null;
     if (typeof val === 'string') {
-      try { return JSON.parse(val) as T; } catch { return fallback; }
+      try { return JSON.parse(val); } catch { throw new Error(`Malformed JSON in snapshot field '${fieldName}' for run ${runId}`); }
     }
-    return val as T;
+    return val;
   };
 
-  const decisionModel = safeParse<DecisionModel>(row.decision_model_snapshot, {} as DecisionModel);
-  const evidenceLedger = safeParse<EvidenceRecordItem[]>(row.evidence_snapshot, []);
+  const decisionModel = parseJson(row.decision_model_snapshot, 'decision_model_snapshot') as DecisionModel;
+  if (!decisionModel || !decisionModel.categoryId) {
+    throw new Error(`Corrupted decision model snapshot for run ${runId}`);
+  }
+
+  const alternatives = parseJson(row.alternatives_snapshot, 'alternatives_snapshot') as CandidateComparison[];
+  if (!Array.isArray(alternatives) || alternatives.length === 0) {
+    throw new Error(`Corrupted alternatives snapshot for run ${runId}: empty candidate array`);
+  }
+  const topCandidate = alternatives[0]?.candidate;
+
+  // Validate financial snapshot with strict Zod schema; reject {} and malformed records
+  const rawFinancial = parseJson(row.financial_snapshot, 'financial_snapshot');
+  const parsedEconomics = FinancialEconomicsSchema.safeParse(rawFinancial);
+  if (!parsedEconomics.success) {
+    throw new Error(`Corrupted financial snapshot for run ${runId}: schema validation failed (${parsedEconomics.error.issues.map(i => i.path.join('.') + ': ' + i.message).join('; ')})`);
+  }
+  const financialEconomics = parsedEconomics.data;
+
+  const evidenceLedger = (parseJson(row.evidence_snapshot, 'evidence_snapshot') as EvidenceRecordItem[]) || [];
   const provenanceLedger: MetricProvenance[] = Array.isArray(evidenceLedger)
     ? evidenceLedger.flatMap(e => e.provenance ? [e.provenance] : [])
     : [];
-  const sensitivitySnapshot = safeParse<any>(row.sensitivity_snapshot, {});
-  const alternatives = safeParse<CandidateComparison[]>(row.alternatives_snapshot, []);
-  const topCandidate = alternatives[0]?.candidate;
-
-  // Restore immutable financial snapshot directly; do not invent fake candidates
-  const persistedEconomics = safeParse<FinancialEconomics | null>(row.financial_snapshot, null);
-  const financialEconomics = persistedEconomics 
-    || (topCandidate ? calculateFinancialEconomics(topCandidate, decisionModel) : null);
-
-  if (!financialEconomics) {
-    throw new Error(`Malformed snapshot for run ${runId}: candidate and financial economics are both missing`);
-  }
+  const sensitivitySnapshot = (parseJson(row.sensitivity_snapshot, 'sensitivity_snapshot') as any) || {};
 
   return {
     runId: row.id,
@@ -242,8 +255,8 @@ export async function replayDecisionRun(runId: string, workspaceId: string): Pro
       targetAov: decisionModel.targetPricePointAov,
       rationale: 'Replayed from immutable run snapshot'
     },
-    geographicFunnel: safeParse(row.funnel_snapshot, row.funnel_snapshot),
-    hypotheses: safeParse(row.hypotheses_snapshot, row.hypotheses_snapshot),
+    geographicFunnel: parseJson(row.funnel_snapshot, 'funnel_snapshot'),
+    hypotheses: parseJson(row.hypotheses_snapshot, 'hypotheses_snapshot'),
     evidenceLedger,
     provenanceLedger,
     rankedAlternatives: alternatives,
@@ -251,6 +264,6 @@ export async function replayDecisionRun(runId: string, workspaceId: string): Pro
     sensitivityShocks: sensitivitySnapshot.sensitivityShocks || [],
     switchingConditions: sensitivitySnapshot.switchingConditions || [],
     materialUnknowns: topCandidate ? prioritizeMaterialUnknowns(topCandidate, decisionModel.categoryId) : [],
-    decisionBrief: safeParse(row.decision_brief, row.decision_brief)
+    decisionBrief: parseJson(row.decision_brief, 'decision_brief')
   };
 }

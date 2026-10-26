@@ -41,20 +41,26 @@ export function buildEvidenceLedger(
     claimRequiresAddressLevel: false
   });
 
+  const isIncomeImputed = candidate.medianIncomeSource === 'IMPUTED_DEFAULT';
+  const hasFoodSpending = typeof candidate.annualFoodAwayExpenditure === 'number';
+
   const incomeProvenance = buildMetricProvenance({
-    metricKey: 'median_after_tax_income',
-    metricName: 'Median After-Tax Household Income',
-    sourceName: 'Statistics Canada',
-    sourceUrl: 'https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1110022201',
-    datasetId: 'Table 11-10-0222-01',
+    metricKey: 'median_household_income',
+    metricName: isIncomeImputed ? 'Provincial Benchmark Household Income (Imputed)' : 'Census Median Household After-Tax Income',
+    sourceName: isIncomeImputed ? 'Ontario Provincial Economic Baseline' : 'Statistics Canada 2021 Census of Population',
+    sourceUrl: 'https://www12.statcan.gc.ca/census-recensement/2021/dp-pd/prof/index.cfm',
+    datasetId: isIncomeImputed ? 'ON-PROV-INCOME-BENCHMARK' : '98-316-X2021001',
+    recordIdentifier: isIncomeImputed ? 'PROV_ON_DEFAULT' : `${geoId}:income_median_hh`,
     observationPeriod: '2021 Census / 2024 Household Spending Survey',
     geographyId: geoId,
     geographyName: candidate.city,
-    geographyResolution: 'CSD',
+    geographyResolution: isIncomeImputed ? 'PROVINCE' : 'CSD',
     units: 'CAD',
     originalValue: candidate.medianIncome,
-    transformation: 'Median household after-tax income from census tax files',
-    evidenceClassification: 'AUDITED',
+    transformation: isIncomeImputed
+      ? 'Localized census tax file observation missing; defaulted to provincial median baseline'
+      : 'Median household after-tax income from census tax files',
+    evidenceClassification: isIncomeImputed ? 'UNVERIFIED_ASSUMPTION' : 'AUDITED',
     limitations: 'Household income indicates consumer purchasing power; does not reflect B2B commercial procurement budgets.',
     claimRequiresAddressLevel: false
   });
@@ -77,22 +83,31 @@ export function buildEvidenceLedger(
     claimRequiresAddressLevel: false
   });
 
+  const isBroadBenchmark = candidate.competitorClassification === 'BENCHMARK';
+  const isDirectObserved = candidate.competitorClassification === 'OBSERVED';
+
   const compProvenance = buildMetricProvenance({
     metricKey: 'competitor_count',
-    metricName: `Active NAICS ${model.naicsCode} Establishments`,
+    metricName: isBroadBenchmark
+      ? `Broad Sector NAICS ${model.naicsCode.slice(0, 2)} Transport/Logistics Establishments`
+      : `Active NAICS ${model.naicsCode} Establishments`,
     sourceName: 'Statistics Canada Canadian Business Counts',
     sourceUrl: 'https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3310117601',
-    datasetId: 'Table 33-10-1176-01',
-    recordIdentifier: `${geoId}:${model.naicsCode}`,
+    datasetId: 'Table 33-10-1097-01',
+    recordIdentifier: `${geoId}:${isBroadBenchmark ? 'NAICS_48_49' : model.naicsCode}`,
     observationPeriod: 'June 2026 Business Register',
     geographyId: geoId,
     geographyName: candidate.city,
     geographyResolution: 'CSD',
     units: 'establishments with employees',
     originalValue: candidate.estimatedDirectCompetitors ?? 'UNAVAILABLE',
-    transformation: 'Filtered business register by CSD boundary and 6-digit NAICS code',
-    evidenceClassification: candidate.estimatedDirectCompetitors !== undefined ? 'AUDITED' : 'UNVERIFIED_ASSUMPTION',
-    limitations: 'Register counts establishments with formal payroll accounts. Does not include non-employer or unclassified operations.',
+    transformation: isBroadBenchmark
+      ? 'Macro 2-digit sector aggregate; direct retail counter storefronts are not broken out in municipal public register tables'
+      : 'Filtered business register by CSD boundary and 6-digit NAICS code',
+    evidenceClassification: isDirectObserved ? 'AUDITED' : (isBroadBenchmark ? 'BENCHMARK' : 'UNVERIFIED_ASSUMPTION'),
+    limitations: isBroadBenchmark
+      ? 'Sector total includes large transport, freight, and warehousing hubs; cannot be interpreted as retail storefront competition.'
+      : 'Register counts establishments with formal payroll accounts. Does not include non-employer or unclassified operations.',
     claimRequiresAddressLevel: false
   });
 
@@ -109,12 +124,18 @@ export function buildEvidenceLedger(
     },
     {
       claim: `Purchasing power / commercial demand supports proposed $${aov.toFixed(2)} ${model.unitRevenueLabel}.`,
-      evidenceObserved: `Median after-tax income of $${candidate.medianIncome.toLocaleString()} and annual spending of $${candidate.annualFoodAwayExpenditure.toLocaleString()} in ${candidate.city}.`,
+      evidenceObserved: isIncomeImputed
+        ? `Modelled under provincial benchmark median income of $${candidate.medianIncome.toLocaleString()} (local census record missing).`
+        : (hasFoodSpending
+          ? `Median after-tax income of $${candidate.medianIncome.toLocaleString()} and annual dining spend of $${candidate.annualFoodAwayExpenditure!.toLocaleString()} in ${candidate.city}.`
+          : `Median after-tax household income of $${candidate.medianIncome.toLocaleString()} in ${candidate.city}.`),
       calculationMethod: `Unit revenue ($${aov.toFixed(2)}) aligns with regional disposable purchasing benchmarks.`,
-      classification: 'AUDITED',
-      uncertaintyEstimate: 'Low-to-moderate: Macro income is strong, but economic shocks and inflation can cause trade-downs.',
+      classification: isIncomeImputed ? 'UNVERIFIED_ASSUMPTION' : 'AUDITED',
+      uncertaintyEstimate: isIncomeImputed
+        ? 'High: Imputed provincial baseline; requires verification of local catchment income demographics.'
+        : 'Low-to-moderate: Macro income is strong, but economic shocks and inflation can cause trade-downs.',
       decisionImplication: 'Maintain disciplined price-value relationship relative to incumbent competitors.',
-      verificationSource: 'StatCan Survey of Household Spending (Table 11-10-0222-01)',
+      verificationSource: isIncomeImputed ? 'Ontario Baseline Economic Model' : 'StatCan Census & Spending Surveys',
       provenance: incomeProvenance
     },
     {
@@ -130,18 +151,26 @@ export function buildEvidenceLedger(
       provenance: rentProvenance
     },
     {
-      claim: `Competitive density permits capture of profitable local market share for NAICS ${model.naicsCode}.`,
-      evidenceObserved: candidate.estimatedDirectCompetitors !== undefined
-        ? `Audited business register identifies ${candidate.estimatedDirectCompetitors} licensed establishments in ${candidate.city}.`
-        : `Direct competitor count for ${model.categoryName} is unavailable in StatCan business registry for ${candidate.city}.`,
-      calculationMethod: candidate.estimatedDirectCompetitors !== undefined
-        ? `Competitor density corresponds to 1 operator per ${Math.round(candidate.population2021 / Math.max(1, candidate.estimatedDirectCompetitors)).toLocaleString()} residents.`
-        : 'Specific localized NAICS density unavailable; requires primary local corridor audit.',
-      classification: candidate.estimatedDirectCompetitors !== undefined ? 'AUDITED' : 'BENCHMARK',
-      uncertaintyEstimate: candidate.estimatedDirectCompetitors !== undefined
-        ? 'High: Low competitor density may indicate unmet demand OR lack of localized customer appetite/infrastructure.'
+      claim: isBroadBenchmark
+        ? `Regional transportation & logistics infrastructure presence in ${candidate.city}.`
+        : `Competitive density permits capture of profitable local market share for NAICS ${model.naicsCode}.`,
+      evidenceObserved: isBroadBenchmark
+        ? `StatCan Business Register records ${candidate.estimatedDirectCompetitors} establishments in broad sector NAICS 48-49 in ${candidate.city}. Direct 6-digit courier/shipping storefront counts are unrecorded at CSD resolution.`
+        : (isDirectObserved
+          ? `Audited business register identifies ${candidate.estimatedDirectCompetitors} licensed establishments in ${candidate.city}.`
+          : `Direct competitor count for ${model.categoryName} is unrecorded in StatCan business registry for ${candidate.city}.`),
+      calculationMethod: isBroadBenchmark
+        ? 'Sector-level infrastructure benchmark; direct competitive density requires primary ground-truth survey.'
+        : (isDirectObserved
+          ? `Competitor density corresponds to 1 operator per ${Math.round(candidate.population2021 / Math.max(1, candidate.estimatedDirectCompetitors!)).toLocaleString()} residents.`
+          : 'Specific localized NAICS density unavailable; requires primary local corridor audit.'),
+      classification: isDirectObserved ? 'AUDITED' : (isBroadBenchmark ? 'BENCHMARK' : 'UNVERIFIED_ASSUMPTION'),
+      uncertaintyEstimate: isBroadBenchmark
+        ? 'High: Macro sector totals do not measure localized retail storefront competition or foot traffic.'
         : 'High: Specific business register sub-segment count unrecorded for this geography.',
-      decisionImplication: 'Differentiate strongly on service speed, specialized offering, or modern logistics integrations.',
+      decisionImplication: isBroadBenchmark
+        ? 'Conduct ground truth field audit to map nearby retail shipping counters (UPS, FedEx, DHL, Canada Post).'
+        : 'Differentiate strongly on service speed, specialized offering, or modern integrations.',
       verificationSource: candidate.competitorDataSource || 'StatCan Canadian Business Counts Table 33-10-1097-01',
       provenance: compProvenance
     }

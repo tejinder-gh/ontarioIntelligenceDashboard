@@ -24,8 +24,8 @@ export async function verifyWorkspaceMembership(
 /**
  * Validates workspace access and prevents multi-tenant crossover:
  * 1. If user is an existing member -> Allowed.
- * 2. If workspace has other members and user is not one of them -> Denied (403).
- * 3. If workspace is brand new (no existing members) -> Grants OWNER role to caller.
+ * 2. If workspace is personal workspace (ws_${userId}) -> Auto-provisions and allows.
+ * 3. Any other arbitrary workspaceId where user is not an existing member -> Denied (403, fail closed).
  */
 export async function ensureWorkspaceAccess(
   userId: string,
@@ -37,27 +37,67 @@ export async function ensureWorkspaceAccess(
     return { allowed: true };
   }
 
-  // 2. Multi-tenant boundary check: check if workspace belongs to another tenant
-  const [existingTenant] = await sql<{ user_id: string }[]>`
-    SELECT user_id 
-    FROM workspace_memberships 
-    WHERE workspace_id = ${workspaceId} 
-    LIMIT 1;
-  `;
+  // 2. Personal default workspace: permit automatic initialization for the user's own workspace
+  if (workspaceId === `ws_${userId}` || workspaceId === `workspace_${userId}`) {
+    await sql`
+      INSERT INTO workspace_memberships (workspace_id, user_id, role)
+      VALUES (${workspaceId}, ${userId}, 'OWNER')
+      ON CONFLICT (workspace_id, user_id) DO NOTHING;
+    `;
+    return { allowed: true };
+  }
 
+  // 3. Fail closed: reject arbitrary foreign/unassigned workspace IDs
+  return {
+    allowed: false,
+    reason: `Access denied: User does not have authorized membership in workspace '${workspaceId}'`
+  };
+}
+
+/**
+ * Explicitly provisions a new workspace for a user under unique constraint
+ */
+export async function createWorkspace(
+  userId: string,
+  workspaceId: string
+): Promise<WorkspaceAccessResult> {
+  const [existingTenant] = await sql<{ user_id: string }[]>`
+    SELECT user_id FROM workspace_memberships WHERE workspace_id = ${workspaceId} LIMIT 1;
+  `;
   if (existingTenant) {
+    if (existingTenant.user_id === userId) {
+      return { allowed: true };
+    }
     return {
       allowed: false,
-      reason: `Access denied: User is not authorized to access isolated workspace '${workspaceId}'`
+      reason: `Access denied: Workspace '${workspaceId}' is already registered to another tenant.`
     };
   }
 
-  // 3. New workspace provisioned: register initial caller as OWNER
   await sql`
     INSERT INTO workspace_memberships (workspace_id, user_id, role)
     VALUES (${workspaceId}, ${userId}, 'OWNER')
     ON CONFLICT (workspace_id, user_id) DO NOTHING;
   `;
-
   return { allowed: true };
+}
+
+/**
+ * Backfills legacy runs so historic workspace owners retain legitimate access
+ */
+export async function backfillLegacyWorkspaceMemberships(): Promise<number> {
+  try {
+    const result = await sql`
+      INSERT INTO workspace_memberships (workspace_id, user_id, role)
+      SELECT DISTINCT r.workspace_id, r.user_id, 'OWNER'
+      FROM decision_engine_runs r
+      JOIN users u ON u.id = r.user_id
+      WHERE r.workspace_id IS NOT NULL AND r.user_id IS NOT NULL
+      ON CONFLICT (workspace_id, user_id) DO NOTHING;
+    `;
+    return result.count ?? 0;
+  } catch (err) {
+    console.warn('[Workspace Auth] Backfill legacy memberships notice:', err);
+    return 0;
+  }
 }

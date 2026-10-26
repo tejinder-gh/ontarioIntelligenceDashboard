@@ -32,6 +32,7 @@ export const DecisionEngineView: React.FC = () => {
   const [engineResult, setEngineResult] = useState<DecisionEngineResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string>(() => (typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : ''));
 
   // Fetch scenarios on mount
   useEffect(() => {
@@ -44,7 +45,7 @@ export const DecisionEngineView: React.FC = () => {
       })
       .catch(err => console.error('Failed to load engine scenarios:', err));
 
-    // Auto-run default inquiry
+    // Auto-run default inquiry if token is available, or allow manual execution
     executeAnalysis('lean_takeout_delivery');
   }, []);
 
@@ -52,9 +53,17 @@ export const DecisionEngineView: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      if (token) setAuthToken(token);
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/engine/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           inquiry: inquiryText,
           selectedScenarioKey: scenarioKey || selectedScenarioKey
@@ -63,6 +72,9 @@ export const DecisionEngineView: React.FC = () => {
 
       const json = await res.json();
       if (!res.ok || !json.success) {
+        if (res.status === 401) {
+          throw new Error('Authentication required: Please sign in to execute and persist decision runs in your private workspace.');
+        }
         throw new Error(json.error || 'Failed to execute decision engine');
       }
 
@@ -115,79 +127,125 @@ export const DecisionEngineView: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-2 p-1.5 bg-slate-900/80 border border-slate-800 rounded-2xl overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('brief')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'brief'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>Executive Brief</span>
-        </button>
+      {/* Guest Mode Notice */}
+      {!authToken && (
+        <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-2xl flex items-center justify-between gap-4 text-xs text-amber-200">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 text-amber-400" />
+            <span>
+              <strong>Guest Session:</strong> You are exploring in unauthenticated mode. Sign in to save versioned decision snapshots to your private workspace.
+            </span>
+          </div>
+        </div>
+      )}
 
-        <button
-          onClick={() => setActiveTab('funnel')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'funnel'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-          }`}
-        >
-          <Compass className="w-4 h-4" />
-          <span>Model & Staged Funnel</span>
-        </button>
+      {/* Navigation Sub-Tabs (Rendered when results are loaded) */}
+      {engineResult && (
+        <div className="flex items-center gap-2 p-1.5 bg-slate-900/80 border border-slate-800 rounded-2xl overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('brief')}
+            className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'brief'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Executive Brief</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('hypotheses')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'hypotheses'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-          }`}
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>Hypotheses & Evidence</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('funnel')}
+            className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'funnel'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            <span>Model & Staged Funnel</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('alternatives')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'alternatives'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-          }`}
-        >
-          <Trophy className="w-4 h-4" />
-          <span>Alternatives & Economics</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('hypotheses')}
+            className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'hypotheses'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Hypotheses & Evidence</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('sensitivity')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'sensitivity'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-          }`}
-        >
-          <Activity className="w-4 h-4" />
-          <span>Sensitivity & Unknowns</span>
-        </button>
-      </div>
+          <button
+            onClick={() => setActiveTab('alternatives')}
+            className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'alternatives'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+            }`}
+          >
+            <Trophy className="w-4 h-4" />
+            <span>Alternatives & Economics</span>
+          </button>
 
-      {/* Error Banner */}
-      {error && (
+          <button
+            onClick={() => setActiveTab('sensitivity')}
+            className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'sensitivity'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+            }`}
+          >
+            <Activity className="w-4 h-4" />
+            <span>Sensitivity & Unknowns</span>
+          </button>
+        </div>
+      )}
+
+      {/* Loading Skeleton */}
+      {loading && (
+        <div className="p-12 bg-slate-900/60 border border-slate-800/80 rounded-3xl flex flex-col items-center justify-center text-center">
+          <div className="w-10 h-10 border-3 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin mb-4" />
+          <h3 className="text-base font-semibold text-slate-100 mb-1">
+            Evaluating Commercial Evidence & Geographic Funnel...
+          </h3>
+          <p className="text-xs text-slate-400 max-w-md">
+            Screening candidate municipalities, auditing 6-digit NAICS registries, and computing multi-factor suitability...
+          </p>
+        </div>
+      )}
+
+      {/* Error Alert with inputs preserved */}
+      {error && !loading && (
         <div className="p-4 bg-rose-950/30 border border-rose-500/30 rounded-2xl flex items-center gap-3 text-rose-300 text-xs">
           <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Tab Contents */}
-      {engineResult && (
+      {/* Unconditionally rendered DecisionModelPanel if no result OR on 'funnel' tab */}
+      {(!engineResult || activeTab === 'funnel') && !loading && (
+        <div className="space-y-6">
+          <DecisionModelPanel
+            inquiryText={inquiryText}
+            setInquiryText={setInquiryText}
+            scenarios={scenarios}
+            selectedScenarioKey={selectedScenarioKey}
+            onSelectScenario={handleScenarioChange}
+            decisionModel={engineResult?.decisionModel ?? null}
+            onRunAnalysis={() => executeAnalysis()}
+            isLoading={loading}
+          />
+          {engineResult && (
+            <StagedFunnelProgress funnel={engineResult.geographicFunnel} />
+          )}
+        </div>
+      )}
+
+      {/* Tab Contents when loaded */}
+      {engineResult && !loading && (
         <div className="space-y-6">
           {activeTab === 'brief' && (
             <DecisionBriefView
@@ -196,22 +254,6 @@ export const DecisionEngineView: React.FC = () => {
               version={engineResult.version}
               timestamp={engineResult.timestamp}
             />
-          )}
-
-          {activeTab === 'funnel' && (
-            <div className="space-y-6">
-              <DecisionModelPanel
-                inquiryText={inquiryText}
-                setInquiryText={setInquiryText}
-                scenarios={scenarios}
-                selectedScenarioKey={selectedScenarioKey}
-                onSelectScenario={handleScenarioChange}
-                decisionModel={engineResult.decisionModel}
-                onRunAnalysis={() => executeAnalysis()}
-                isLoading={loading}
-              />
-              <StagedFunnelProgress funnel={engineResult.geographicFunnel} />
-            </div>
           )}
 
           {activeTab === 'hypotheses' && (
