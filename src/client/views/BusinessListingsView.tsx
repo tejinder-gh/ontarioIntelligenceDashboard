@@ -150,21 +150,21 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
       },
       decisionImplications: [
         {
-          heading: 'Asking vs Confirmed Sale Price Protocol (Requirement 24)',
+          heading: 'Asking vs Confirmed Sale Price Protocol',
           insight: l.confirmed_sale_price 
             ? `Confirmed Sale: $${Number(l.confirmed_sale_price).toLocaleString()} (Discount-to-ask spread: $${(Number(l.asking_price) - Number(l.confirmed_sale_price)).toLocaleString()}). Confirmed through Teranet Land Registry filing.`
             : 'Pending Escrow / Unconfirmed Transaction. Mandate #5 forbids conflating asking price with transactional revenue.',
           impact: l.confirmed_sale_price ? 'positive' : 'warning'
         },
         {
-          heading: 'Repeated Listing Detection (Requirement 25)',
+          heading: 'Repeated Listing Detection',
           insight: l.repeated_listing_confidence 
             ? `${(Number(l.repeated_listing_confidence) * 100).toFixed(0)}% algorithmic match confidence matching ${l.repeated_parent_uid || 'prior MLS offering'}. Relisted under modified terms to refresh marketplace exposure.`
             : 'Unique initial commercial offering with no prior MLS footprint recorded.',
           impact: l.repeated_listing_confidence ? 'warning' : 'neutral'
         },
         {
-          heading: 'Price Adjustment History (Requirement 26)',
+          heading: 'Price Adjustment History',
           insight: hasPriceDrop 
             ? `Reduced by $${priceDropAmt.toLocaleString()} (was $${Number(l.previous_asking_price).toLocaleString()}). Demonstrates seller negotiation flexibility.` 
             : 'No downward price revisions recorded. Listing currently held at initial asking valuation.',
@@ -284,7 +284,7 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
             />
           </div>
 
-          {/* Dynamic Category Selector (Requirement 24) */}
+          {/* Dynamic Category Selector */}
           <select 
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
@@ -327,7 +327,7 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
             <option value="REMOVED">REMOVED (Expired / Off-Market)</option>
           </select>
 
-          {/* Repeated Listing Only Toggle (Requirement 25) */}
+          {/* Repeated Listing Only Toggle */}
           <button
             type="button"
             onClick={() => setRepeatedOnly(!repeatedOnly)}
@@ -552,7 +552,7 @@ export const BusinessListingsView: React.FC<BusinessListingsViewProps> = ({ city
         )}
       </div>
 
-      {/* Price & Status Timeline Modal (Requirement 26) */}
+      {/* Price & Status Timeline Modal */}
       {selectedListingForHistory && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="glass-panel w-full max-w-xl rounded-2xl border border-white/20 p-6 shadow-2xl relative bg-slate-950 space-y-4">

@@ -51,7 +51,10 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
         summaryHeadline: `INSUFFICIENT EVIDENCE / NO QUALIFIED CANDIDATES: Zero candidate locations qualified in ${decisionModel.geographicScope} for ${decisionModel.categoryName}.`,
         feasibilityGateNote: 'FEASIBILITY GATE FAILED: Candidate markets failed demographic density, income viability, or commercial lease affordability screening criteria. Demarcated fail-closed state strictly prevents un-screened property recommendation.'
       },
-      whyThisLocation: [],
+      whyThisLocation: [
+        `No candidate locations in ${decisionModel.geographicScope} satisfied the viability screening criteria.`,
+        'Preserving capital is recommended until search parameters or operating model constraints are broadened.'
+      ],
       whyNotAlternatives: geographicFunnel.stages.screenedMarkets.map(m => ({
         candidateName: m.name,
         tradeOffReason: m.reason

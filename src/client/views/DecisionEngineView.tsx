@@ -103,7 +103,7 @@ export const DecisionEngineView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="px-3 py-1 text-xs font-mono font-semibold rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                Staff Engineer Grade • Deterministic Engine v2.0
+                Commercial Intelligence OS • Verifiable Analysis
               </span>
               <span className="px-2.5 py-1 text-[10px] font-mono rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 Auditable Calculations
@@ -121,7 +121,13 @@ export const DecisionEngineView: React.FC = () => {
             <div className="shrink-0 flex flex-col sm:flex-row items-start sm:items-center gap-3">
               <div className="px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-2xl font-mono text-xs">
                 <div className="text-slate-500">Run ID: {engineResult.runId}</div>
-                <div className="text-emerald-400 font-bold mt-0.5">
+                <div className={`font-bold mt-0.5 ${
+                  engineResult.decisionBrief.recommendation.outcome === 'PROCEED_WITH_VERIFICATION'
+                    ? 'text-emerald-400'
+                    : engineResult.decisionBrief.recommendation.outcome === 'INVESTIGATE_ALTERNATIVE' || engineResult.decisionBrief.recommendation.outcome === 'INSUFFICIENT_EVIDENCE'
+                    ? 'text-amber-400'
+                    : 'text-rose-400'
+                }`}>
                   {engineResult.decisionBrief.recommendation.outcome}
                 </div>
               </div>
@@ -229,9 +235,18 @@ export const DecisionEngineView: React.FC = () => {
 
       {/* Error Alert with inputs preserved */}
       {error && !loading && (
-        <div className="p-4 bg-rose-950/30 border border-rose-500/30 rounded-2xl flex items-center gap-3 text-rose-300 text-xs">
-          <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
-          <span>{error}</span>
+        <div className="p-4 bg-rose-950/30 border border-rose-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-rose-300 text-xs">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
+            <span>{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => executeAnalysis()}
+            className="px-3.5 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 rounded-xl font-medium transition-colors shrink-0 cursor-pointer"
+          >
+            Retry Analysis
+          </button>
         </div>
       )}
 
@@ -263,6 +278,7 @@ export const DecisionEngineView: React.FC = () => {
               runId={engineResult.runId}
               version={engineResult.version}
               timestamp={engineResult.timestamp}
+              onEditInquiry={() => setActiveTab('funnel')}
             />
           )}
 

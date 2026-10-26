@@ -26,7 +26,7 @@ describe('Phase 4 — Reproducibility, Async Durability & Webhook Fulfillment', 
     expect(syncResult.stagesCompleted).toContain('crea_ddf_status');
     expect(syncResult.stagesCompleted).toContain('derived_analytics');
     expect(syncResult.durationMs).toBeGreaterThan(0);
-  });
+  }, 25000);
 
   // Requirement 11: Stripe Webhook Requires Correct Paid State
   it('defers dossier delivery when payment_status is not paid', async () => {

@@ -25,7 +25,7 @@ export const PreCommitmentChecklist: React.FC<PreCommitmentChecklistProps> = ({ 
           <div className="flex items-center gap-2">
             <CheckSquare className="w-5 h-5 text-indigo-400" />
             <h3 className="text-base font-semibold text-slate-100">
-              Prioritized Material Unknowns & Pre-Lease Verification (Requirement 8)
+              Prioritized Material Unknowns & Pre-Lease Verification
             </h3>
           </div>
           <span className="text-xs text-slate-400">

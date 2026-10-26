@@ -194,8 +194,20 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const handleOpenLogin = () => setIsLoginOpen(true);
+    const handleOpenLaunchWorkspace = (e: Event) => {
+      const customEvent = e as CustomEvent<{ workspaceId: string }>;
+      if (customEvent.detail?.workspaceId) {
+        setLaunchWorkspaceId(customEvent.detail.workspaceId);
+        setActiveTab('launch_readiness');
+        window.history.pushState({}, '', `/launch_readiness/${customEvent.detail.workspaceId}`);
+      }
+    };
     window.addEventListener('open-login-modal', handleOpenLogin);
-    return () => window.removeEventListener('open-login-modal', handleOpenLogin);
+    window.addEventListener('open-launch-workspace', handleOpenLaunchWorkspace);
+    return () => {
+      window.removeEventListener('open-login-modal', handleOpenLogin);
+      window.removeEventListener('open-launch-workspace', handleOpenLaunchWorkspace);
+    };
   }, []);
 
   const handleSignOut = () => {

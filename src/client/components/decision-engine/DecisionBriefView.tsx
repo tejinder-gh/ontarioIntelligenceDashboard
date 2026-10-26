@@ -1,21 +1,44 @@
 import React, { useState } from 'react';
-import { FileText, Copy, Check, Printer, ShieldCheck, MapPin, DollarSign, AlertTriangle, BookOpen, ExternalLink } from 'lucide-react';
+import { FileText, Copy, Check, Printer, ShieldCheck, MapPin, DollarSign, AlertTriangle, BookOpen, ExternalLink, ClipboardCheck, Edit3 } from 'lucide-react';
 import type { DecisionBrief } from '../../types/decision-engine.js';
+import { createLaunchWorkspace } from '../../utils/launch-api.js';
 
 interface DecisionBriefViewProps {
   brief: DecisionBrief;
   runId: string;
   version: string;
   timestamp: string;
+  onEditInquiry?: () => void;
 }
 
 export const DecisionBriefView: React.FC<DecisionBriefViewProps> = ({
   brief,
   runId,
   version,
-  timestamp
+  timestamp,
+  onEditInquiry
 }) => {
   const [copied, setCopied] = useState(false);
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+
+  const handleInitiateDueDiligence = async () => {
+    setCreatingWorkspace(true);
+    try {
+      const ws = await createLaunchWorkspace({
+        name: `${brief.recommendation.operatingFormat} - ${brief.recommendation.marketOrLocation}`,
+        municipality: brief.recommendation.marketOrLocation,
+        industry: brief.recommendation.operatingFormat,
+      });
+      if (ws?.id) {
+        window.dispatchEvent(new CustomEvent('open-launch-workspace', { detail: { workspaceId: ws.id } }));
+      }
+    } catch (err) {
+      console.error('Failed to create due diligence workspace:', err);
+      alert('Could not initiate launch workspace. Please check your connection.');
+    } finally {
+      setCreatingWorkspace(false);
+    }
+  };
 
   const handleCopyText = () => {
     const text = `
@@ -68,14 +91,33 @@ ${brief.sources.map(s => `• ${s.name} (${s.friendlyCode}): ${s.coverage} [Limi
             <FileText className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-slate-100">Executive Decision Brief (Requirement 9)</div>
+            <div className="text-sm font-semibold text-slate-100">Executive Decision Brief</div>
             <div className="text-xs text-slate-400 font-mono">
               Run: {runId} • Engine v{version} • {new Date(timestamp).toLocaleDateString()}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {onEditInquiry && (
+            <button
+              onClick={onEditInquiry}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700"
+            >
+              <Edit3 className="w-4 h-4 text-indigo-400" />
+              <span>Adjust Parameters</span>
+            </button>
+          )}
+          {brief.recommendation.outcome !== 'DO_NOT_PROCEED' && (
+            <button
+              onClick={handleInitiateDueDiligence}
+              disabled={creatingWorkspace}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-emerald-500/20"
+            >
+              <ClipboardCheck className="w-4 h-4" />
+              <span>{creatingWorkspace ? 'Creating...' : 'Initiate Due Diligence'}</span>
+            </button>
+          )}
           <button
             onClick={handleCopyText}
             className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700"
@@ -113,7 +155,13 @@ ${brief.sources.map(s => `• ${s.name} (${s.friendlyCode}): ${s.coverage} [Limi
             <span className="px-2.5 py-1 rounded-full font-mono bg-slate-800 text-slate-400">
               Format: {brief.recommendation.operatingFormat}
             </span>
-            <span className="px-2.5 py-1 rounded-full font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+            <span className={`px-2.5 py-1 rounded-full font-mono border ${
+              brief.recommendation.outcome === 'PROCEED_WITH_VERIFICATION'
+                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                : brief.recommendation.outcome === 'INVESTIGATE_ALTERNATIVE' || brief.recommendation.outcome === 'INSUFFICIENT_EVIDENCE'
+                ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+            }`}>
               Status: {brief.recommendation.outcome}
             </span>
           </div>
@@ -212,6 +260,22 @@ ${brief.sources.map(s => `• ${s.name} (${s.friendlyCode}): ${s.coverage} [Limi
               </div>
             ))}
           </div>
+          {brief.recommendation.outcome !== 'DO_NOT_PROCEED' && (
+            <div className="mt-4 pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="text-xs text-slate-400">
+                Ready to verify on the ground? Transfer these pre-lease checklist items directly into a Launch Due Diligence workspace.
+              </div>
+              <button
+                type="button"
+                onClick={handleInitiateDueDiligence}
+                disabled={creatingWorkspace}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-emerald-500/20 shrink-0"
+              >
+                <ClipboardCheck className="w-4 h-4" />
+                <span>{creatingWorkspace ? 'Initiating Due Diligence...' : 'Initiate Launch Workspace'}</span>
+              </button>
+            </div>
+          )}
         </section>
 
         {/* 7. SOURCES */}

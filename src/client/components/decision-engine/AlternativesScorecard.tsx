@@ -14,7 +14,7 @@ export const AlternativesScorecard: React.FC<AlternativesScorecardProps> = ({ al
           <div className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-amber-400" />
             <h3 className="text-base font-semibold text-slate-100">
-              Ranked Alternatives Comparison (Requirement 6)
+              Ranked Alternatives Comparison
             </h3>
           </div>
           <span className="text-xs text-slate-400">
