@@ -95,6 +95,7 @@ export interface FunnelCandidate {
   monthlyRent?: number;
   squareFootage?: number;
   isFranchiseListing?: boolean;
+  isDemoFixture?: boolean;
 }
 
 export interface GeographicFunnelResult {

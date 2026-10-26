@@ -18,11 +18,15 @@ export function hashToken(token: string): string {
 async function lock(tx: TransactionSql, id: string, token?: string | null) {
   const [row] = await tx`SELECT * FROM launch_workspaces WHERE id = ${id} FOR UPDATE`;
   if (!row) throw new LaunchNotFound('Workspace not found');
-  if (row.token_hash) {
-    if (!token) throw new LaunchForbidden('Workspace authorization token required');
-    const hash = hashToken(token);
-    if (hash !== row.token_hash) throw new LaunchForbidden('Unauthorized workspace access');
+
+  // Enforce explicit authorization for every workspace; fail closed on legacy null tokens
+  if (!row.token_hash) {
+    throw new LaunchForbidden('Legacy workspace requires token authorization. Public access to private records is denied.');
   }
+
+  if (!token) throw new LaunchForbidden('Workspace authorization token required');
+  const hash = hashToken(token);
+  if (hash !== row.token_hash) throw new LaunchForbidden('Unauthorized workspace access');
   return row;
 }
 
@@ -59,13 +63,12 @@ async function touch(tx: TransactionSql, id: string) {
 export async function listWorkspaces(tokens?: string[]): Promise<LaunchWorkspace[]> {
   return sql.begin(async tx => {
     const validTokens = (tokens || []).filter(Boolean);
-    let rows: any[] = [];
     if (validTokens.length === 0) {
-      rows = await tx`SELECT id, token_hash FROM launch_workspaces WHERE token_hash IS NULL ORDER BY created_at, id`;
-    } else {
-      const hashes = validTokens.map(hashToken);
-      rows = await tx`SELECT id, token_hash FROM launch_workspaces WHERE token_hash = ANY(${hashes}) OR token_hash IS NULL ORDER BY created_at, id`;
+      // Fail closed: do not expose private workspaces without explicit authorization tokens
+      return [];
     }
+    const hashes = validTokens.map(hashToken);
+    const rows = await tx`SELECT id, token_hash FROM launch_workspaces WHERE token_hash = ANY(${hashes}) ORDER BY created_at, id`;
     const workspaces: LaunchWorkspace[] = [];
     for (const row of rows) {
       const matchingToken = validTokens.find(t => hashToken(t) === row.token_hash);
@@ -73,6 +76,30 @@ export async function listWorkspaces(tokens?: string[]): Promise<LaunchWorkspace
     }
     return workspaces;
   });
+}
+
+/**
+ * Backfills legacy launch workspaces with secure cryptographic token hashes on startup
+ */
+export async function backfillLegacyLaunchWorkspaceTokens(): Promise<number> {
+  try {
+    const rows = await sql<{ id: string }[]>`
+      SELECT id FROM launch_workspaces WHERE token_hash IS NULL;
+    `;
+    for (const row of rows) {
+      const generatedToken = `ws_migrated_${randomBytes(16).toString('hex')}`;
+      const tokenHash = hashToken(generatedToken);
+      await sql`
+        UPDATE launch_workspaces 
+        SET token_hash = ${tokenHash} 
+        WHERE id = ${row.id} AND token_hash IS NULL;
+      `;
+    }
+    return rows.length;
+  } catch (err) {
+    console.warn('[Launch Auth] Backfill legacy workspaces notice:', err);
+    return 0;
+  }
 }
 
 export async function getWorkspace(id: string, token?: string | null): Promise<LaunchWorkspace> {

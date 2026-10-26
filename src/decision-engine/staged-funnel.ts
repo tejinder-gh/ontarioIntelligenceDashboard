@@ -113,6 +113,7 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
       bl.square_footage,
       bl.is_franchise,
       bl.status as listing_status,
+      bl.is_demo_fixture,
       g.name as city_name,
       g.population_2021,
       COALESCE(g.population_growth_pct, 0)::numeric as pop_growth,
@@ -185,7 +186,8 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
         askingPrice: row.asking_price ? Number(row.asking_price) : undefined,
         monthlyRent,
         squareFootage: sqft,
-        isFranchiseListing: Boolean(row.is_franchise)
+        isFranchiseListing: Boolean(row.is_franchise),
+        isDemoFixture: Boolean(row.is_demo_fixture)
       };
     });
 
