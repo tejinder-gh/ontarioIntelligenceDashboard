@@ -507,12 +507,14 @@ CREATE TABLE IF NOT EXISTS business_listings (
     repeated_listing_parent_id INTEGER REFERENCES business_listings(id),
     match_confidence NUMERIC(4, 2),          -- 0.00 to 1.00
     notes TEXT,
+    is_demo_fixture BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_listings_geo_cat ON business_listings(geography_id, category_id);
 CREATE INDEX IF NOT EXISTS idx_listings_status ON business_listings(status);
+CREATE INDEX IF NOT EXISTS idx_listings_demo ON business_listings(is_demo_fixture);
 
 -- 18b. Historical Listing Price & Status Timeline (Requirement 26)
 CREATE TABLE IF NOT EXISTS business_listing_price_history (
@@ -842,6 +844,7 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at TIMESTAMPTZ NOT NULL,
     used BOOLEAN DEFAULT FALSE,
+    token_type VARCHAR(32) NOT NULL DEFAULT 'SESSION',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -93,4 +93,41 @@ describe('Decision Engine Adversarial HTTP Authorization & Workspace Isolation',
     const finalRows = await sql`SELECT COUNT(*)::int as count FROM workspace_memberships WHERE workspace_id = ${unassignedWsId};`;
     expect(finalRows[0]?.count).toBe(0);
   });
+
+  it('successfully processes analyze request for authenticated user in their personal workspace', async () => {
+    const validUserId = '55555555-5555-4555-8555-555555555555';
+    const validToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 3600 * 1000);
+
+    await sql`INSERT INTO users (id, email) VALUES (${validUserId}, 'valid.user@example.com') ON CONFLICT (id) DO NOTHING;`;
+    await sql`
+      INSERT INTO auth_tokens (token, user_id, expires_at, used)
+      VALUES (${validToken}, ${validUserId}, ${expiresAt}, FALSE)
+      ON CONFLICT (token) DO NOTHING;
+    `;
+
+    const res = await fetch(`http://localhost:${port}/api/engine/analyze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${validToken}`
+      },
+      body: JSON.stringify({
+        inquiry: 'Open a pizza store in Burlington with $250,000 budget'
+      })
+    });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data.runId).toBeDefined();
+    expect(json.data.decisionBrief.recommendation.outcome).toBeDefined();
+
+    // Verify personal workspace was created and member is OWNER
+    const membership = await sql`
+      SELECT role FROM workspace_memberships WHERE user_id = ${validUserId} AND workspace_id = ${`ws_${validUserId}`};
+    `;
+    expect(membership.length).toBe(1);
+    expect(membership[0]?.role).toBe('OWNER');
+  });
 });
