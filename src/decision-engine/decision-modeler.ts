@@ -112,6 +112,10 @@ export function resolveGeographyIds(regions: string[]): string[] {
     const mapped = MUNICIPALITY_GEO_ID_MAP[trimmed.toLowerCase()];
     if (mapped) {
       ids.push(mapped);
+    } else {
+      // Direct canonical format derivation for any Ontario CSD
+      const derived = `CSD_${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+      ids.push(derived);
     }
   }
   return Array.from(new Set(ids));

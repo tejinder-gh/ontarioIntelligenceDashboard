@@ -7,7 +7,7 @@ export type OwnerInvolvement = 'FULL_TIME_OPERATOR' | 'SEMI_ABSENTEE' | 'INVESTO
 export type ResolutionTier = 'PROSPECTIVE_MARKET' | 'PROMISING_NEIGHBOURHOOD' | 'POTENTIALLY_SUITABLE_PROPERTY' | 'FEASIBILITY_VERIFIED_PROPERTY';
 export type EvidenceClassification = 'OBSERVED' | 'AUDITED' | 'BENCHMARK' | 'DERIVED' | 'UNAVAILABLE' | 'UNVERIFIED_ASSUMPTION';
 export type HypothesisStatus = 'SUPPORTED' | 'CONTRADICTED' | 'INCONCLUSIVE';
-export type RecommendationOutcome = 'PROCEED_WITH_VERIFICATION' | 'DO_NOT_PROCEED' | 'INVESTIGATE_ALTERNATIVE';
+export type RecommendationOutcome = 'PROCEED_WITH_VERIFICATION' | 'DO_NOT_PROCEED' | 'INVESTIGATE_ALTERNATIVE' | 'INSUFFICIENT_EVIDENCE';
 export type FeasibilityGateStatus = 'VERIFIED_PERMITTED' | 'UNVERIFIED_PENDING_REVIEW' | 'DISALLOWED';
 
 export const DecisionInquirySchema = z.object({
@@ -103,6 +103,10 @@ export interface FunnelCandidate {
   squareFootage?: number;
   isFranchiseListing?: boolean;
   isDemoFixture?: boolean;
+  scoringVersion?: string;
+  scoreContributions?: Record<string, number>;
+  tradeOffs?: string[];
+  missingEvidence?: string[];
 }
 
 export interface GeographicFunnelResult {

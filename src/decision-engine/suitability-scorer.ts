@@ -1,6 +1,9 @@
 import type { DecisionModel, FunnelCandidate } from './types.js';
 
+export const SUITABILITY_SCORER_VERSION = '2026.4.1';
+
 export interface SuitabilityScoreBreakdown {
+  scorerVersion: string;
   incomeScore: number;
   growthScore: number;
   rentAffordabilityScore: number;
@@ -9,6 +12,9 @@ export interface SuitabilityScoreBreakdown {
   totalSuitabilityScore: number;
   attractivenessScore: number;
   confidenceScore: number;
+  scoreContributions: Record<string, number>;
+  tradeOffs: string[];
+  missingEvidence: string[];
   explanation: string;
 }
 
@@ -28,23 +34,25 @@ export interface CandidateScoringInput {
 }
 
 /**
- * Multi-Factor Candidate Suitability Evaluation
+ * Versioned Multi-Factor Candidate Suitability Evaluation
  * 
- * Explicit weighting model:
- * 1. Income & Purchasing Power (25% weight): Compares median household income against $85k benchmark.
- * 2. Growth & Demographic Scale (20% weight): Population scale and positive growth trend.
- * 3. Rent Affordability & Unit Margin (25% weight): Occupancy cost ratio vs category ceiling.
- * 4. Competitive Density & Market Room (15% weight): Headroom for new entrant without over-saturation.
- * 5. Data Verification & Physical Grounding (15% weight): Address confirmation vs municipal aggregate.
+ * Rules version 2026.4.1:
+ * - Differentiates category-specific factor weights (e.g. daycare vs shipping vs pizza)
+ * - Explicitly tracks score contributions, tradeoffs, and missing evidence
+ * - Separates attractiveness (market demand) from confidence (observational grounding)
  */
 export function computeCandidateSuitability(
   candidate: CandidateScoringInput,
   model: DecisionModel
 ): SuitabilityScoreBreakdown {
+  const isIndustrial = model.categoryId === 'logistics_warehouse';
+  const isDaycare = model.categoryId === 'child_daycare';
+  const isShipping = model.categoryId === 'retail_shipping_counter';
+
   // 1. Income Factor (Max 25 points)
   // Benchmark Ontario median HH income is ~$85,000
   const incomeRatio = candidate.medianIncome / 85000;
-  const incomeScore = Math.min(25, Math.max(5, Math.round(incomeRatio * 18)));
+  const incomeScore = Math.min(25, Math.max(5, Math.round(incomeRatio * (isDaycare ? 22 : 18))));
 
   // 2. Growth & Population Scale (Max 20 points)
   let growthScore = 10;
@@ -58,7 +66,9 @@ export function computeCandidateSuitability(
 
   // 3. Rent Affordability Factor (Max 25 points)
   // Estimated monthly revenue from target orders and AOV
-  const estimatedMonthlySales = model.minDailyOrdersNeeded * model.targetPricePointAov * 30;
+  const periods = model.annualOperatingPeriods || (model.periodType === 'MONTH' ? 12 : 360);
+  const benchmarkVol = model.benchmarkDailyVolume || model.minDailyOrdersNeeded || 70;
+  const estimatedMonthlySales = (benchmarkVol * model.targetPricePointAov * periods) / 12;
   const sqft = candidate.squareFootage || 1400;
   const monthlyRent = candidate.monthlyRent || (sqft * candidate.commercialGrossRentSqft / 12);
   const rentRatioFraction = monthlyRent / Math.max(1, estimatedMonthlySales);
@@ -81,9 +91,9 @@ export function computeCandidateSuitability(
     competitionScore = 10; // Neutral when data unavailable
   } else if (comps === 0 && candidate.population2021 > 50000) {
     competitionScore = 15; // Virgin market with verified population
-  } else if (comps <= 12) {
+  } else if (comps <= (isShipping ? 8 : 12)) {
     competitionScore = 13; // Balanced market headroom
-  } else if (comps > 30) {
+  } else if (comps > (isShipping ? 20 : 30)) {
     competitionScore = 6;  // Dense competitor saturation
   }
 
@@ -95,6 +105,27 @@ export function computeCandidateSuitability(
     verificationScore = 12; // Real physical address
   } else {
     verificationScore = 6;  // Corridor / municipal aggregate
+  }
+
+  // Tradeoffs & Missing Evidence
+  const tradeOffs: string[] = [];
+  const missingEvidence: string[] = [];
+
+  if (rentRatioFraction > model.maxGrossRentPctRevenue) {
+    tradeOffs.push(`Occupancy rent burden (${(rentRatioFraction * 100).toFixed(1)}%) exceeds target category ceiling of ${(model.maxGrossRentPctRevenue * 100).toFixed(1)}%, requiring higher margin yield.`);
+  }
+  if (comps !== undefined && comps > 20) {
+    tradeOffs.push(`High direct competitor density (${comps} active establishments) demands aggressive local market differentiation.`);
+  }
+  if (candidate.populationGrowthPct < 1.0) {
+    tradeOffs.push(`Sub-benchmark population growth (+${candidate.populationGrowthPct.toFixed(1)}%) indicates reliance on existing resident base rather than organic catchment expansion.`);
+  }
+
+  if (!candidate.hasVerifiedAddress) {
+    missingEvidence.push('Specific property premise address is unverified; recommendation bounded to strategic planning corridor.');
+  }
+  if (comps === undefined) {
+    missingEvidence.push('Direct competitor count was unavailable from municipal registry snapshot; requires on-site commercial audit.');
   }
 
   // Combined Scores
@@ -115,12 +146,21 @@ export function computeCandidateSuitability(
     incomeScore + growthScore + rentAffordabilityScore + competitionScore + verificationScore
   ));
 
-  const explanation = `${candidate.name} in ${candidate.city} scores ${totalSuitabilityScore}/100 ` +
+  const scoreContributions: Record<string, number> = {
+    incomePurchasingPower: incomeScore,
+    demographicGrowthScale: growthScore,
+    rentAffordability: rentAffordabilityScore,
+    competitiveHeadroom: competitionScore,
+    physicalVerification: verificationScore
+  };
+
+  const explanation = `${candidate.name} in ${candidate.city} scores ${totalSuitabilityScore}/100 [v${SUITABILITY_SCORER_VERSION}] ` +
     `[Income: ${incomeScore}/25, Growth: ${growthScore}/20, Rent Affordability: ${rentAffordabilityScore}/25, ` +
     `Competition: ${competitionScore}/15, Verification: ${verificationScore}/15]. ` +
     `Occupancy rent ratio is ${(rentRatioFraction * 100).toFixed(1)}% (ceiling: ${(model.maxGrossRentPctRevenue * 100).toFixed(1)}%).`;
 
   return {
+    scorerVersion: SUITABILITY_SCORER_VERSION,
     incomeScore,
     growthScore,
     rentAffordabilityScore,
@@ -129,6 +169,9 @@ export function computeCandidateSuitability(
     totalSuitabilityScore,
     attractivenessScore,
     confidenceScore,
+    scoreContributions,
+    tradeOffs,
+    missingEvidence,
     explanation
   };
 }
@@ -155,3 +198,4 @@ export function sortCandidatesBySuitability(candidates: FunnelCandidate[]): Funn
     return a.id.localeCompare(b.id);
   });
 }
+
