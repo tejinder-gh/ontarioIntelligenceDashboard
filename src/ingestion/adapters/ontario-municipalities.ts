@@ -17,6 +17,33 @@ export async function ingestOntarioMunicipalities(): Promise<number> {
   // Official Ontario Open Data Catalogue URL
   const sourceUrl = 'https://data.ontario.ca/datastore/dump/6783a586-6b05-4a73-9663-e60a6963c91e?bom=True';
   
+  const BUNDLED_MUNICIPALITIES_CSV = `Municipality,Municipal status,Geographic area
+Toronto,City,Toronto
+Ottawa,City,Ottawa
+Mississauga,City,Peel
+Brampton,City,Peel
+Hamilton,City,Hamilton
+London,City,Middlesex
+Markham,City,York
+Vaughan,City,York
+Kitchener,City,Waterloo
+Windsor,City,Essex
+Burlington,City,Halton
+Oakville,Town,Halton
+Milton,Town,Halton
+Richmond Hill,City,York
+Greater Sudbury,City,Greater Sudbury
+Barrie,City,Simcoe
+Guelph,City,Wellington
+Cambridge,City,Waterloo
+Whitby,Town,Durham
+Ajax,Town,Durham
+Waterloo,City,Waterloo
+Halton Hills,Town,Halton
+Pickering,City,Durham
+Niagara Falls,City,Niagara
+Kingston,City,Frontenac`;
+
   let csvData: string;
   try {
     const res = await fetch(sourceUrl, { headers: { 'User-Agent': 'OntarioEconomicIntelligence/1.0' } });
@@ -24,7 +51,7 @@ export async function ingestOntarioMunicipalities(): Promise<number> {
     csvData = await res.text();
   } catch (err) {
     console.warn('Network fetch for municipal registry failed, loading bundled fallback snapshot...', err);
-    csvData = '';
+    csvData = BUNDLED_MUNICIPALITIES_CSV;
   }
 
   // Parse CSV records with relax_quotes
