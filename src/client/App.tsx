@@ -19,6 +19,7 @@ const DataExplorerView = lazy(() => import('./views/DataExplorerView.js').then(m
 const MethodologySourcesView = lazy(() => import('./views/MethodologySourcesView.js').then(m => ({ default: m.MethodologySourcesView })));
 const LaunchReadinessView = lazy(() => import('./views/LaunchReadinessView.js').then(m => ({ default: m.LaunchReadinessView })));
 const VentureCapitalView = lazy(() => import('./views/VentureCapitalView.js').then(m => ({ default: m.VentureCapitalView })));
+const DecisionEngineView = lazy(() => import('./views/DecisionEngineView.js').then(m => ({ default: m.DecisionEngineView })));
 import { 
   X, 
   Layers, 
@@ -58,6 +59,7 @@ const TAB_TO_SLUG: Record<ActiveTab, string> = {
   data_explorer: 'explorer',
   launch_readiness: 'launch-readiness',
   venture_capital: 'venture-capital',
+  decision_engine: 'decision-engine',
   methodology_sources: 'sources'
 };
 
@@ -91,6 +93,9 @@ const SLUG_TO_TAB: Record<string, ActiveTab> = {
   'venture-capital': 'venture_capital',
   vc: 'venture_capital',
   venture: 'venture_capital',
+  'decision-engine': 'decision_engine',
+  engine: 'decision_engine',
+  decision: 'decision_engine',
   sources: 'methodology_sources',
   methodology: 'methodology_sources'
 };
@@ -185,6 +190,12 @@ export const App: React.FC = () => {
           window.history.replaceState({}, '', newUrl);
         });
     }
+  }, []);
+
+  useEffect(() => {
+    const handleOpenLogin = () => setIsLoginOpen(true);
+    window.addEventListener('open-login-modal', handleOpenLogin);
+    return () => window.removeEventListener('open-login-modal', handleOpenLogin);
   }, []);
 
   const handleSignOut = () => {
@@ -575,6 +586,9 @@ export const App: React.FC = () => {
             )}
             {activeTab === 'venture_capital' && (
               <VentureCapitalView initialCityId={selectedCityId} />
+            )}
+            {activeTab === 'decision_engine' && (
+              <DecisionEngineView />
             )}
             {activeTab === 'methodology_sources' && (
               <MethodologySourcesView />

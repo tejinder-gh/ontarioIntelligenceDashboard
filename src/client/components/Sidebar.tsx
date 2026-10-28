@@ -63,6 +63,7 @@ const NAV_CATEGORIES: NavCategory[] = [
     key: 'market_opportunity',
     defaultTitle: 'Market Opportunity & Fit',
     items: [
+      { id: 'decision_engine', defaultLabel: 'Decision & Research Engine', icon: <Sparkles className="w-4 h-4 text-indigo-400" />, badgeKey: 'auditable_ai', defaultBadge: 'Auditable' },
       { id: 'opportunity_lab', defaultLabel: 'Opportunity Lab', icon: <Target className="w-4 h-4" />, badgeKey: 'ai_engine', defaultBadge: 'AI Engine' },
       { id: 'launch_readiness', defaultLabel: 'Launch Readiness', icon: <ShieldCheck className="w-4 h-4" /> },
       { id: 'venture_capital', defaultLabel: 'Venture & Investor Capital', icon: <TrendingUp className="w-4 h-4" />, badgeKey: 'vc_graph', defaultBadge: 'VC Graph' },

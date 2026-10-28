@@ -1,6 +1,7 @@
 import { app } from './app.js';
 import { testConnection, closeDatabase } from '../db/index.js';
 import { startCron, stopCron } from './cron.js';
+import { backfillLegacyWorkspaceMemberships } from './workspace-auth.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -10,6 +11,9 @@ async function startServer() {
     console.error('Failed to connect to PostgreSQL database on startup.');
     process.exit(1);
   }
+
+  // Backfill legacy decision engine runs into workspace_memberships
+  await backfillLegacyWorkspaceMemberships();
 
   const server = app.listen(PORT, '127.0.0.1', () => {
     console.log(`================================================================`);

@@ -507,12 +507,14 @@ CREATE TABLE IF NOT EXISTS business_listings (
     repeated_listing_parent_id INTEGER REFERENCES business_listings(id),
     match_confidence NUMERIC(4, 2),          -- 0.00 to 1.00
     notes TEXT,
+    is_demo_fixture BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_listings_geo_cat ON business_listings(geography_id, category_id);
 CREATE INDEX IF NOT EXISTS idx_listings_status ON business_listings(status);
+CREATE INDEX IF NOT EXISTS idx_listings_demo ON business_listings(is_demo_fixture);
 
 -- 18b. Historical Listing Price & Status Timeline (Requirement 26)
 CREATE TABLE IF NOT EXISTS business_listing_price_history (
@@ -842,7 +844,48 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at TIMESTAMPTZ NOT NULL,
     used BOOLEAN DEFAULT FALSE,
+    token_type VARCHAR(32) NOT NULL DEFAULT 'SESSION',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
+
+-- 34. Multi-Tenant Workspace Memberships (T-062 Phase 2 Auth)
+CREATE TABLE IF NOT EXISTS workspace_memberships (
+    workspace_id VARCHAR(64) NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(32) NOT NULL DEFAULT 'MEMBER',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (workspace_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_memberships_user ON workspace_memberships(user_id);
+
+-- 35. Intelligent Research and Decision Engine Versioned Runs
+CREATE TABLE IF NOT EXISTS decision_engine_runs (
+    id VARCHAR(64) PRIMARY KEY,
+    engine_version VARCHAR(32) NOT NULL,
+    category_id VARCHAR(64) NOT NULL,
+    inquiry_text TEXT NOT NULL,
+    operating_format VARCHAR(64) NOT NULL,
+    scenario_label VARCHAR(128) NOT NULL,
+    selected_candidate_id VARCHAR(64),
+    recommendation_outcome VARCHAR(64) NOT NULL,
+    workspace_id VARCHAR(64) DEFAULT 'default_workspace',
+    user_id UUID REFERENCES users(id),
+    decision_model_snapshot JSONB NOT NULL,
+    funnel_snapshot JSONB NOT NULL,
+    hypotheses_snapshot JSONB NOT NULL,
+    evidence_snapshot JSONB NOT NULL,
+    alternatives_snapshot JSONB NOT NULL,
+    sensitivity_snapshot JSONB NOT NULL,
+    financial_snapshot JSONB,
+    decision_brief JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_decision_runs_cat ON decision_engine_runs(category_id);
+CREATE INDEX IF NOT EXISTS idx_decision_runs_created ON decision_engine_runs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_decision_runs_workspace ON decision_engine_runs(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_decision_runs_user ON decision_engine_runs(user_id);
+
