@@ -188,54 +188,12 @@ export const businessCountsData = [
   ];
 
 export async function ingestStatCanBusinessCounts(): Promise<void> {
-  console.log('Ingesting Canadian Business Counts (Table 33-10-1176-01 June 2026 & Historical Table 33-10-1097-01 Dec 2025)...');
+  console.log('Ingesting Canadian Business Counts (Table 33-10-1097-01 Dec 2025 baseline & Table 33-10-1175-01 June 2026 non-employer)...');
   
   for (const b of businessCountsData) {
     const bizPer1k = parseFloat(((b.totalBusinesses / b.pop) * 1000).toFixed(2));
 
-    // 1. Historical Dec 2025 Baseline (Table 33-10-1097-01) - preserved for historical lineage
-    await sql`
-      INSERT INTO observations (
-        geography_id, metric_id, reference_year, value_numeric, unit,
-        geographic_resolution, is_benchmark, metric_classification,
-        source_id, dataset_id, confidence, is_estimate, is_superseded
-      ) VALUES (
-        ${b.geoId}, 'businesses_total_counts', 2025, ${b.totalBusinesses}, 'businesses',
-        'CSD', false, 'OBSERVED',
-        'bus_cnt_csd', 'statcan_business_counts_2025_12', 'HIGH', false, true
-      )
-      ON CONFLICT (geography_id, metric_id, reference_year, is_benchmark, benchmark_label)
-      DO UPDATE SET 
-        value_numeric = EXCLUDED.value_numeric,
-        metric_classification = 'OBSERVED',
-        is_superseded = true,
-        updated_at = NOW();
-    `;
-
-    await sql`
-      INSERT INTO observations (
-        geography_id, metric_id, reference_year, value_numeric, unit,
-        geographic_resolution, is_benchmark, metric_classification,
-        source_id, dataset_id, confidence, is_estimate, is_superseded
-      ) VALUES (
-        ${b.geoId}, 'businesses_per_1000_pop', 2025, ${bizPer1k}, 'businesses/1,000 pop',
-        'CSD', false, 'DERIVED',
-        'bus_cnt_csd', 'statcan_business_counts_2025_12', 'HIGH', false, true
-      )
-      ON CONFLICT (geography_id, metric_id, reference_year, is_benchmark, benchmark_label)
-      DO UPDATE SET 
-        value_numeric = EXCLUDED.value_numeric,
-        metric_classification = 'DERIVED',
-        is_superseded = true,
-        updated_at = NOW();
-    `;
-
-    // 2. Projected June 2026 Ingestion (Modelled from Table 33-10-1097-01 with 1.8% formation rate)
-    // Reflects projected mid-2026 employer counts (Modelled estimate, not raw unadjusted census)
-    const count2026 = Math.round(b.totalBusinesses * 1.018); // 1.8% average mid-year business formation model
-    const bizPer1k2026 = parseFloat(((count2026 / b.pop) * 1000).toFixed(2));
-    const formationMethodology = 'Projected 2026 employer business count modelled by indexing authoritative Statistics Canada Table 33-10-1097-01 (Dec 2025) baseline with observed 1.8% annual formation trend. Modelled estimate pending full municipal release.';
-
+    // 1. Historical Dec 2025 Baseline (Table 33-10-1097-01) - preliminary exploratory baseline
     await sql`
       INSERT INTO observations (
         geography_id, metric_id, reference_year, value_numeric, unit,
@@ -243,15 +201,16 @@ export async function ingestStatCanBusinessCounts(): Promise<void> {
         source_id, dataset_id, confidence, is_estimate, is_superseded,
         methodology_notes
       ) VALUES (
-        ${b.geoId}, 'businesses_total_counts', 2026, ${count2026}, 'businesses',
-        'CSD', false, 'MODELLED',
-        'bus_cnt_csd', 'statcan_business_counts_2026_modelled', 'HIGH', true, false,
-        ${formationMethodology}
+        ${b.geoId}, 'businesses_total_counts', 2025, ${b.totalBusinesses}, 'businesses',
+        'CSD', false, 'OBSERVED',
+        'bus_cnt_csd', 'statcan_business_counts_2025_12', 'LOW', true, false,
+        'Preliminary exploratory baseline (StatCan Table 33-10-1097-01 Dec 2025); pending independent verification against official microdata/tabular download.'
       )
       ON CONFLICT (geography_id, metric_id, reference_year, is_benchmark, benchmark_label)
       DO UPDATE SET 
         value_numeric = EXCLUDED.value_numeric,
-        metric_classification = 'MODELLED',
+        metric_classification = 'OBSERVED',
+        confidence = 'LOW',
         is_estimate = true,
         methodology_notes = EXCLUDED.methodology_notes,
         is_superseded = false,
@@ -265,15 +224,16 @@ export async function ingestStatCanBusinessCounts(): Promise<void> {
         source_id, dataset_id, confidence, is_estimate, is_superseded,
         methodology_notes
       ) VALUES (
-        ${b.geoId}, 'businesses_per_1000_pop', 2026, ${bizPer1k2026}, 'businesses/1,000 pop',
+        ${b.geoId}, 'businesses_per_1000_pop', 2025, ${bizPer1k}, 'businesses/1,000 pop',
         'CSD', false, 'DERIVED',
-        'bus_cnt_csd', 'statcan_business_counts_2026_modelled', 'HIGH', true, false,
-        'Derived ratio calculated from modelled 2026 employer business count divided by 2021 Census population baseline.'
+        'bus_cnt_csd', 'statcan_business_counts_2025_12', 'LOW', true, false,
+        'Derived ratio calculated from preliminary Dec 2025 baseline divided by 2021 Census population; pending independent verification against official tabular release file.'
       )
       ON CONFLICT (geography_id, metric_id, reference_year, is_benchmark, benchmark_label)
       DO UPDATE SET 
         value_numeric = EXCLUDED.value_numeric,
         metric_classification = 'DERIVED',
+        confidence = 'LOW',
         is_estimate = true,
         methodology_notes = EXCLUDED.methodology_notes,
         is_superseded = false,
@@ -281,7 +241,11 @@ export async function ingestStatCanBusinessCounts(): Promise<void> {
     `;
   }
 
-  // 3. Canadian Business Counts without employees (Table 33-10-1175-01, June 2026)
+  // Note on 2026 CSD employer counts:
+  // Statistics Canada Table 33-10-1176-01 (June 2026) employer counts by CSD are not yet ingested from verified tabular releases.
+  // We do not fabricate 2026 CSD counts using unsupported trend multipliers (e.g. 1.8%). 2026 CSD employer counts remain UNAVAILABLE.
+
+  // 2. Canadian Business Counts without employees (Table 33-10-1175-01, June 2026)
   // Published strictly at Canada and Province levels (never allocate to CSD)
   const ontarioNonEmpCount = 1042500; // Total non-employer establishments in Ontario (June 2026)
   await sql`
@@ -303,5 +267,5 @@ export async function ingestStatCanBusinessCounts(): Promise<void> {
       updated_at = NOW();
   `;
 
-  console.log('Canadian Business Counts (Employer 33-10-1176-01 and Non-Employer 33-10-1175-01) successfully ingested.');
+  console.log('Canadian Business Counts (Employer 33-10-1097-01 and Non-Employer 33-10-1175-01) successfully ingested.');
 }
