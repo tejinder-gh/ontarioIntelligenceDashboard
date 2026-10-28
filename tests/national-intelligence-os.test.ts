@@ -29,7 +29,8 @@ describe('National Business Intelligence & Venture Execution OS', () => {
       await sql`DELETE FROM outreach_campaigns WHERE id = ANY(${createdCampaignIds});`;
     }
     await sql`DELETE FROM acuity_voice_jobs WHERE id LIKE 'voice_test_%';`;
-    await sql`DELETE FROM outreach_campaigns WHERE name ILIKE '%test%' OR id LIKE 'test_%';`;
+    await sql`DELETE FROM outreach_messages WHERE campaign_id LIKE 'test_%';`;
+    await sql`DELETE FROM outreach_campaigns WHERE id LIKE 'test_%';`;
 
     if (createdSuppressionKeys.length > 0) {
       await sql`DELETE FROM outreach_suppression WHERE channel_value = ANY(${createdSuppressionKeys});`;
