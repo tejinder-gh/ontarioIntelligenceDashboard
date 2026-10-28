@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS datasets (
     geographic_coverage VARCHAR(64) NOT NULL,-- 'CSD_CANADA', 'CSD_ONTARIO', 'PROVINCE_ONTARIO'
     naics_version VARCHAR(32),               -- '2022 v1.0', '2017'
     update_frequency VARCHAR(32),            -- 'QUENQUENNIAL', 'SEMI_ANNUAL', 'ANNUAL', 'CONTINUOUS'
-    classification VARCHAR(32) CHECK (classification IN ('OBSERVED', 'BENCHMARK', 'DERIVED', 'MODELED')) DEFAULT 'OBSERVED',
+    classification VARCHAR(32) CHECK (classification IN ('OBSERVED', 'BENCHMARK', 'DERIVED', 'MODELED', 'MODELLED')) DEFAULT 'OBSERVED',
     superseding_dataset_id VARCHAR(128),
     checksum VARCHAR(128),
     etag VARCHAR(255),
@@ -192,7 +192,23 @@ CREATE TABLE IF NOT EXISTS dataset_dependencies (
     UNIQUE(dependent_dataset_id, prerequisite_dataset_id, dependency_type)
 );
 
--- 5g. Source Disagreements Ledger (Discrepancy Resolution per Section 36)
+-- 5g. Metrics Definitions & Data Dictionary (Section 27)
+CREATE TABLE IF NOT EXISTS metrics_definitions (
+    id VARCHAR(64) PRIMARY KEY,              -- 'pop_total', 'income_median_hh', 'spending_food_restaurants'
+    name VARCHAR(255) NOT NULL,
+    category VARCHAR(64) NOT NULL,           -- 'Demographics', 'Financial', 'Workforce', 'Businesses', 'Spending', 'Municipal'
+    subcategory VARCHAR(64),
+    unit VARCHAR(64) NOT NULL,               -- 'people', 'CAD', 'CAD/year', 'businesses/10k pop', '%'
+    default_classification VARCHAR(32) CHECK (default_classification IN ('OBSERVED', 'BENCHMARK', 'DERIVED', 'MODELED', 'MODELLED')) DEFAULT 'OBSERVED',
+    definition TEXT NOT NULL,
+    formula TEXT,
+    preferred_aggregation VARCHAR(32),       -- 'SUM', 'MEDIAN', 'MEAN', 'WEIGHTED_AVG'
+    geographic_scope_supported VARCHAR(64),  -- 'CSD_AND_ABOVE', 'PROVINCE_AND_CMA_ONLY'
+    limitations TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5h. Source Disagreements Ledger (Discrepancy Resolution per Section 36)
 CREATE TABLE IF NOT EXISTS source_disagreements (
     id SERIAL PRIMARY KEY,
     metric_id VARCHAR(64) NOT NULL REFERENCES metrics_definitions(id),
@@ -208,7 +224,7 @@ CREATE TABLE IF NOT EXISTS source_disagreements (
     detected_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5h. Coverage Gaps Ledger (Tracking Unsupported Resolution Requests per Section 39)
+-- 5i. Coverage Gaps Ledger (Tracking Unsupported Resolution Requests per Section 39)
 CREATE TABLE IF NOT EXISTS coverage_gaps (
     id SERIAL PRIMARY KEY,
     requested_metric VARCHAR(64) NOT NULL,
@@ -249,23 +265,7 @@ CREATE TABLE IF NOT EXISTS raw_ingestion_records (
 
 CREATE INDEX IF NOT EXISTS idx_raw_records_ds_ext ON raw_ingestion_records(dataset_id, external_record_id);
 
--- 8. Metrics Definitions & Data Dictionary (Section 27)
-CREATE TABLE IF NOT EXISTS metrics_definitions (
-    id VARCHAR(64) PRIMARY KEY,              -- 'pop_total', 'income_median_hh', 'spending_food_restaurants'
-    name VARCHAR(255) NOT NULL,
-    category VARCHAR(64) NOT NULL,           -- 'Demographics', 'Financial', 'Workforce', 'Businesses', 'Spending', 'Municipal'
-    subcategory VARCHAR(64),
-    unit VARCHAR(64) NOT NULL,               -- 'people', 'CAD', 'CAD/year', 'businesses/10k pop', '%'
-    default_classification VARCHAR(32) CHECK (default_classification IN ('OBSERVED', 'BENCHMARK', 'DERIVED', 'MODELED')) DEFAULT 'OBSERVED',
-    definition TEXT NOT NULL,
-    formula TEXT,
-    preferred_aggregation VARCHAR(32),       -- 'SUM', 'MEDIAN', 'MEAN', 'WEIGHTED_AVG'
-    geographic_scope_supported VARCHAR(64),  -- 'CSD_AND_ABOVE', 'PROVINCE_AND_CMA_ONLY'
-    limitations TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 9. Layer 2: Normalized Observations Fact Table
+-- 8. Layer 2: Normalized Observations Fact Table
 CREATE TABLE IF NOT EXISTS observations (
     id BIGSERIAL PRIMARY KEY,
     geography_id VARCHAR(64) NOT NULL REFERENCES geographies(id) ON DELETE CASCADE,
@@ -277,7 +277,7 @@ CREATE TABLE IF NOT EXISTS observations (
     geographic_resolution VARCHAR(32) NOT NULL, -- 'CSD', 'CMA', 'PROVINCE', 'CANADA'
     is_benchmark BOOLEAN DEFAULT FALSE,
     benchmark_label VARCHAR(128),              -- e.g. 'Toronto CMA benchmark — not Burlington-specific'
-    metric_classification VARCHAR(32) CHECK (metric_classification IN ('OBSERVED', 'BENCHMARK', 'DERIVED', 'MODELED')) DEFAULT 'OBSERVED',
+    metric_classification VARCHAR(32) CHECK (metric_classification IN ('OBSERVED', 'BENCHMARK', 'DERIVED', 'MODELED', 'MODELLED')) DEFAULT 'OBSERVED',
     source_id VARCHAR(64) NOT NULL REFERENCES sources(id),
     dataset_id VARCHAR(128) NOT NULL REFERENCES datasets(id),
     confidence VARCHAR(32) DEFAULT 'HIGH',     -- 'HIGH', 'MEDIUM', 'LOW', 'BENCHMARK'

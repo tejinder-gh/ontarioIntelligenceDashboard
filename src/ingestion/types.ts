@@ -18,7 +18,8 @@ export type MetricClassification =
   | 'OBSERVED' 
   | 'BENCHMARK' 
   | 'DERIVED' 
-  | 'MODELED';
+  | 'MODELED'
+  | 'MODELLED';
 
 export interface GeographyRecord {
   id: string;
