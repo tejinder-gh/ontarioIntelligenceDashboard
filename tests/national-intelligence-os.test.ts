@@ -14,18 +14,34 @@ import { ventureRegistry } from '../src/ventures/registry.js';
 describe('National Business Intelligence & Venture Execution OS', () => {
   const testRunId = `test_run_${Date.now()}`;
   const createdBusinessIds: string[] = [];
+  const createdCampaignIds: string[] = [];
+  const createdSuppressionKeys: string[] = [];
 
   beforeAll(async () => {
     await ventureRegistry.syncWithDatabase();
   });
 
   afterAll(async () => {
-    // Clean up test records
+    // Clean up test records completely to prevent any table leakage
+    if (createdCampaignIds.length > 0) {
+      await sql`DELETE FROM acuity_voice_jobs WHERE campaign_id = ANY(${createdCampaignIds});`;
+      await sql`DELETE FROM outreach_messages WHERE campaign_id = ANY(${createdCampaignIds});`;
+      await sql`DELETE FROM outreach_campaigns WHERE id = ANY(${createdCampaignIds});`;
+    }
+    await sql`DELETE FROM acuity_voice_jobs WHERE id LIKE 'voice_test_%';`;
+    await sql`DELETE FROM outreach_campaigns WHERE name ILIKE '%test%' OR id LIKE 'test_%';`;
+
+    if (createdSuppressionKeys.length > 0) {
+      await sql`DELETE FROM outreach_suppression WHERE channel_value = ANY(${createdSuppressionKeys});`;
+    }
+    await sql`DELETE FROM outreach_suppression WHERE channel_value LIKE 'optout_%';`;
+
     if (createdBusinessIds.length > 0) {
+      await sql`DELETE FROM business_contacts WHERE business_id = ANY(${createdBusinessIds});`;
+      await sql`DELETE FROM business_source_records WHERE canonical_business_id = ANY(${createdBusinessIds});`;
       await sql`DELETE FROM businesses WHERE id = ANY(${createdBusinessIds});`;
     }
     await sql`DELETE FROM business_source_records WHERE source_record_id LIKE 'test_src_%';`;
-    await sql`DELETE FROM outreach_campaigns WHERE id LIKE 'test_camp_%';`;
     await sql`DELETE FROM durable_jobs WHERE queue_name LIKE 'test_queue_%';`;
   });
 
@@ -110,6 +126,8 @@ describe('National Business Intelligence & Venture Execution OS', () => {
 
     const res1 = await entityResolver.resolveAndPersist(branch1, testRunId);
     const res2 = await entityResolver.resolveAndPersist(branch2, testRunId);
+    if (res1.canonicalBusinessId) createdBusinessIds.push(res1.canonicalBusinessId);
+    if (res2.canonicalBusinessId) createdBusinessIds.push(res2.canonicalBusinessId);
 
     expect(res1.canonicalBusinessId).not.toBe(res2.canonicalBusinessId);
   });
@@ -153,6 +171,8 @@ describe('National Business Intelligence & Venture Execution OS', () => {
 
     const r1 = await entityResolver.resolveAndPersist(pizza1, testRunId);
     const r2 = await entityResolver.resolveAndPersist(pizza2, testRunId);
+    if (r1.canonicalBusinessId) createdBusinessIds.push(r1.canonicalBusinessId);
+    if (r2.canonicalBusinessId) createdBusinessIds.push(r2.canonicalBusinessId);
 
     expect(r1.canonicalBusinessId).not.toBe(r2.canonicalBusinessId);
   });
@@ -192,6 +212,8 @@ describe('National Business Intelligence & Venture Execution OS', () => {
 
     const rA = await entityResolver.resolveAndPersist(bizA, testRunId);
     const rB = await entityResolver.resolveAndPersist(bizB, testRunId);
+    if (rA.canonicalBusinessId) createdBusinessIds.push(rA.canonicalBusinessId);
+    if (rB.canonicalBusinessId) createdBusinessIds.push(rB.canonicalBusinessId);
 
     expect(rA.canonicalBusinessId).not.toBe(rB.canonicalBusinessId);
   });
@@ -213,6 +235,7 @@ describe('National Business Intelligence & Venture Execution OS', () => {
     };
 
     const res = await entityResolver.resolveAndPersist(newRecord, testRunId);
+    if (res.canonicalBusinessId) createdBusinessIds.push(res.canonicalBusinessId);
     const [biz] = await sql<{
       verification_status: string;
       operating_status: string;
@@ -247,6 +270,7 @@ describe('National Business Intelligence & Venture Execution OS', () => {
     };
 
     const res = await entityResolver.resolveAndPersist(initialRecord, testRunId);
+    if (res.canonicalBusinessId) createdBusinessIds.push(res.canonicalBusinessId);
 
     // Follow-up observation with missing phone & website
     const sparseFollowUp: RawSourceRecord = {
@@ -308,6 +332,7 @@ describe('National Business Intelligence & Venture Execution OS', () => {
   // 8. Suppressed contacts cannot be messaged across any campaign
   it('enforces universal suppression: an opted-out contact is blocked from all campaigns', async () => {
     const suppressedEmail = `optout_${Date.now()}@example.com`;
+    createdSuppressionKeys.push(suppressedEmail);
     await caslEngine.recordOptOut('EMAIL', suppressedEmail, 'UNSUBSCRIBE_REQUEST');
 
     const result = await caslEngine.evaluateEligibility({
@@ -336,6 +361,7 @@ describe('National Business Intelligence & Venture Execution OS', () => {
       senderAddress: '123 Main St, Toronto, ON',
       senderContact: 'contact@test.ca',
     });
+    createdCampaignIds.push(campaignId);
 
     const [campaign] = await sql<{ approval_status: string; execution_mode: string }[]>`
       SELECT approval_status, execution_mode FROM outreach_campaigns WHERE id = ${campaignId};

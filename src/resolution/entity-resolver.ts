@@ -9,7 +9,7 @@ import {
   extractDomain,
   calculateDistanceMeters,
 } from './normalizer.js';
-import { mapCategoriesToCanonical } from './category-mapper.js';
+import { mapCategoriesToCanonical, isNonCommercialEntity } from './category-mapper.js';
 import { resolveGeographyId } from './geo-resolver.js';
 
 export interface ResolutionResult {
@@ -34,6 +34,16 @@ export class EntityResolver {
     record: RawSourceRecord,
     ingestionRunId?: string
   ): Promise<ResolutionResult> {
+    // Strictly isolate businesses table: non-commercial entities (parks, metro stations, municipal boundaries) must not leak into businesses directory
+    if (isNonCommercialEntity(record.name, record.categories)) {
+      return {
+        canonicalBusinessId: '',
+        isNew: false,
+        matchType: 'NEW_RECORD',
+        confidenceScore: 0,
+      };
+    }
+
     const rawPayloadStr = JSON.stringify(record.rawPayload);
     const checksum = crypto.createHash('sha256').update(rawPayloadStr).digest('hex');
     const normalizedName = normalizeBusinessName(record.name);
@@ -65,7 +75,10 @@ export class EntityResolver {
       };
     }
 
-    // 2. Search for candidate matches in the same geography
+    // 2. Search for candidate matches in the same geography using targeted name, address, phone, or postal code
+    const namePrefix = normalizedName.slice(0, 12).trim();
+    const addrPrefix = normalizedAddr ? normalizedAddr.slice(0, 12).trim() : '';
+
     const candidates = await sql<{
       id: string;
       name: string;
@@ -79,7 +92,13 @@ export class EntityResolver {
       SELECT id, name, address, postal_code, latitude, longitude, phone, website
       FROM businesses
       WHERE geography_id = ${geographyId}
-      LIMIT 100;
+        AND (
+          (${namePrefix.length >= 3 ? sql`LOWER(name) ILIKE ${'%' + namePrefix + '%'}` : sql`false`})
+          OR (${addrPrefix.length >= 4 ? sql`LOWER(address) ILIKE ${'%' + addrPrefix + '%'}` : sql`false`})
+          OR (${record.phone ? sql`phone = ${record.phone}` : sql`false`})
+          OR (${normalizedPostcode ? sql`postal_code = ${normalizedPostcode}` : sql`false`})
+        )
+      LIMIT 50;
     `;
 
     let bestCandidateId: string | null = null;

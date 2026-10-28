@@ -1,6 +1,7 @@
 import postgres from 'postgres';
 import type { SourceAdapter, SourceMetadata, RawSourceRecord, IngestionFilter } from '../types.js';
 import { REGISTERED_SOURCES } from '../sources-catalog.js';
+import { isNonCommercialEntity } from '../../resolution/category-mapper.js';
 
 const FSQ_DATABASE_URL = process.env.FSQ_DATABASE_URL || 
   'postgresql://postgres:postgres@localhost:5432/fourSquare_datadump';
@@ -73,7 +74,9 @@ export class PlacesAdapter implements SourceAdapter {
       OFFSET ${offset};
     `;
 
-    return rows.map((row) => this.mapToRawRecord(row));
+    const rawRecords = rows.map((row) => this.mapToRawRecord(row));
+    // Strictly isolate table scope: exclude non-commercial parks, transit stops, municipal boundaries, and schools
+    return rawRecords.filter((rec) => !isNonCommercialEntity(rec.name, rec.categories));
   }
 
   private mapToRawRecord(row: FsqPlaceRow): RawSourceRecord {
