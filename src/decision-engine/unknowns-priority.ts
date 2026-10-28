@@ -17,7 +17,7 @@ export function prioritizeMaterialUnknowns(
         category: 'ZONING',
         potentialImpact: 'FATAL: If site lacks E1/E2 employment industrial zoning allowing freight handling, cross-docking, and courier vehicles, operations will face immediate municipal stop-work orders.',
         authoritativeSource: `City of ${candidate.city} Planning & Building Department (Employment Area Zoning By-law)`,
-        retrievalStatus: 'ONLINE_VERIFIED',
+        retrievalStatus: 'NOT_RETRIEVED',
         fieldCheckProtocol: `Request Official Zoning Compliance Certificate confirming NAICS 484110 / courier distribution is permitted as-of-right.`
       },
       {
@@ -58,7 +58,7 @@ export function prioritizeMaterialUnknowns(
         category: 'ZONING',
         potentialImpact: 'FATAL: Failure to obtain provincial licensing approval prohibits commercial operation as a registered child care facility.',
         authoritativeSource: 'Ontario Ministry of Education & Municipal Building Inspection Division',
-        retrievalStatus: 'ONLINE_VERIFIED',
+        retrievalStatus: 'NOT_RETRIEVED',
         fieldCheckProtocol: 'Submit preliminary architectural floor plan to Ministry of Education program advisor and municipal chief building official.'
       },
       {
@@ -99,7 +99,7 @@ export function prioritizeMaterialUnknowns(
       category: 'ZONING',
       potentialImpact: 'FATAL: If commercial unit lacks permitted class for commercial ventilation exhaust, legal baking and cooking cannot occur without a 6–9 month Committee of Adjustment variance.',
       authoritativeSource: `City of ${candidate.city} Planning & Building Department (Zoning By-law Schedule & Land Use By-law)`,
-      retrievalStatus: 'ONLINE_VERIFIED',
+      retrievalStatus: 'NOT_RETRIEVED',
       fieldCheckProtocol: `Request Official Zoning Compliance Letter from City of ${candidate.city} planning department explicitly confirming NAICS 722513 / commercial food service permitted as-of-right.`
     },
     {

@@ -22,6 +22,7 @@ import { runSensitivityAnalysis } from './sensitivity-matrix.js';
 import { prioritizeMaterialUnknowns } from './unknowns-priority.js';
 import { generateDecisionBrief } from './decision-brief-generator.js';
 import { getCategoryProfile } from './category-profiles.js';
+import { describeCompetitorEvidence } from './claim-language.js';
 
 export const ENGINE_VERSION = '2.0.0';
 
@@ -200,19 +201,19 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
     
     let rankingRationale = '';
     if (isTop) {
-      rankingRationale = `Rank #1: Balances above-average disposable income ($${cand.medianIncome.toLocaleString()}) with competitive gross lease rate ($${cand.commercialGrossRentSqft.toFixed(2)}/sqft) and manageable competitor density (${cand.estimatedDirectCompetitors} units).`;
+      rankingRationale = `Rank #1 by the model's suitability score. Income input: $${cand.medianIncome.toLocaleString()}${cand.medianIncomeSource === 'IMPUTED_DEFAULT' ? ' (imputed)' : ''}; gross lease benchmark: $${cand.commercialGrossRentSqft.toFixed(2)}/sqft. ${describeCompetitorEvidence(cand)}`;
     } else {
       const rentDelta = cand.commercialGrossRentSqft - topCandidate.commercialGrossRentSqft;
       const rentDesc = rentDelta > 0 
         ? `$${Math.abs(rentDelta).toFixed(2)}/sqft higher gross lease rate`
-        : `$${Math.abs(rentDelta).toFixed(2)}/sqft lower lease rate but lower localized density`;
-      rankingRationale = `Rank #${idx + 1}: ${rentDesc}; requires higher volume capture to match Rank #1 net profitability.`;
+        : `$${Math.abs(rentDelta).toFixed(2)}/sqft lower or equal lease benchmark`;
+      rankingRationale = `Rank #${idx + 1} by the model's suitability score; ${rentDesc}. Compare the modelled scenario economics and verify local conditions.`;
     }
 
     return {
       candidate: cand,
       rank: idx + 1,
-      whyItFits: `${cand.city} demonstrates ${cand.populationGrowthPct > 0 ? 'expanding' : 'stable'} demand suitable for a ${decisionModel.format.toLowerCase().replace('_', ' ')} format.`,
+      whyItFits: `${cand.city} has a modelled suitability score of ${cand.suitabilityScore}; population change does not by itself establish demand for this format.`,
       strongestSupportingEvidence: [
         `Median after-tax income: $${cand.medianIncome.toLocaleString()}`,
         `Gross commercial lease benchmark: $${cand.commercialGrossRentSqft.toFixed(2)}/sqft`,
@@ -222,7 +223,7 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
         idx === 1 ? 'Higher initial rent burden or suburban commuter outflow' : 'Lower foot-traffic pedestrian density during weekday hours'
       ],
       contradictoryEvidence: [
-        `${cand.estimatedDirectCompetitors} licensed NAICS ${decisionModel.naicsCode} competitors in municipality`
+        describeCompetitorEvidence(cand)
       ],
       scenarioEconomics: {
         breakEvenDailyOrders: candEconomics.breakEvenDailyUnits,

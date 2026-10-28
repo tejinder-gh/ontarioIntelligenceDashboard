@@ -119,13 +119,10 @@ export function runSensitivityAnalysis(
     compImpact = 'SECTOR BENCHMARK CAUTION: Count reflects broader NAICS industry establishments across municipality, not verified local storefronts.';
     compResilience = competitorNet > 40000 ? 'ROBUST' : 'SENSITIVE';
   } else {
-    const verifiedCount = typeof compCount === 'number' ? compCount : 0;
-    compBaseMetric = `${verifiedCount} verified area competitors (${topCandidate.competitorDataSource || 'StatCan Table 33-10-1097-01'})`;
-    compShockedMetric = `${verifiedCount + 1} competitors ($${Math.round(competitorNet).toLocaleString()} adjusted net income)`;
-    compImpact = competitorNet > 35000 
-      ? 'Remains financially viable; brand positioning and product differentiation required to defend market share.' 
-      : 'Erodes operating margin below safety buffer; requires high customer retention.';
-    compResilience = competitorNet > 45000 ? 'ROBUST' : 'SENSITIVE';
+    compBaseMetric = `${compCount} category establishments; direct competitors require verification`;
+    compShockedMetric = `Hypothetical 10% volume loss ($${Math.round(competitorNet).toLocaleString()} modelled net income)`;
+    compImpact = 'Illustrative scenario only; neither the direct competitor count nor the volume loss is verified.';
+    compResilience = competitorNet > 0 ? 'SENSITIVE' : 'VULNERABLE';
   }
 
   const compShock: SensitivityShock = {

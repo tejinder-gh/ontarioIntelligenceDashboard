@@ -260,7 +260,7 @@ export interface MaterialUnknown {
   category: 'ZONING' | 'BUILDING_SERVICES' | 'LEASE_TERMS' | 'CATCHMENT_ACCESS';
   potentialImpact: string;
   authoritativeSource: string;
-  retrievalStatus: 'ONLINE_VERIFIED' | 'LOCAL_ARCHIVE_NEEDED' | 'FIELD_INSPECTION_REQUIRED';
+  retrievalStatus: 'ONLINE_VERIFIED' | 'NOT_RETRIEVED' | 'LOCAL_ARCHIVE_NEEDED' | 'FIELD_INSPECTION_REQUIRED';
   fieldCheckProtocol: string;
 }
 

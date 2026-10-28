@@ -9,6 +9,7 @@ import type {
   RecommendationOutcome,
 } from './types.js';
 import { getCategoryProfile } from './category-profiles.js';
+import { describeCompetitorEvidence } from './claim-language.js';
 
 export function generateDecisionBrief(
   topCandidate: FunnelCandidate,
@@ -52,16 +53,10 @@ export function generateDecisionBrief(
     ? `Target ${topCandidate.name} (${topCandidate.city}) for ${activeScenario.label} under conditional due diligence.`
     : `DO NOT PROCEED: ${capitalHeadlineReason || (topCandidate.zoningFeasibilityStatus === 'DISALLOWED' ? 'Municipal zoning strictly prohibits target use' : 'Viability criteria not satisfied')}.`;
 
-  const competitorDensityBullet = typeof topCandidate.estimatedDirectCompetitors === 'number'
-    ? (topCandidate.competitorClassification === 'BENCHMARK'
-        ? `Competitive Density Benchmark: ${topCandidate.estimatedDirectCompetitors} broad sector establishments recorded across ${topCandidate.city} (${topCandidate.competitorDataSource || 'StatCan Table 33-10-1097-01'}). Note: Represents sector-wide establishments, not verified individual storefronts.`
-        : `Audited Competitive Density: ${topCandidate.estimatedDirectCompetitors} registered NAICS ${model.naicsCode} establishments in ${topCandidate.city} (${topCandidate.competitorDataSource || 'StatCan Table 33-10-1097-01'}), indicating headroom for differentiated offerings.`)
-    : `Competitive Density: Direct competitor count unobserved for ${topCandidate.city}; on-site field survey required before executing leasehold agreement.`;
-
   const whyThisLocation = [
-    `Strong Macro Demographics & Market Base: ${topCandidate.city} combines a robust municipal population (${topCandidate.population2021.toLocaleString()}) with sustained growth (+${topCandidate.populationGrowthPct.toFixed(1)}%) and high median household income ($${topCandidate.medianIncome.toLocaleString()}).`,
-    `Favorable Occupancy Economics: Benchmark ${isIndustrial ? 'industrial' : 'commercial retail'} lease rate of $${topCandidate.commercialGrossRentSqft.toFixed(2)}/sqft gross preserves sustainable operating margins.`,
-    competitorDensityBullet,
+    `Municipal baseline: population ${topCandidate.population2021.toLocaleString()}, population change ${topCandidate.populationGrowthPct.toFixed(1)}%, and ${topCandidate.medianIncomeSource === 'IMPUTED_DEFAULT' ? 'imputed income assumption' : 'reported median household income'} $${topCandidate.medianIncome.toLocaleString()}. These figures do not establish local demand.`,
+    `Modelled occupancy: ${isIndustrial ? 'industrial' : 'commercial retail'} lease benchmark of $${topCandidate.commercialGrossRentSqft.toFixed(2)}/sqft gross; verify the rate and terms for the specific property.`,
+    describeCompetitorEvidence(topCandidate),
     topCandidate.propertyAddress
       ? `Physical Premise Screening: Candidate listing #${topCandidate.listingId || 'N/A'} at ${topCandidate.propertyAddress} offers ${topCandidate.squareFootage || profile.typicalSqftMin} sqft footprint (subject to physical engineering audit and zoning verification).`
       : `Neighbourhood-Level Resolution: Filtered to ${topCandidate.neighbourhood || topCandidate.city}; individual property leasehold selection pending broker RFP.`
@@ -73,7 +68,7 @@ export function generateDecisionBrief(
   }));
 
   const whatCouldMakeThisWrong = [
-    `Intermediary Channel Cannibalization: Excessive reliance on third-party brokerages or digital aggregators can compress net operating margin by >$15,000 annually.`,
+    `Intermediary Channel Cannibalization: Third-party brokerage or digital aggregator fees may reduce net operating margin; verify fee schedules and model the impact.`,
     `Undisclosed Tenant Infrastructure Upgrades: ${profile.essentialInfrastructure[0] || 'Mechanical systems'} can trigger unexpected capital expenditure during fit-out.`,
     `Competitive Ingress: Local incumbents may possess established contract relationships or generational customer loyalty requiring sustained marketing spend to penetrate.`,
     `Macroeconomic Discretionary Compression: Elevated interest rates or inflation could slow discretionary consumer demand or corporate logistics spending.`
