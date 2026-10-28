@@ -104,11 +104,19 @@ export const IntelligenceExplorerView: React.FC = () => {
           className="px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none"
         >
           <option value="all">All Municipalities</option>
+          <option value="Toronto">Toronto (GTA)</option>
+          <option value="Mississauga">Mississauga (Peel)</option>
+          <option value="Brampton">Brampton (Peel)</option>
           <option value="Burlington">Burlington (Halton)</option>
           <option value="Oakville">Oakville (Halton)</option>
           <option value="Milton">Milton (Halton)</option>
           <option value="Halton Hills">Halton Hills (Halton)</option>
-          <option value="Toronto">Toronto</option>
+          <option value="Hamilton">Hamilton</option>
+          <option value="Ottawa">Ottawa</option>
+          <option value="London">London</option>
+          <option value="Waterloo">Waterloo</option>
+          <option value="Kitchener">Kitchener</option>
+          <option value="Cambridge">Cambridge</option>
         </select>
 
         <select

@@ -47,8 +47,9 @@ export class TorontoLicencesAdapter implements SourceAdapter {
 
   async fetchRecords(filter?: IngestionFilter): Promise<RawSourceRecord[]> {
     const client = this.getClient();
-    const limit = filter?.limit || 100;
-    const offset = filter?.offset || 0;
+    const rawLimit = typeof filter?.limit === 'number' ? filter.limit : 100;
+    const limit = Math.max(1, Math.min(5000, rawLimit));
+    const offset = Math.max(0, Number(filter?.offset) || 0);
 
     const rows = await client<LicenceRow[]>`
       SELECT 

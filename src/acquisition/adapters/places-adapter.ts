@@ -52,8 +52,9 @@ export class PlacesAdapter implements SourceAdapter {
 
   async fetchRecords(filter?: IngestionFilter): Promise<RawSourceRecord[]> {
     const client = this.getClient();
-    const limit = filter?.limit || 500;
-    const offset = filter?.offset || 0;
+    const rawLimit = typeof filter?.limit === 'number' ? filter.limit : 500;
+    const limit = Math.max(1, Math.min(10000, rawLimit));
+    const offset = Math.max(0, Number(filter?.offset) || 0);
     const targetCities = filter?.cities && filter.cities.length > 0 
       ? filter.cities 
       : ['Burlington', 'Oakville', 'Milton', 'Halton Hills'];
