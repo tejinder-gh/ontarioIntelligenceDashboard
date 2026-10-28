@@ -96,8 +96,8 @@ export interface FunnelCandidate {
   confidenceScore: number;     // 0-100 evidence completeness (strictly separate)
   suitabilityScore: number;    // composite ranking score
   zoningFeasibilityStatus: FeasibilityGateStatus;
-  buildingSuitabilityStatus: 'VERIFIED_COMPLIANT' | 'UNVERIFIED_MEP_CHECK_NEEDED' | 'NON_COMPLIANT';
-  listingId?: number;
+  listingId?: number | string;
+  listingUrl?: string;
   askingPrice?: number;
   monthlyRent?: number;
   squareFootage?: number;

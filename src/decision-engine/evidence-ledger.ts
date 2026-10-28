@@ -140,8 +140,12 @@ export function buildEvidenceLedger(
     },
     {
       claim: `Commercial occupancy expense is sustainable under base operating volume.`,
-      evidenceObserved: `Benchmark ${isIndustrial ? 'industrial' : 'commercial retail'} lease rate is $${grossRent.toFixed(2)}/sqft (Net $${(candidate.commercialNetRentSqft ?? (grossRent * 0.70)).toFixed(2)} + TMI $${(candidate.commercialTmiSqft ?? (grossRent * 0.30)).toFixed(2)}), translating to ~$${Math.round(monthlyRent).toLocaleString()}/month for ${sqft.toLocaleString()} sqft.`,
-      calculationMethod: `Occupancy cost represents ${rentRatioPct.toFixed(1)}% of base monthly revenue ($${Math.round(monthlySales).toLocaleString()}), evaluated against the ${ceilingPct.toFixed(1)}% viability ceiling.`,
+      evidenceObserved: (candidate.commercialNetRentSqft != null && candidate.commercialTmiSqft != null)
+        ? `Benchmark ${isIndustrial ? 'industrial' : 'commercial retail'} lease rate is $${grossRent.toFixed(2)}/sqft (reported Net $${candidate.commercialNetRentSqft.toFixed(2)} + TMI $${candidate.commercialTmiSqft.toFixed(2)}), translating to ~$${Math.round(monthlyRent).toLocaleString()}/month for ${sqft.toLocaleString()} sqft.`
+        : `Benchmark ${isIndustrial ? 'industrial' : 'commercial retail'} lease rate is $${grossRent.toFixed(2)}/sqft gross (modelled assumption: 70% Net $${(grossRent * 0.70).toFixed(2)} + 30% TMI $${(grossRent * 0.30).toFixed(2)}; specific property terms unverified), translating to ~$${Math.round(monthlyRent).toLocaleString()}/month for ${sqft.toLocaleString()} sqft.`,
+      calculationMethod: (candidate.commercialNetRentSqft != null && candidate.commercialTmiSqft != null)
+        ? `Occupancy cost represents ${rentRatioPct.toFixed(1)}% of base monthly revenue ($${Math.round(monthlySales).toLocaleString()}), evaluated against the ${ceilingPct.toFixed(1)}% viability ceiling.`
+        : `Occupancy cost represents ${rentRatioPct.toFixed(1)}% of base monthly revenue ($${Math.round(monthlySales).toLocaleString()}) using an assumed 70/30 net/TMI allocation; evaluated against the ${ceilingPct.toFixed(1)}% viability ceiling.`,
       classification: 'BENCHMARK',
       uncertaintyEstimate: 'Moderate: Submarket benchmark rate. Final lease agreement will dictate actual base rent and CAM pass-throughs.',
       decisionImplication: rentRatioFraction <= model.maxGrossRentPctRevenue 
@@ -181,7 +185,7 @@ export function buildEvidenceLedger(
       metricKey: 'property_listing',
       metricName: 'Commercial Property Listing',
       sourceName: 'Commercial Brokerage Candidate Listing Profile',
-      sourceUrl: 'https://ontario.ca/page/business-services-and-support',
+      sourceUrl: candidate.listingUrl || '',
       datasetId: 'ON-COMMERCIAL-LISTINGS',
       recordIdentifier: String(candidate.listingId),
       observationPeriod: 'Current Advertised',
@@ -192,7 +196,7 @@ export function buildEvidenceLedger(
       originalValue: sqft,
       transformation: 'Brokerage listing specification screening. Site-specific municipal zoning permitted use and building utilities remain unverified.',
       evidenceClassification: 'UNVERIFIED',
-      limitations: 'Advertised footprint from commercial listing. As-of-right zoning compliance certificate and engineering audit required prior to lease execution.',
+      limitations: 'Advertised footprint from commercial listing. As-of-right zoning compliance certificate and engineering audit required prior to lease execution. General provincial portals do not substantiate property-specific listing claims.',
       claimRequiresAddressLevel: true
     });
 

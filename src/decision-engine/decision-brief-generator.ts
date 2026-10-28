@@ -54,7 +54,7 @@ export function generateDecisionBrief(
     : `DO NOT PROCEED: ${capitalHeadlineReason || (topCandidate.zoningFeasibilityStatus === 'DISALLOWED' ? 'Municipal zoning strictly prohibits target use' : 'Viability criteria not satisfied')}.`;
 
   const whyThisLocation = [
-    `Municipal baseline: population ${topCandidate.population2021.toLocaleString()}, population change ${topCandidate.populationGrowthPct.toFixed(1)}%, and ${topCandidate.medianIncomeSource === 'IMPUTED_DEFAULT' ? 'imputed income assumption' : 'reported median household income'} $${topCandidate.medianIncome.toLocaleString()}. These figures do not establish local demand.`,
+    `Municipal baseline: municipal population ${topCandidate.population2021.toLocaleString()} in ${topCandidate.city}, population change ${topCandidate.populationGrowthPct.toFixed(1)}%, and ${topCandidate.medianIncomeSource === 'IMPUTED_DEFAULT' ? 'imputed income assumption' : 'reported median household income'} $${topCandidate.medianIncome.toLocaleString()}. These figures do not establish local demand.`,
     `Modelled occupancy: ${isIndustrial ? 'industrial' : 'commercial retail'} lease benchmark of $${topCandidate.commercialGrossRentSqft.toFixed(2)}/sqft gross; verify the rate and terms for the specific property.`,
     describeCompetitorEvidence(topCandidate),
     topCandidate.propertyAddress
