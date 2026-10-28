@@ -84,8 +84,8 @@ export class EntityResolver {
       name: string;
       address: string | null;
       postal_code: string | null;
-      latitude: number;
-      longitude: number;
+      latitude: number | null;
+      longitude: number | null;
       phone: string | null;
       website: string | null;
     }[]>`
@@ -113,8 +113,8 @@ export class EntityResolver {
       const distance = calculateDistanceMeters(
         record.latitude,
         record.longitude,
-        Number(cand.latitude),
-        Number(cand.longitude)
+        cand.latitude != null ? Number(cand.latitude) : null,
+        cand.longitude != null ? Number(cand.longitude) : null
       );
 
       let confidence = 0.0;
@@ -218,6 +218,8 @@ export class EntityResolver {
         website = COALESCE(website, ${record.website ?? null}),
         address = COALESCE(address, ${record.address ?? null}),
         postal_code = COALESCE(postal_code, ${record.postalCode ?? null}),
+        latitude = COALESCE(latitude, ${record.latitude ?? null}),
+        longitude = COALESCE(longitude, ${record.longitude ?? null}),
         source_observed_at = GREATEST(source_observed_at, ${record.sourceObservedAt}),
         quality_score = GREATEST(quality_score, ${qualityScore})
       WHERE id = ${canonicalId};

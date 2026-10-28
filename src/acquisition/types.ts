@@ -33,8 +33,8 @@ export interface RawSourceRecord {
   city: string;
   province: string;
   postalCode?: string | null;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   phone?: string | null;
   email?: string | null;
   website?: string | null;

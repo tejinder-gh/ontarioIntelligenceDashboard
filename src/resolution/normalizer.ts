@@ -69,22 +69,29 @@ export function extractDomain(url: string | null | undefined): string | null {
   }
 }
 
-/**
- * Calculates geographic distance in meters between two lat/lon points (Haversine formula).
- */
 export function calculateDistanceMeters(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
+  lat1: number | null | undefined,
+  lon1: number | null | undefined,
+  lat2: number | null | undefined,
+  lon2: number | null | undefined
 ): number {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) {
+    return Infinity;
+  }
+  const nLat1 = Number(lat1);
+  const nLon1 = Number(lon1);
+  const nLat2 = Number(lat2);
+  const nLon2 = Number(lon2);
+  if (isNaN(nLat1) || isNaN(nLon1) || isNaN(nLat2) || isNaN(nLon2)) {
+    return Infinity;
+  }
   const R = 6371000; // Earth radius in meters
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const dLat = ((nLat2 - nLat1) * Math.PI) / 180;
+  const dLon = ((nLon2 - nLon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
+    Math.cos((nLat1 * Math.PI) / 180) *
+      Math.cos((nLat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
