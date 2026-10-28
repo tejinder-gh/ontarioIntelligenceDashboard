@@ -85,7 +85,7 @@ describe('Intelligent Research & Decision Engine Suite', () => {
       expect(item.calculationMethod).toBeTruthy();
       expect(item.uncertaintyEstimate).toBeTruthy();
       expect(item.decisionImplication).toBeTruthy();
-      expect(['OBSERVED', 'AUDITED', 'BENCHMARK', 'DERIVED']).toContain(item.classification);
+      expect(['OBSERVED', 'AUDITED', 'BENCHMARK', 'DERIVED', 'UNAVAILABLE', 'UNVERIFIED', 'UNVERIFIED_ASSUMPTION']).toContain(item.classification);
     }
   });
 

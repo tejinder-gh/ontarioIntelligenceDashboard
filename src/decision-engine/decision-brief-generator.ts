@@ -29,10 +29,10 @@ export function generateDecisionBrief(
   if (topCandidate.zoningFeasibilityStatus === 'DISALLOWED') {
     outcome = 'DO_NOT_PROCEED';
     feasibilityGateNote = 'FEASIBILITY GATE FAILED: Municipal planning or environmental zoning strictly prohibits requested operating format at this candidate location.';
-  } else if (topCandidate.zoningFeasibilityStatus === 'UNVERIFIED_PENDING_REVIEW') {
-    feasibilityGateNote = 'FEASIBILITY GATE ACTIVE: Commercial/industrial permitted use and physical utility capacity are unverified. No capital commitments permitted until official municipal zoning compliance certificate is issued.';
+  } else if (topCandidate.zoningFeasibilityStatus === 'VERIFIED_PERMITTED') {
+    feasibilityGateNote = 'FEASIBILITY GATE VERIFIED: Municipal permitted use verified as-of-right for target NAICS classification via official municipal zoning compliance certificate.';
   } else {
-    feasibilityGateNote = 'FEASIBILITY GATE VERIFIED: Municipal permitted use verified as-of-right for target NAICS classification.';
+    feasibilityGateNote = 'FEASIBILITY GATE ACTIVE (UNVERIFIED): Commercial/industrial permitted use and physical utility capacity are unverified. No capital commitments permitted until official municipal zoning compliance certificate is issued.';
   }
 
   // Capital & Funding Gap Check
@@ -52,12 +52,18 @@ export function generateDecisionBrief(
     ? `Target ${topCandidate.name} (${topCandidate.city}) for ${activeScenario.label} under conditional due diligence.`
     : `DO NOT PROCEED: ${capitalHeadlineReason || (topCandidate.zoningFeasibilityStatus === 'DISALLOWED' ? 'Municipal zoning strictly prohibits target use' : 'Viability criteria not satisfied')}.`;
 
+  const competitorDensityBullet = typeof topCandidate.estimatedDirectCompetitors === 'number'
+    ? (topCandidate.competitorClassification === 'BENCHMARK'
+        ? `Competitive Density Benchmark: ${topCandidate.estimatedDirectCompetitors} broad sector establishments recorded across ${topCandidate.city} (${topCandidate.competitorDataSource || 'StatCan Table 33-10-1097-01'}). Note: Represents sector-wide establishments, not verified individual storefronts.`
+        : `Audited Competitive Density: ${topCandidate.estimatedDirectCompetitors} registered NAICS ${model.naicsCode} establishments in ${topCandidate.city} (${topCandidate.competitorDataSource || 'StatCan Table 33-10-1097-01'}), indicating headroom for differentiated offerings.`)
+    : `Competitive Density: Direct competitor count unobserved for ${topCandidate.city}; on-site field survey required before executing leasehold agreement.`;
+
   const whyThisLocation = [
     `Strong Macro Demographics & Market Base: ${topCandidate.city} combines a robust municipal population (${topCandidate.population2021.toLocaleString()}) with sustained growth (+${topCandidate.populationGrowthPct.toFixed(1)}%) and high median household income ($${topCandidate.medianIncome.toLocaleString()}).`,
     `Favorable Occupancy Economics: Benchmark ${isIndustrial ? 'industrial' : 'commercial retail'} lease rate of $${topCandidate.commercialGrossRentSqft.toFixed(2)}/sqft gross preserves sustainable operating margins.`,
-    `Audited Competitive Density: ${topCandidate.estimatedDirectCompetitors} licensed NAICS ${model.naicsCode} establishments active in the municipality (StatCan Business Counts Table 33-10-1176-01), permitting strategic market differentiation.`,
+    competitorDensityBullet,
     topCandidate.propertyAddress
-      ? `Physical Premise Screening: Active listing #${topCandidate.listingId || 'N/A'} at ${topCandidate.propertyAddress} offers ${topCandidate.squareFootage || profile.typicalSqftMin} sqft footprint.`
+      ? `Physical Premise Screening: Candidate listing #${topCandidate.listingId || 'N/A'} at ${topCandidate.propertyAddress} offers ${topCandidate.squareFootage || profile.typicalSqftMin} sqft footprint (subject to physical engineering audit and zoning verification).`
       : `Neighbourhood-Level Resolution: Filtered to ${topCandidate.neighbourhood || topCandidate.city}; individual property leasehold selection pending broker RFP.`
   ];
 

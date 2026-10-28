@@ -99,13 +99,42 @@ export function runSensitivityAnalysis(
   // 5. Direct Competitor Ingress
   const competitorShareLoss = annualRev * 0.10;
   const competitorNet = baseNet - (competitorShareLoss * 0.40);
+  const hasKnownCompetitors = typeof topCandidate.estimatedDirectCompetitors === 'number';
+  const compCount = topCandidate.estimatedDirectCompetitors;
+  const isBenchmark = topCandidate.competitorClassification === 'BENCHMARK';
+
+  let compBaseMetric: string;
+  let compShockedMetric: string;
+  let compImpact: string;
+  let compResilience: 'ROBUST' | 'SENSITIVE' | 'VULNERABLE';
+
+  if (!hasKnownCompetitors) {
+    compBaseMetric = 'UNAVAILABLE (Specific NAICS competitor count unobserved; field audit required)';
+    compShockedMetric = `Hypothetical entrant capturing 10% volume erodes $${Math.round(competitorShareLoss * 0.40).toLocaleString()}/yr net income`;
+    compImpact = 'UNVERIFIED COMPETITIVE BASELINE: Without verified baseline competitor count, actual headroom is uncertain. Physical site audit required before committing capital.';
+    compResilience = 'SENSITIVE';
+  } else if (isBenchmark) {
+    compBaseMetric = `${compCount} sector establishments (StatCan Benchmark — not direct retail storefronts)`;
+    compShockedMetric = `Hypothetical direct entrant: -$${Math.round(competitorShareLoss * 0.40).toLocaleString()}/yr net income ($${Math.round(competitorNet).toLocaleString()} adjusted)`;
+    compImpact = 'SECTOR BENCHMARK CAUTION: Count reflects broader NAICS industry establishments across municipality, not verified local storefronts.';
+    compResilience = competitorNet > 40000 ? 'ROBUST' : 'SENSITIVE';
+  } else {
+    const verifiedCount = typeof compCount === 'number' ? compCount : 0;
+    compBaseMetric = `${verifiedCount} verified area competitors (${topCandidate.competitorDataSource || 'StatCan Table 33-10-1097-01'})`;
+    compShockedMetric = `${verifiedCount + 1} competitors ($${Math.round(competitorNet).toLocaleString()} adjusted net income)`;
+    compImpact = competitorNet > 35000 
+      ? 'Remains financially viable; brand positioning and product differentiation required to defend market share.' 
+      : 'Erodes operating margin below safety buffer; requires high customer retention.';
+    compResilience = competitorNet > 45000 ? 'ROBUST' : 'SENSITIVE';
+  }
+
   const compShock: SensitivityShock = {
     parameter: 'Local Competitive Ingress',
     shockApplied: 'New entrant establishes operations within primary catchment and captures 10% volume',
-    baseMetric: `${topCandidate.estimatedDirectCompetitors ?? 0} existing area competitors`,
-    shockedMetric: `${(topCandidate.estimatedDirectCompetitors ?? 0) + 1} competitors ($${Math.round(competitorNet).toLocaleString()} adjusted net income)`,
-    impactOnViability: 'Remains viable provided brand establishes localized customer loyalty and service differentiation.',
-    resilienceRating: 'ROBUST'
+    baseMetric: compBaseMetric,
+    shockedMetric: compShockedMetric,
+    impactOnViability: compImpact,
+    resilienceRating: compResilience
   };
 
   const shocks = [rentShock, volumeShock, cogsShock, channelShock, compShock];

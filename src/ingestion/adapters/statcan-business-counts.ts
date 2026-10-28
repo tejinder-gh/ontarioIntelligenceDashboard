@@ -230,25 +230,30 @@ export async function ingestStatCanBusinessCounts(): Promise<void> {
         updated_at = NOW();
     `;
 
-    // 2. Current June 2026 Ingestion (Table 33-10-1176-01, released August 14, 2026)
-    // Reflects updated mid-2026 employer counts
-    const count2026 = Math.round(b.totalBusinesses * 1.018); // Authentic 1.8% average mid-year business formation rate
+    // 2. Projected June 2026 Ingestion (Modelled from Table 33-10-1097-01 with 1.8% formation rate)
+    // Reflects projected mid-2026 employer counts (Modelled estimate, not raw unadjusted census)
+    const count2026 = Math.round(b.totalBusinesses * 1.018); // 1.8% average mid-year business formation model
     const bizPer1k2026 = parseFloat(((count2026 / b.pop) * 1000).toFixed(2));
+    const formationMethodology = 'Projected 2026 employer business count modelled by indexing authoritative Statistics Canada Table 33-10-1097-01 (Dec 2025) baseline with observed 1.8% annual formation trend. Modelled estimate pending full municipal release.';
 
     await sql`
       INSERT INTO observations (
         geography_id, metric_id, reference_year, value_numeric, unit,
         geographic_resolution, is_benchmark, metric_classification,
-        source_id, dataset_id, confidence, is_estimate, is_superseded
+        source_id, dataset_id, confidence, is_estimate, is_superseded,
+        methodology_notes
       ) VALUES (
         ${b.geoId}, 'businesses_total_counts', 2026, ${count2026}, 'businesses',
-        'CSD', false, 'OBSERVED',
-        'bus_cnt_csd', 'statcan_business_counts_2026_06', 'HIGH', false, false
+        'CSD', false, 'MODELLED',
+        'bus_cnt_csd', 'statcan_business_counts_2026_modelled', 'HIGH', true, false,
+        ${formationMethodology}
       )
       ON CONFLICT (geography_id, metric_id, reference_year, is_benchmark, benchmark_label)
       DO UPDATE SET 
         value_numeric = EXCLUDED.value_numeric,
-        metric_classification = 'OBSERVED',
+        metric_classification = 'MODELLED',
+        is_estimate = true,
+        methodology_notes = EXCLUDED.methodology_notes,
         is_superseded = false,
         updated_at = NOW();
     `;
@@ -257,16 +262,20 @@ export async function ingestStatCanBusinessCounts(): Promise<void> {
       INSERT INTO observations (
         geography_id, metric_id, reference_year, value_numeric, unit,
         geographic_resolution, is_benchmark, metric_classification,
-        source_id, dataset_id, confidence, is_estimate, is_superseded
+        source_id, dataset_id, confidence, is_estimate, is_superseded,
+        methodology_notes
       ) VALUES (
         ${b.geoId}, 'businesses_per_1000_pop', 2026, ${bizPer1k2026}, 'businesses/1,000 pop',
         'CSD', false, 'DERIVED',
-        'bus_cnt_csd', 'statcan_business_counts_2026_06', 'HIGH', false, false
+        'bus_cnt_csd', 'statcan_business_counts_2026_modelled', 'HIGH', true, false,
+        'Derived ratio calculated from modelled 2026 employer business count divided by 2021 Census population baseline.'
       )
       ON CONFLICT (geography_id, metric_id, reference_year, is_benchmark, benchmark_label)
       DO UPDATE SET 
         value_numeric = EXCLUDED.value_numeric,
         metric_classification = 'DERIVED',
+        is_estimate = true,
+        methodology_notes = EXCLUDED.methodology_notes,
         is_superseded = false,
         updated_at = NOW();
     `;

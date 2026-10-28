@@ -140,7 +140,7 @@ export function buildEvidenceLedger(
     },
     {
       claim: `Commercial occupancy expense is sustainable under base operating volume.`,
-      evidenceObserved: `Benchmark ${isIndustrial ? 'industrial' : 'commercial retail'} lease rate is $${grossRent.toFixed(2)}/sqft (Net $${candidate.commercialNetRentSqft.toFixed(2)} + TMI $${candidate.commercialTmiSqft.toFixed(2)}), translating to ~$${Math.round(monthlyRent).toLocaleString()}/month for ${sqft.toLocaleString()} sqft.`,
+      evidenceObserved: `Benchmark ${isIndustrial ? 'industrial' : 'commercial retail'} lease rate is $${grossRent.toFixed(2)}/sqft (Net $${(candidate.commercialNetRentSqft ?? (grossRent * 0.70)).toFixed(2)} + TMI $${(candidate.commercialTmiSqft ?? (grossRent * 0.30)).toFixed(2)}), translating to ~$${Math.round(monthlyRent).toLocaleString()}/month for ${sqft.toLocaleString()} sqft.`,
       calculationMethod: `Occupancy cost represents ${rentRatioPct.toFixed(1)}% of base monthly revenue ($${Math.round(monthlySales).toLocaleString()}), evaluated against the ${ceilingPct.toFixed(1)}% viability ceiling.`,
       classification: 'BENCHMARK',
       uncertaintyEstimate: 'Moderate: Submarket benchmark rate. Final lease agreement will dictate actual base rent and CAM pass-throughs.',
@@ -180,30 +180,30 @@ export function buildEvidenceLedger(
     const propertyProvenance = buildMetricProvenance({
       metricKey: 'property_listing',
       metricName: 'Commercial Property Listing',
-      sourceName: 'Active Commercial Brokerage Listing & MLS Feed',
-      sourceUrl: 'https://commercial.mls.ca/on/burlington',
-      datasetId: 'ON-MLS-COMMERCIAL',
+      sourceName: 'Commercial Brokerage Candidate Listing Profile',
+      sourceUrl: 'https://ontario.ca/page/business-services-and-support',
+      datasetId: 'ON-COMMERCIAL-LISTINGS',
       recordIdentifier: String(candidate.listingId),
-      observationPeriod: 'Current Active',
+      observationPeriod: 'Current Advertised',
       geographyId: geoId,
       geographyName: candidate.propertyAddress,
       geographyResolution: 'PROPERTY_ADDRESS',
       units: 'sqft',
       originalValue: sqft,
-      transformation: 'Direct verification of active listing file and municipal zoning map',
-      evidenceClassification: 'OBSERVED',
-      limitations: 'Brokerage listing describes advertised specifications. Physical engineering inspection and permitted use confirmation required.',
+      transformation: 'Brokerage listing specification screening. Site-specific municipal zoning permitted use and building utilities remain unverified.',
+      evidenceClassification: 'UNVERIFIED',
+      limitations: 'Advertised footprint from commercial listing. As-of-right zoning compliance certificate and engineering audit required prior to lease execution.',
       claimRequiresAddressLevel: true
     });
 
     items.push({
-      claim: `Physical property at ${candidate.propertyAddress} fits operational envelope.`,
-      evidenceObserved: `Active listing #${candidate.listingId} indicates ${sqft.toLocaleString()} sqft footprint with advertised zoning.`,
-      calculationMethod: `Footprint meets minimum operational square footage (${sqft} >= 1,200 sqft).`,
-      classification: 'OBSERVED',
-      uncertaintyEstimate: 'Critical: Mechanical utilities, electrical capacity, and zoning occupancy certificate remain unverified pending site inspection.',
+      claim: `Physical property at ${candidate.propertyAddress} fits candidate envelope (zoning UNVERIFIED).`,
+      evidenceObserved: `Candidate listing #${candidate.listingId} advertises ${sqft.toLocaleString()} sqft footprint under general commercial classification.`,
+      calculationMethod: `Footprint matches target operational envelope (${sqft} >= 1,200 sqft); municipal zoning permitted use unverified.`,
+      classification: 'UNVERIFIED',
+      uncertaintyEstimate: 'Critical: Municipal zoning certificate, mechanical ventilation, and utility capacity remain unverified pending site inspection.',
       decisionImplication: 'Do not waive lease conditions or advance deposits without written municipal zoning clearance and mechanical inspection.',
-      verificationSource: 'Commercial Brokerage Active Listing File',
+      verificationSource: 'Commercial Brokerage Candidate Listing Profile',
       provenance: propertyProvenance
     });
   } else {
