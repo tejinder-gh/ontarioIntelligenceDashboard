@@ -67,7 +67,7 @@ describe('Decision Engine Adversarial HTTP Authorization & Workspace Isolation',
   });
 
   it('GET /api/engine/runs is strictly read-only and never mutates workspace_memberships', async () => {
-    const callerUserId = '44444444-4444-4444-8444-444444444444';
+    const callerUserId = '77777777-7777-4777-8777-777777777777';
     const unassignedWsId = 'ws_unassigned_read_attempt';
     const callerToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 3600 * 1000);
