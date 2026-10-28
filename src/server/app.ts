@@ -102,8 +102,13 @@ app.use((req, res, next) => {
   next();
 });
 
+import { intelligenceRouter } from './intelligence-routes.js';
+import { ventureRouter } from './venture-routes.js';
+
 // API routes
 app.use('/api', apiRouter);
+app.use('/api/intelligence', intelligenceRouter);
+app.use('/api/ventures', ventureRouter);
 
 // Serve static build in production
 const clientDist = path.resolve(process.cwd(), 'dist');
