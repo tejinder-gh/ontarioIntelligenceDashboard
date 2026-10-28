@@ -597,15 +597,27 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
                       <td className="py-3 px-4 text-slate-400">{r.census_division || 'Ontario'}</td>
                       <td className="py-3 px-4 text-right">{Number(r.population_2021 || 0).toLocaleString()}</td>
                       <td className="py-3 px-4 text-right font-bold text-indigo-300">
-                        {activeMetricObj.unit === '$' 
-                          ? `$${Number(r.value_numeric).toLocaleString()}`
-                          : `${Number(r.value_numeric).toLocaleString()} ${activeMetricObj.unit}`}
+                        {r.value_numeric !== null && r.value_numeric !== undefined ? (
+                          activeMetricObj.unit === '$' 
+                            ? `$${Number(r.value_numeric).toLocaleString()}`
+                            : `${Number(r.value_numeric).toLocaleString()} ${activeMetricObj.unit}`
+                        ) : (
+                          <span className="text-slate-500 font-normal italic">Unavailable</span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-right font-medium">
-                        <span className="text-emerald-400">{r.percentile_rank}%</span>
+                        {r.percentile_rank !== null && r.percentile_rank !== undefined ? (
+                          <span className="text-emerald-400">{r.percentile_rank}%</span>
+                        ) : (
+                          <span className="text-slate-500 font-normal">—</span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-right font-mono text-slate-400">
-                        {r.z_score !== null ? (r.z_score > 0 ? `+${r.z_score}` : r.z_score) : '0.00'}
+                        {r.z_score !== null && r.z_score !== undefined ? (
+                          r.z_score > 0 ? `+${r.z_score}` : r.z_score
+                        ) : (
+                          <span className="text-slate-500">—</span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-center">
                         {isOutlier ? (

@@ -9,7 +9,7 @@ interface EvidenceLedgerTableProps {
 export const EvidenceLedgerTable: React.FC<EvidenceLedgerTableProps> = ({ items }) => {
   const [expandedProvenanceIdx, setExpandedProvenanceIdx] = useState<number | null>(null);
 
-  const getClassificationBadge = (cls: EvidenceClassification) => {
+  const getClassificationBadge = (cls: EvidenceClassification | 'UNVERIFIED_ASSUMPTION') => {
     switch (cls) {
       case 'OBSERVED':
         return <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">OBSERVED</span>;
@@ -19,6 +19,10 @@ export const EvidenceLedgerTable: React.FC<EvidenceLedgerTableProps> = ({ items 
         return <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">BENCHMARK</span>;
       case 'DERIVED':
         return <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">DERIVED</span>;
+      case 'UNVERIFIED':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">UNVERIFIED</span>;
+      case 'UNVERIFIED_ASSUMPTION':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">ASSUMPTION</span>;
       default:
         return <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-400">UNAVAILABLE</span>;
     }
@@ -106,16 +110,22 @@ export const EvidenceLedgerTable: React.FC<EvidenceLedgerTableProps> = ({ items 
                         <td colSpan={5} className="p-4">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono">
                             <div>
-                              <span className="text-slate-500 block text-[10px] uppercase">Source Provider & URL</span>
-                              <a
-                                href={prov.sourceUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-indigo-400 hover:underline flex items-center gap-1 mt-0.5 truncate"
-                              >
-                                <span>{prov.sourceName}</span>
-                                <ExternalLink className="w-3 h-3 shrink-0" />
-                              </a>
+                              <span className="text-slate-500 block text-[10px] uppercase">Source Provider & Citation</span>
+                              {prov.sourceUrl && prov.sourceUrl.startsWith('http') ? (
+                                <a
+                                  href={prov.sourceUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-indigo-400 hover:underline flex items-center gap-1 mt-0.5 truncate"
+                                >
+                                  <span>{prov.sourceName}</span>
+                                  <ExternalLink className="w-3 h-3 shrink-0" />
+                                </a>
+                              ) : (
+                                <div className="text-slate-300 mt-0.5 truncate font-medium">
+                                  <span>{prov.sourceName}</span>
+                                </div>
+                              )}
                               <span className="text-slate-400 text-[10px] block mt-1">Dataset: {prov.datasetId}</span>
                             </div>
 
