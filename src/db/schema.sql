@@ -452,17 +452,31 @@ CREATE TABLE IF NOT EXISTS businesses (
     longitude NUMERIC(10, 6) NOT NULL,
     is_chain BOOLEAN DEFAULT FALSE,
     brand_name VARCHAR(128),
-    source_type VARCHAR(64) NOT NULL,        -- 'OSM_LISTED', 'MUNICIPAL_OPEN_DATA', 'BUSINESS_DIRECTORY'
+    entity_id VARCHAR(64),
+    source_type VARCHAR(64) NOT NULL,        -- 'OSM_LISTED', 'OVERTURE_MAPS', 'MUNICIPAL_OPEN_DATA', 'BUSINESS_DIRECTORY'
     source_element_id VARCHAR(128),
+    source_observed_at TIMESTAMPTZ,
+    verification_status VARCHAR(32) NOT NULL DEFAULT 'UNVERIFIED',
+    verification_basis TEXT,
+    operating_status VARCHAR(32) NOT NULL DEFAULT 'UNKNOWN',
+    phone VARCHAR(64),
+    email VARCHAR(255),
+    website VARCHAR(512),
+    quality_score NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
+    confidence_score NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
     tags JSONB,
     first_observed_at TIMESTAMPTZ DEFAULT NOW(),
-    last_confirmed_at TIMESTAMPTZ DEFAULT NOW(),
+    last_confirmed_at TIMESTAMPTZ,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_businesses_geo_cat ON businesses(geography_id, category_id);
 CREATE INDEX IF NOT EXISTS idx_businesses_coords ON businesses(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_businesses_verification ON businesses(verification_status);
+CREATE INDEX IF NOT EXISTS idx_businesses_operating_status ON businesses(operating_status);
+CREATE INDEX IF NOT EXISTS idx_businesses_quality_score ON businesses(quality_score DESC);
+CREATE INDEX IF NOT EXISTS idx_businesses_source_observed ON businesses(source_observed_at DESC);
 
 -- 17. Business Reviews (Independent Provider Adapter, Section 17 & User Instruction #7)
 CREATE TABLE IF NOT EXISTS business_reviews (
@@ -888,4 +902,235 @@ CREATE INDEX IF NOT EXISTS idx_decision_runs_cat ON decision_engine_runs(categor
 CREATE INDEX IF NOT EXISTS idx_decision_runs_created ON decision_engine_runs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_decision_runs_workspace ON decision_engine_runs(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_decision_runs_user ON decision_engine_runs(user_id);
+
+-- 36. Business Entities (Parent corporate/holding entities)
+CREATE TABLE IF NOT EXISTS business_entities (
+    id VARCHAR(64) PRIMARY KEY,
+    legal_name VARCHAR(255) NOT NULL,
+    jurisdiction VARCHAR(64) NOT NULL DEFAULT 'CA',
+    registration_number VARCHAR(128),
+    entity_type VARCHAR(64) NOT NULL DEFAULT 'CORPORATION',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_business_entities_legal_name ON business_entities(legal_name);
+CREATE INDEX IF NOT EXISTS idx_business_entities_reg_no ON business_entities(registration_number);
+
+-- 37. Business Source Records (Append-only raw source observations)
+CREATE TABLE IF NOT EXISTS business_source_records (
+    id VARCHAR(64) PRIMARY KEY,
+    source_id VARCHAR(64) NOT NULL REFERENCES sources(id),
+    source_record_id VARCHAR(255) NOT NULL,
+    canonical_business_id VARCHAR(64) REFERENCES businesses(id) ON DELETE SET NULL,
+    raw_payload JSONB NOT NULL,
+    payload_checksum VARCHAR(64) NOT NULL,
+    observed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ingestion_run_id VARCHAR(64),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (source_id, source_record_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_biz_src_canonical ON business_source_records(canonical_business_id);
+CREATE INDEX IF NOT EXISTS idx_biz_src_lookup ON business_source_records(source_id, source_record_id);
+
+-- 38. Business Aliases
+CREATE TABLE IF NOT EXISTS business_aliases (
+    id VARCHAR(64) PRIMARY KEY,
+    business_id VARCHAR(64) NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    alias_name VARCHAR(255) NOT NULL,
+    alias_type VARCHAR(64) NOT NULL DEFAULT 'TRADING_NAME',
+    source_id VARCHAR(64) REFERENCES sources(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_business_aliases_name ON business_aliases(alias_name);
+CREATE INDEX IF NOT EXISTS idx_business_aliases_biz ON business_aliases(business_id);
+
+-- 39. Business Contacts & CASL Compliance Points
+CREATE TABLE IF NOT EXISTS business_contacts (
+    id VARCHAR(64) PRIMARY KEY,
+    business_id VARCHAR(64) NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    channel_type VARCHAR(32) NOT NULL,
+    channel_value VARCHAR(255) NOT NULL,
+    contact_role VARCHAR(64),
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    casl_consent_type VARCHAR(32) NOT NULL DEFAULT 'UNVERIFIED',
+    casl_evidence_ref TEXT,
+    casl_obtained_at TIMESTAMPTZ,
+    casl_expires_at TIMESTAMPTZ,
+    is_suppressed BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (business_id, channel_type, channel_value)
+);
+
+CREATE INDEX IF NOT EXISTS idx_business_contacts_channel ON business_contacts(channel_type, channel_value);
+CREATE INDEX IF NOT EXISTS idx_business_contacts_casl ON business_contacts(casl_consent_type);
+
+-- 40. Business Identity Matches (Candidate deduplication & merge ledger)
+CREATE TABLE IF NOT EXISTS business_identity_matches (
+    id VARCHAR(64) PRIMARY KEY,
+    business_id_a VARCHAR(64) NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    business_id_b VARCHAR(64) NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    confidence_score NUMERIC(5,2) NOT NULL,
+    match_method VARCHAR(64) NOT NULL,
+    match_signals JSONB NOT NULL DEFAULT '{}'::jsonb,
+    resolution_status VARCHAR(32) NOT NULL DEFAULT 'PENDING_REVIEW',
+    resolved_by VARCHAR(64),
+    resolved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_identity_matches_status ON business_identity_matches(resolution_status);
+CREATE INDEX IF NOT EXISTS idx_identity_matches_pairs ON business_identity_matches(business_id_a, business_id_b);
+
+-- 41. Business Verification Events (Independent operational audit trail)
+CREATE TABLE IF NOT EXISTS business_verification_events (
+    id VARCHAR(64) PRIMARY KEY,
+    business_id VARCHAR(64) NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    verification_method VARCHAR(64) NOT NULL,
+    observed_operating_status VARCHAR(32) NOT NULL,
+    confidence NUMERIC(5,2) NOT NULL DEFAULT 1.00,
+    evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+    verified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    verified_by VARCHAR(64) NOT NULL DEFAULT 'SYSTEM_AGENT'
+);
+
+CREATE INDEX IF NOT EXISTS idx_biz_verif_events ON business_verification_events(business_id, verified_at DESC);
+
+-- 42. Durable PostgreSQL Job Queue & Outbox
+CREATE TABLE IF NOT EXISTS durable_jobs (
+    id VARCHAR(64) PRIMARY KEY,
+    queue_name VARCHAR(64) NOT NULL,
+    job_type VARCHAR(64) NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    idempotency_key VARCHAR(128) UNIQUE,
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    lease_owner VARCHAR(64),
+    lease_expires_at TIMESTAMPTZ,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 5,
+    backoff_base_sec INTEGER NOT NULL DEFAULT 10,
+    next_run_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_error TEXT,
+    result JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_durable_jobs_lease ON durable_jobs(queue_name, status, next_run_at);
+CREATE INDEX IF NOT EXISTS idx_durable_jobs_idemp ON durable_jobs(idempotency_key);
+
+-- 43. Venture Modules
+CREATE TABLE IF NOT EXISTS venture_modules (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    version VARCHAR(32) NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    description TEXT,
+    config_schema JSONB NOT NULL DEFAULT '{}'::jsonb,
+    supported_workflows JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 44. Venture Targets (Pipeline & Qualification)
+CREATE TABLE IF NOT EXISTS venture_targets (
+    id VARCHAR(64) PRIMARY KEY,
+    venture_id VARCHAR(64) NOT NULL REFERENCES venture_modules(id) ON DELETE CASCADE,
+    business_id VARCHAR(64) NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    qualification_status VARCHAR(32) NOT NULL DEFAULT 'QUALIFIED',
+    qualification_score NUMERIC(5,2) NOT NULL DEFAULT 0.00,
+    qualification_hypotheses JSONB NOT NULL DEFAULT '[]'::jsonb,
+    opportunity_signals JSONB NOT NULL DEFAULT '{}'::jsonb,
+    enriched_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (venture_id, business_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_venture_targets_status ON venture_targets(venture_id, qualification_status);
+CREATE INDEX IF NOT EXISTS idx_venture_targets_score ON venture_targets(venture_id, qualification_score DESC);
+
+-- 45. Outreach Campaigns
+CREATE TABLE IF NOT EXISTS outreach_campaigns (
+    id VARCHAR(64) PRIMARY KEY,
+    venture_id VARCHAR(64) NOT NULL REFERENCES venture_modules(id),
+    name VARCHAR(255) NOT NULL,
+    execution_mode VARCHAR(32) NOT NULL DEFAULT 'DRY_RUN',
+    authorized_channels JSONB NOT NULL DEFAULT '["EMAIL"]'::jsonb,
+    target_criteria JSONB NOT NULL DEFAULT '{}'::jsonb,
+    daily_send_cap INTEGER NOT NULL DEFAULT 50,
+    budget_cap_cad NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    sender_identity VARCHAR(255),
+    compliance_basis VARCHAR(64) NOT NULL DEFAULT 'CASL_B2B_RELEVANT',
+    approval_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    approved_by VARCHAR(64),
+    approved_at TIMESTAMPTZ,
+    kill_switch_active BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_campaigns_venture ON outreach_campaigns(venture_id, execution_mode);
+
+-- 46. Outreach Messages & Action Ledger
+CREATE TABLE IF NOT EXISTS outreach_messages (
+    id VARCHAR(64) PRIMARY KEY,
+    campaign_id VARCHAR(64) NOT NULL REFERENCES outreach_campaigns(id) ON DELETE CASCADE,
+    business_id VARCHAR(64) NOT NULL REFERENCES businesses(id),
+    contact_id VARCHAR(64) REFERENCES business_contacts(id),
+    channel VARCHAR(32) NOT NULL,
+    recipient_address VARCHAR(255) NOT NULL,
+    subject VARCHAR(255),
+    body_text TEXT NOT NULL,
+    is_dry_run BOOLEAN NOT NULL DEFAULT TRUE,
+    dispatch_status VARCHAR(32) NOT NULL DEFAULT 'SCHEDULED',
+    provider_message_id VARCHAR(128),
+    response_intent VARCHAR(64),
+    casl_exemption_record JSONB NOT NULL DEFAULT '{}'::jsonb,
+    dispatched_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_outreach_campaign_status ON outreach_messages(campaign_id, dispatch_status);
+CREATE INDEX IF NOT EXISTS idx_outreach_recipient ON outreach_messages(recipient_address);
+
+-- 47. Outreach Suppression Registry
+CREATE TABLE IF NOT EXISTS outreach_suppression (
+    id VARCHAR(64) PRIMARY KEY,
+    channel_type VARCHAR(32) NOT NULL,
+    channel_value VARCHAR(255) NOT NULL,
+    scope VARCHAR(32) NOT NULL DEFAULT 'GLOBAL',
+    campaign_id VARCHAR(64) REFERENCES outreach_campaigns(id),
+    reason VARCHAR(64) NOT NULL,
+    evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+    suppressed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (channel_type, channel_value, scope)
+);
+
+CREATE INDEX IF NOT EXISTS idx_suppression_lookup ON outreach_suppression(channel_type, channel_value);
+
+-- 48. Acuity Voice Jobs Gateway Contract
+CREATE TABLE IF NOT EXISTS acuity_voice_jobs (
+    id VARCHAR(64) PRIMARY KEY,
+    campaign_id VARCHAR(64) NOT NULL REFERENCES outreach_campaigns(id),
+    business_id VARCHAR(64) NOT NULL REFERENCES businesses(id),
+    target_phone VARCHAR(64) NOT NULL,
+    lead_name VARCHAR(128),
+    business_name VARCHAR(255) NOT NULL,
+    persona VARCHAR(64) NOT NULL DEFAULT 'COMMERCIAL_RESEARCHER',
+    status VARCHAR(32) NOT NULL DEFAULT 'STAGED',
+    disposition VARCHAR(64),
+    recording_ref VARCHAR(255),
+    transcript_summary TEXT,
+    regulatory_clearance JSONB NOT NULL DEFAULT '{"dncl_checked": false, "time_window_valid": true, "ai_disclosure_active": true}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_acuity_jobs_status ON acuity_voice_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_acuity_jobs_campaign ON acuity_voice_jobs(campaign_id);
+
 

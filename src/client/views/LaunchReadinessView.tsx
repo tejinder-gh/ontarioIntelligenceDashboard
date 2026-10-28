@@ -117,7 +117,18 @@ export const LaunchReadinessView: React.FC<LaunchReadinessViewProps> = ({ worksp
       const [nextCatalog, nextWorkspaces] = await Promise.all([getLaunchCatalog(), listLaunchWorkspaces()]);
       setCatalog(nextCatalog);
       setWorkspaces(nextWorkspaces);
-      const selected = (workspaceId && nextWorkspaces.find(item => item.id === workspaceId)) || nextWorkspaces[0];
+      let selected = (workspaceId && nextWorkspaces.find(item => item.id === workspaceId)) || nextWorkspaces[0];
+      if (!selected && workspaceId) {
+        try {
+          const directWs = await getLaunchWorkspace(workspaceId);
+          if (directWs) {
+            selected = directWs;
+            setWorkspaces(prev => [directWs, ...prev.filter(item => item.id !== directWs.id)]);
+          }
+        } catch {
+          // Fall through
+        }
+      }
       if (selected) {
         await loadWorkspace(selected.id, selected);
       } else {

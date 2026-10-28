@@ -15,7 +15,7 @@ export const StagedFunnelProgress: React.FC<StagedFunnelProgressProps> = ({ funn
           <div className="flex items-center gap-2">
             <Filter className="w-5 h-5 text-indigo-400" />
             <h3 className="text-base font-semibold text-slate-100">
-              Staged Geographic Investigation Funnel (Requirement 2)
+              Staged Geographic Investigation Funnel
             </h3>
           </div>
           <span className="text-xs font-mono px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded-full">

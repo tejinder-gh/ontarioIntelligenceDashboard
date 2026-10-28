@@ -8,6 +8,8 @@ export interface CategoryOperatingScenario {
   investmentCapital: number;
   workingCapital: number;
   targetUnitRevenue: number;
+  benchmarkDailyVolume?: number;
+  operationalDailyCapacity?: number;
   rationale: string;
 }
 
@@ -19,6 +21,9 @@ export interface CategoryProfile {
   volumeUnit: string;
   unitRevenueLabel: string;
   benchmarkUnitRevenue: number;
+  periodType?: 'DAY' | 'MONTH';
+  annualOperatingPeriods?: number;
+  operationalDailyCapacity?: number;
   cogsRatio: number;
   variableLaborRatio: number;
   channelOrCommissionRatio: number;
@@ -40,6 +45,9 @@ export const PIZZA_STORE_PROFILE: CategoryProfile = {
   volumeUnit: 'daily orders',
   unitRevenueLabel: 'Average Order Value (AOV)',
   benchmarkUnitRevenue: 28.5,
+  periodType: 'DAY',
+  annualOperatingPeriods: 360,
+  operationalDailyCapacity: 240,
   cogsRatio: 0.29,
   variableLaborRatio: 0.28,
   channelOrCommissionRatio: 0.12,
@@ -68,6 +76,8 @@ export const PIZZA_STORE_PROFILE: CategoryProfile = {
       investmentCapital: 195000,
       workingCapital: 35000,
       targetUnitRevenue: 28.5,
+      benchmarkDailyVolume: 65,
+      operationalDailyCapacity: 240,
       rationale: 'Minimizes front-of-house square footage (1,100–1,400 sqft) and fit-out capital while prioritizing 3.5 km delivery catchment density and digital ordering.'
     },
     {
@@ -78,6 +88,8 @@ export const PIZZA_STORE_PROFILE: CategoryProfile = {
       investmentCapital: 320000,
       workingCapital: 45000,
       targetUnitRevenue: 26.0,
+      benchmarkDailyVolume: 85,
+      operationalDailyCapacity: 260,
       rationale: 'Leverages established regional brand loyalty and standardized supply chains, balanced against franchise fee and 5.5% ongoing royalty burden.'
     },
     {
@@ -88,6 +100,8 @@ export const PIZZA_STORE_PROFILE: CategoryProfile = {
       investmentCapital: 275000,
       workingCapital: 50000,
       targetUnitRevenue: 34.0,
+      benchmarkDailyVolume: 80,
+      operationalDailyCapacity: 220,
       rationale: 'Targets affluent demographics and active daytime footfall with higher-margin beverage pairings, gourmet toppings, and dual lunch/dinner dayparts.'
     }
   ]
@@ -101,6 +115,9 @@ export const RETAIL_SHIPPING_COUNTER_PROFILE: CategoryProfile = {
   volumeUnit: 'daily shipments / parcel drop-offs',
   unitRevenueLabel: 'Average Transaction Value (Shipment / Service)',
   benchmarkUnitRevenue: 22.5,
+  periodType: 'DAY',
+  annualOperatingPeriods: 312,
+  operationalDailyCapacity: 350,
   cogsRatio: 0.22,
   variableLaborRatio: 0.26,
   channelOrCommissionRatio: 0.08,
@@ -129,6 +146,8 @@ export const RETAIL_SHIPPING_COUNTER_PROFILE: CategoryProfile = {
       investmentCapital: 175000,
       workingCapital: 35000,
       targetUnitRevenue: 22.5,
+      benchmarkDailyVolume: 90,
+      operationalDailyCapacity: 350,
       rationale: 'Multi-carrier relationships (Canpar, Purolator, DHL, FedEx) with custom crating, mailbox rentals, and print services.'
     },
     {
@@ -139,6 +158,8 @@ export const RETAIL_SHIPPING_COUNTER_PROFILE: CategoryProfile = {
       investmentCapital: 265000,
       workingCapital: 45000,
       targetUnitRevenue: 24.0,
+      benchmarkDailyVolume: 135,
+      operationalDailyCapacity: 400,
       rationale: 'National brand footprint (e.g. UPS Store archetype) with corporate carrier account agreements and national drop-off contracts.'
     }
   ]
@@ -204,6 +225,9 @@ export const CHILD_DAYCARE_PROFILE: CategoryProfile = {
   volumeUnit: 'licensed full-time children',
   unitRevenueLabel: 'Monthly Tuition per Child',
   benchmarkUnitRevenue: 1250.0,
+  periodType: 'MONTH',
+  annualOperatingPeriods: 12,
+  operationalDailyCapacity: 50,
   cogsRatio: 0.12,
   variableLaborRatio: 0.48,
   channelOrCommissionRatio: 0.02,
@@ -232,6 +256,8 @@ export const CHILD_DAYCARE_PROFILE: CategoryProfile = {
       investmentCapital: 380000,
       workingCapital: 70000,
       targetUnitRevenue: 1250.0,
+      benchmarkDailyVolume: 48,
+      operationalDailyCapacity: 50,
       rationale: 'Captures urgent infant/toddler waitlist demand with CWELCC subsidized funding integration.'
     },
     {
@@ -242,6 +268,8 @@ export const CHILD_DAYCARE_PROFILE: CategoryProfile = {
       investmentCapital: 520000,
       workingCapital: 85000,
       targetUnitRevenue: 1450.0,
+      benchmarkDailyVolume: 60,
+      operationalDailyCapacity: 64,
       rationale: 'Premium curriculum commanding above-average tuition and corporate employer partnership subsidies.'
     }
   ]

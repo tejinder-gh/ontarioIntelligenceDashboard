@@ -324,7 +324,7 @@ export const ComparableCitiesCard: React.FC<ComparableCitiesCardProps> = ({
           <div className="p-2.5 bg-slate-900/90 rounded-lg border border-amber-800/40 text-[11px] text-amber-200/90 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <strong>Analytical Integrity Warning (Mandate #36):</strong> Do not equate low business density with guaranteed commercial opportunity. Low density in {targetCity.name} may alternative reflect restrictive municipal zoning by-laws, elevated commercial retail net rents, specific suburban demographic age profiles, or out-of-city commuter shopping patterns.
+              <strong>Market Interpretation Note:</strong> Do not equate low business density with guaranteed commercial opportunity. Low density in {targetCity.name} may alternative reflect restrictive municipal zoning by-laws, elevated commercial retail net rents, specific suburban demographic age profiles, or out-of-city commuter shopping patterns.
             </div>
           </div>
         </div>

@@ -3,12 +3,14 @@ import { sql } from '../db/index.js';
 import {
   FinancialEconomicsSchema,
   type CandidateComparison,
+  type DecisionBrief,
   type DecisionEngineResult,
   type DecisionInquiry,
   type DecisionModel,
   type EvidenceRecordItem,
   type FinancialEconomics,
   type FunnelCandidate,
+  type RecommendationOutcome,
 } from './types.js';
 import type { MetricProvenance } from './provenance.js';
 import { buildDecisionModel } from './decision-modeler.js';
@@ -38,7 +40,144 @@ export async function runDecisionEngine(inquiry: DecisionInquiry): Promise<Decis
   const candidates = geographicFunnel.shortlistedCandidates;
 
   if (candidates.length === 0) {
-    throw new Error('No candidate locations satisfied the minimum demographic and commercial screening criteria.');
+    const outcome: RecommendationOutcome = 'DO_NOT_PROCEED';
+    const decisionBrief: DecisionBrief = {
+      recommendation: {
+        marketOrLocation: decisionModel.geographicScope,
+        resolutionTier: 'PROSPECTIVE_MARKET',
+        operatingFormat: decisionModel.format,
+        ownershipModel: decisionModel.ownership,
+        outcome,
+        summaryHeadline: `INSUFFICIENT EVIDENCE / NO QUALIFIED CANDIDATES: Zero candidate locations qualified in ${decisionModel.geographicScope} for ${decisionModel.categoryName}.`,
+        feasibilityGateNote: 'FEASIBILITY GATE FAILED: Candidate markets failed demographic density, income viability, or commercial lease affordability screening criteria. Demarcated fail-closed state strictly prevents un-screened property recommendation.'
+      },
+      whyThisLocation: [
+        `No candidate locations in ${decisionModel.geographicScope} satisfied the viability screening criteria.`,
+        'Preserving capital is recommended until search parameters or operating model constraints are broadened.'
+      ],
+      whyNotAlternatives: geographicFunnel.stages.screenedMarkets.map(m => ({
+        candidateName: m.name,
+        tradeOffReason: m.reason
+      })),
+      economics: {
+        requiredCapital: decisionModel.totalRequiredCapital,
+        breakEvenDailyOrders: decisionModel.minDailyOrdersNeeded,
+        breakEvenUnitsLabel: decisionModel.volumeUnit,
+        baseNetIncome: 0,
+        scenarioRanges: 'Unviable under current geographic or category constraints'
+      },
+      whatCouldMakeThisWrong: [
+        'Geographic filter strictly constrained to markets lacking necessary population threshold',
+        'Commercial lease asking rates or available space in target municipality do not support business model',
+        'Underlying demographic data may be unobserved for small non-census rural subdivisions'
+      ],
+      beforeCommitting: [
+        'Widen target geographic regions to adjacent Census Subdivisions',
+        'Review alternative operating formats (e.g. ghost kitchen or mobile delivery) to lower occupancy burden',
+        'Commission a localized foot-traffic intercept and traffic study before signing any commercial lease'
+      ],
+      sources: [
+        {
+          name: 'Statistics Canada Census Profile (2021)',
+          friendlyCode: 'DEM-CEN21',
+          coverage: 'Complete Ontario Census Subdivisions (CSDs)',
+          limitations: 'Official baseline updated quinquennially.'
+        }
+      ]
+    };
+
+    const emptyEconomics: FinancialEconomics = {
+      totalInitialCapital: decisionModel.totalRequiredCapital,
+      buildoutEquipmentCapEx: 0,
+      isAcquisition: false,
+      workingCapitalBuffer: decisionModel.workingCapital,
+      fundingGap: 0,
+      isFullyFunded: true,
+      breakEvenDailyOrders: decisionModel.minDailyOrdersNeeded,
+      breakEvenDailyUnits: decisionModel.minDailyOrdersNeeded,
+      breakEvenMonthlyRevenue: 0,
+      breakEvenFeasible: false,
+      marginWarning: 'No candidate passed geographic screening criteria.',
+      periodType: decisionModel.periodType || 'DAY',
+      annualOperatingPeriods: decisionModel.annualOperatingPeriods || 360,
+      bands: {
+        conservative: {
+          dailyOrders: 0, dailyUnitVolume: 0, unitName: decisionModel.volumeUnit,
+          annualRevenue: 0, foodCostCogs: 0, laborCost: 0, occupancyCostRent: 0,
+          deliveryCommissions: 0, operatingExpenses: 0, netOperatingIncome: 0,
+          ownerCashFlow: 0, paybackMonths: 999
+        },
+        baseCase: {
+          dailyOrders: 0, dailyUnitVolume: 0, unitName: decisionModel.volumeUnit,
+          annualRevenue: 0, foodCostCogs: 0, laborCost: 0, occupancyCostRent: 0,
+          deliveryCommissions: 0, operatingExpenses: 0, netOperatingIncome: 0,
+          ownerCashFlow: 0, paybackMonths: 999
+        },
+        optimistic: {
+          dailyOrders: 0, dailyUnitVolume: 0, unitName: decisionModel.volumeUnit,
+          annualRevenue: 0, foodCostCogs: 0, laborCost: 0, occupancyCostRent: 0,
+          deliveryCommissions: 0, operatingExpenses: 0, netOperatingIncome: 0,
+          ownerCashFlow: 0, paybackMonths: 999
+        }
+      }
+    };
+
+    const isUuid = (val: string | undefined): boolean => 
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+    const dbUserId: string | null = (inquiry.userId && isUuid(inquiry.userId)) ? inquiry.userId : null;
+
+    try {
+      await sql`
+        INSERT INTO decision_engine_runs (
+          id, engine_version, category_id, inquiry_text, operating_format, 
+          scenario_label, selected_candidate_id, recommendation_outcome,
+          decision_model_snapshot, funnel_snapshot, hypotheses_snapshot,
+          evidence_snapshot, alternatives_snapshot, sensitivity_snapshot,
+          financial_snapshot, decision_brief, workspace_id, user_id
+        ) VALUES (
+          ${runId},
+          ${ENGINE_VERSION},
+          ${decisionModel.categoryId},
+          ${inquiry.inquiry},
+          ${decisionModel.format},
+          ${activeScenario.label},
+          'NO_CANDIDATE_QUALIFIED',
+          ${outcome},
+          ${sql.json(decisionModel as any)},
+          ${sql.json(geographicFunnel as any)},
+          ${sql.json([])},
+          ${sql.json([])},
+          ${sql.json([])},
+          ${sql.json([])},
+          ${sql.json(emptyEconomics as any)},
+          ${sql.json(decisionBrief as any)},
+          ${workspaceId},
+          ${dbUserId}
+        );
+      `;
+    } catch (dbErr) {
+      console.warn('[DecisionEngine] Failed to persist unviable run to PostgreSQL:', dbErr);
+    }
+
+    return {
+      runId,
+      version: ENGINE_VERSION,
+      timestamp,
+      workspaceId,
+      userId,
+      decisionModel,
+      activeScenario,
+      geographicFunnel,
+      hypotheses: [],
+      evidenceLedger: [],
+      provenanceLedger: [],
+      rankedAlternatives: [],
+      financialEconomics: emptyEconomics,
+      sensitivityShocks: [],
+      switchingConditions: [],
+      materialUnknowns: [],
+      decisionBrief
+    };
   }
 
   const topCandidate = candidates[0]!;

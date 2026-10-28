@@ -103,7 +103,7 @@ export const DataCoverageCard: React.FC<DataCoverageCardProps> = ({ cityId, city
               </span>
             </div>
             <p className="text-xs text-slate-300 mt-0.5">
-              Strictly measures verified observed records. Prevents the platform from implying greater certainty than source evidence supports (Requirement 38).
+              Strictly measures verified observed records to ensure platform findings reflect empirical source evidence.
             </p>
           </div>
         </div>

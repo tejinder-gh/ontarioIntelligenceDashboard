@@ -46,7 +46,7 @@ export const HypothesesMatrixCard: React.FC<HypothesesMatrixCardProps> = ({ hypo
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-indigo-400" />
             <h3 className="text-base font-semibold text-slate-100">
-              Testable Business Hypotheses & Counter-Arguments (Requirement 3)
+              Testable Business Hypotheses & Counter-Arguments
             </h3>
           </div>
           <span className="text-xs text-slate-400">

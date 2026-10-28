@@ -43,9 +43,9 @@ export function generateDecisionBrief(
   } else if (!economics.breakEvenFeasible) {
     outcome = 'DO_NOT_PROCEED';
     capitalHeadlineReason = economics.marginWarning || 'Non-viable contribution margin';
-  } else if (economics.breakEvenDailyUnits > 250) {
+  } else if (economics.breakEvenDailyUnits > (economics.operationalCapacity?.unitCapacity ?? 250)) {
     outcome = 'DO_NOT_PROCEED';
-    capitalHeadlineReason = `Required break-even volume (${economics.breakEvenDailyUnits} ${unitLabel}/day) exceeds trade-area throughput ceiling`;
+    capitalHeadlineReason = `Required break-even volume (${economics.breakEvenDailyUnits} ${unitLabel}/${(economics.periodType || 'day').toLowerCase()}) exceeds operational capacity ceiling (${economics.operationalCapacity?.unitCapacity ?? 250})`;
   }
 
   const headline = outcome === 'PROCEED_WITH_VERIFICATION'

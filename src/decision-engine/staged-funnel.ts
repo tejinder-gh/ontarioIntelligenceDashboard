@@ -24,7 +24,10 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
 
   const minPopThreshold = model.categoryId === 'logistics_warehouse' ? 50000 : 35000;
   const targetPropertyType = model.categoryId === 'logistics_warehouse' ? 'INDUSTRIAL' : 'RETAIL_STRIP_PLAZA';
-  const hasAllowedGeos = Boolean(model.allowedGeographyIds && model.allowedGeographyIds.length > 0);
+  const hasAllowedGeos = model.allowedGeographyIds !== undefined;
+  const allowedGeos = (model.allowedGeographyIds && model.allowedGeographyIds.length > 0)
+    ? model.allowedGeographyIds
+    : ['CSD_UNMATCHED_FILTER'];
 
   // Stage 1 & 2: Screen Candidate Municipalities
   const candidateMarkets = await sql`
@@ -40,7 +43,7 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
     LEFT JOIN observations obs_inc ON g.id = obs_inc.geography_id AND obs_inc.metric_id = 'income_median_hh'
     LEFT JOIN commercial_real_estate cre ON g.id = cre.geography_id AND cre.property_type = ${targetPropertyType}
     WHERE g.geo_type = 'CSD' 
-      ${hasAllowedGeos ? sql`AND g.id = ANY(${model.allowedGeographyIds!})` : sql`AND g.population_2021 >= ${minPopThreshold}`}
+      ${hasAllowedGeos ? sql`AND g.id = ANY(${allowedGeos})` : sql`AND g.population_2021 >= ${minPopThreshold}`}
     ORDER BY g.population_2021 DESC
     ${hasAllowedGeos ? sql`` : sql`LIMIT 20`};
   `;
@@ -67,8 +70,10 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
       totalMarketsScreened: candidateMarkets.length,
       screenedExclusionsCount: candidateMarkets.length,
       stoppingCriteria: [
-        'All evaluated candidate markets failed viability screening criteria; zero candidate properties qualified.',
-        'Demarcated fail-closed state prevents un-screened property recommendation.'
+        hasAllowedGeos
+          ? `Target geography filter (${model.geographicScope}) contains no qualifying Ontario Census Subdivisions; evaluated candidate markets failed viability screening criteria.`
+          : 'All evaluated candidate markets failed viability screening criteria; zero candidate properties qualified.',
+        'Demarcated fail-closed state strictly prevents un-screened property recommendation.'
       ],
       stages: { province: { name: 'Ontario', totalCsds }, screenedMarkets: screenedMarkets.slice(0, 10), neighbourhoodNodes: [], candidateProperties: [] },
       shortlistedCandidates: []
@@ -93,10 +98,15 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
   }));
 
   if (neighbourhoodNodes.length === 0) {
-    neighbourhoodNodes.push(
-      { id: 'node_burl_brant', name: 'Downtown Brant Street Corridor', city: 'Burlington', anchorType: 'Mixed-Use Commercial Node' },
-      { id: 'node_milton_main', name: 'Main Street Growth Corridor', city: 'Milton', anchorType: 'Arterial Commercial Node' }
-    );
+    const passedMarkets = candidateMarkets.filter(m => passedCityIds.includes(m.id as string));
+    for (const m of passedMarkets.slice(0, 3)) {
+      neighbourhoodNodes.push({
+        id: `node_${m.id}_core`,
+        name: `${m.name} Commercial Corridor`,
+        city: m.name as string,
+        anchorType: 'Primary Commercial Node'
+      });
+    }
   }
 
   // Stage 4: Query Real Commercial Properties strictly in passed cities
@@ -113,6 +123,7 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
       bl.square_footage,
       bl.is_franchise,
       bl.status as listing_status,
+      bl.is_demo_fixture,
       g.name as city_name,
       g.population_2021,
       COALESCE(g.population_growth_pct, 0)::numeric as pop_growth,
@@ -185,7 +196,12 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
         askingPrice: row.asking_price ? Number(row.asking_price) : undefined,
         monthlyRent,
         squareFootage: sqft,
-        isFranchiseListing: Boolean(row.is_franchise)
+        isFranchiseListing: Boolean(row.is_franchise),
+        isDemoFixture: Boolean(row.is_demo_fixture),
+        scoringVersion: scoreBreakdown.scorerVersion,
+        scoreContributions: scoreBreakdown.scoreContributions,
+        tradeOffs: scoreBreakdown.tradeOffs,
+        missingEvidence: scoreBreakdown.missingEvidence
       };
     });
 
@@ -246,7 +262,11 @@ export async function executeStagedFunnel(model: DecisionModel): Promise<Geograp
         zoningFeasibilityStatus: 'UNVERIFIED_PENDING_REVIEW',
         buildingSuitabilityStatus: 'UNVERIFIED_MEP_CHECK_NEEDED',
         monthlyRent,
-        squareFootage: targetSqft
+        squareFootage: targetSqft,
+        scoringVersion: scoreBreakdown.scorerVersion,
+        scoreContributions: scoreBreakdown.scoreContributions,
+        tradeOffs: scoreBreakdown.tradeOffs,
+        missingEvidence: scoreBreakdown.missingEvidence
       };
     });
 

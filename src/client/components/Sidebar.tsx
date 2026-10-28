@@ -21,7 +21,8 @@ import {
   MapPin,
   ChevronRight,
   ShieldCheck,
-  TrendingUp
+  TrendingUp,
+  Search
 } from 'lucide-react';
 import { ActiveTab, GeographySummary } from '../types/index.js';
 import { CitySearch } from './CitySearch.js';
@@ -50,6 +51,16 @@ interface NavCategory {
 }
 
 const NAV_CATEGORIES: NavCategory[] = [
+  {
+    key: 'national_intelligence_os',
+    defaultTitle: 'National Business & Ventures',
+    items: [
+      { id: 'intelligence_explorer', defaultLabel: 'Intelligence Explorer', icon: <Search className="w-4 h-4 text-cyan-400" />, defaultBadge: '632+ Live' },
+      { id: 'source_operations', defaultLabel: 'Source Operations', icon: <Database className="w-4 h-4 text-emerald-400" />, defaultBadge: 'Active Sync' },
+      { id: 'marketing_command_center', defaultLabel: 'Marketing Command Center', icon: <Target className="w-4 h-4 text-indigo-400" />, defaultBadge: 'CASL Safe' },
+      { id: 'venture_workspaces', defaultLabel: 'Venture Workspaces', icon: <Briefcase className="w-4 h-4 text-amber-400" /> }
+    ]
+  },
   {
     key: 'executive_strategy',
     defaultTitle: 'Executive & Strategy',

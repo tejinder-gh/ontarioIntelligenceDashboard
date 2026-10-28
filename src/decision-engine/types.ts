@@ -7,7 +7,7 @@ export type OwnerInvolvement = 'FULL_TIME_OPERATOR' | 'SEMI_ABSENTEE' | 'INVESTO
 export type ResolutionTier = 'PROSPECTIVE_MARKET' | 'PROMISING_NEIGHBOURHOOD' | 'POTENTIALLY_SUITABLE_PROPERTY' | 'FEASIBILITY_VERIFIED_PROPERTY';
 export type EvidenceClassification = 'OBSERVED' | 'AUDITED' | 'BENCHMARK' | 'DERIVED' | 'UNAVAILABLE' | 'UNVERIFIED_ASSUMPTION';
 export type HypothesisStatus = 'SUPPORTED' | 'CONTRADICTED' | 'INCONCLUSIVE';
-export type RecommendationOutcome = 'PROCEED_WITH_VERIFICATION' | 'DO_NOT_PROCEED' | 'INVESTIGATE_ALTERNATIVE';
+export type RecommendationOutcome = 'PROCEED_WITH_VERIFICATION' | 'DO_NOT_PROCEED' | 'INVESTIGATE_ALTERNATIVE' | 'INSUFFICIENT_EVIDENCE';
 export type FeasibilityGateStatus = 'VERIFIED_PERMITTED' | 'UNVERIFIED_PENDING_REVIEW' | 'DISALLOWED';
 
 export const DecisionInquirySchema = z.object({
@@ -47,6 +47,11 @@ export interface DecisionModel {
   targetTimelineMonths: number;
   desiredAnnualIncome: number;
   minDailyOrdersNeeded: number;
+  benchmarkDailyVolume?: number;
+  operationalDailyCapacity?: number;
+  periodType?: 'DAY' | 'MONTH';
+  annualOperatingPeriods?: number;
+  requiredDailyUnitsForGoal?: number;
   minCatchmentHouseholds: number;
   maxGrossRentPctRevenue: number;
   unspecifiedPreferencesExplored: string[];
@@ -62,6 +67,8 @@ export interface OperatingScenario {
   investmentCapital: number;
   workingCapital: number;
   targetAov: number;
+  benchmarkDailyVolume?: number;
+  operationalDailyCapacity?: number;
   rationale: string;
 }
 
@@ -95,6 +102,11 @@ export interface FunnelCandidate {
   monthlyRent?: number;
   squareFootage?: number;
   isFranchiseListing?: boolean;
+  isDemoFixture?: boolean;
+  scoringVersion?: string;
+  scoreContributions?: Record<string, number>;
+  tradeOffs?: string[];
+  missingEvidence?: string[];
 }
 
 export interface GeographicFunnelResult {
@@ -136,6 +148,8 @@ export interface EvidenceRecordItem {
 export interface FinancialBand {
   dailyOrders: number;
   dailyUnitVolume: number;
+  periodUnitVolume?: number;
+  periodType?: 'DAY' | 'MONTH';
   unitName: string;
   annualRevenue: number;
   foodCostCogs: number;
@@ -151,6 +165,8 @@ export interface FinancialBand {
 export const FinancialBandSchema = z.object({
   dailyOrders: z.number(),
   dailyUnitVolume: z.number(),
+  periodUnitVolume: z.number().optional(),
+  periodType: z.enum(['DAY', 'MONTH']).optional(),
   unitName: z.string(),
   annualRevenue: z.number(),
   foodCostCogs: z.number(),
@@ -162,6 +178,38 @@ export const FinancialBandSchema = z.object({
   ownerCashFlow: z.number(),
   paybackMonths: z.number()
 });
+
+export const OperationalCapacitySchema = z.object({
+  unitCapacity: z.number(),
+  periodType: z.enum(['DAY', 'MONTH']),
+  annualOperatingPeriods: z.number(),
+  capacityUtilizationPct: z.number(),
+  capacityCeilingExceeded: z.boolean(),
+  notes: z.string().optional()
+});
+
+export type OperationalCapacity = z.infer<typeof OperationalCapacitySchema>;
+
+export const RequiredSalesForGoalSchema = z.object({
+  targetAnnualDiscretionaryIncome: z.number(),
+  requiredUnitsPerPeriod: z.number(),
+  requiredAnnualRevenue: z.number(),
+  goalVolumeGap: z.number(),
+  isGoalAchievableWithinCapacity: z.boolean(),
+  interpretation: z.string()
+});
+
+export type RequiredSalesForGoal = z.infer<typeof RequiredSalesForGoalSchema>;
+
+export const RequiredMarketCaptureSchema = z.object({
+  annualDemandUnits: z.number(),
+  periodDemandUnits: z.number(),
+  tradeAreaExpenditurePool: z.number().optional(),
+  estimatedMarketSharePct: z.number(),
+  validationNeeded: z.string()
+});
+
+export type RequiredMarketCapture = z.infer<typeof RequiredMarketCaptureSchema>;
 
 export const FinancialEconomicsSchema = z.object({
   totalInitialCapital: z.number().positive(),
@@ -176,6 +224,11 @@ export const FinancialEconomicsSchema = z.object({
   breakEvenMonthlyRevenue: z.number(),
   breakEvenFeasible: z.boolean(),
   marginWarning: z.string().optional(),
+  periodType: z.enum(['DAY', 'MONTH']).default('DAY'),
+  annualOperatingPeriods: z.number().default(360),
+  operationalCapacity: OperationalCapacitySchema.optional(),
+  requiredSalesForIncomeGoal: RequiredSalesForGoalSchema.optional(),
+  requiredMarketCapture: RequiredMarketCaptureSchema.optional(),
   bands: z.object({
     conservative: FinancialBandSchema,
     baseCase: FinancialBandSchema,

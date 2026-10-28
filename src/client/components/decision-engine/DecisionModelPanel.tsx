@@ -70,7 +70,7 @@ export const DecisionModelPanel: React.FC<DecisionModelPanelProps> = ({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-purple-400" />
-            <h4 className="text-sm font-semibold text-slate-200">Operating Scenarios (Requirement 1)</h4>
+            <h4 className="text-sm font-semibold text-slate-200">Operating Scenarios</h4>
           </div>
           <span className="text-xs text-slate-400 font-mono">Explicitly Labelled Parameter Sets</span>
         </div>

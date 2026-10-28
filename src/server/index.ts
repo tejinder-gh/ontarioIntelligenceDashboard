@@ -2,6 +2,8 @@ import { app } from './app.js';
 import { testConnection, closeDatabase } from '../db/index.js';
 import { startCron, stopCron } from './cron.js';
 import { backfillLegacyWorkspaceMemberships } from './workspace-auth.js';
+import { backfillLegacyLaunchWorkspaceTokens } from '../launch/repository.js';
+import { ventureRegistry } from '../ventures/registry.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -14,6 +16,12 @@ async function startServer() {
 
   // Backfill legacy decision engine runs into workspace_memberships
   await backfillLegacyWorkspaceMemberships();
+
+  // Backfill legacy launch workspaces with secure token hashes
+  await backfillLegacyLaunchWorkspaceTokens();
+
+  // Sync registered Venture OS modules with DB
+  await ventureRegistry.syncWithDatabase();
 
   const server = app.listen(PORT, '127.0.0.1', () => {
     console.log(`================================================================`);

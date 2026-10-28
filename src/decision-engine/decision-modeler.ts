@@ -112,6 +112,10 @@ export function resolveGeographyIds(regions: string[]): string[] {
     const mapped = MUNICIPALITY_GEO_ID_MAP[trimmed.toLowerCase()];
     if (mapped) {
       ids.push(mapped);
+    } else {
+      // Direct canonical format derivation for any Ontario CSD
+      const derived = `CSD_${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+      ids.push(derived);
     }
   }
   return Array.from(new Set(ids));
@@ -149,6 +153,8 @@ export function buildDecisionModel(input: DecisionInquiry): {
     investmentCapital: s.investmentCapital,
     workingCapital: s.workingCapital,
     targetAov: s.targetUnitRevenue,
+    benchmarkDailyVolume: s.benchmarkDailyVolume,
+    operationalDailyCapacity: s.operationalDailyCapacity,
     rationale: s.rationale
   }));
 
@@ -209,16 +215,24 @@ export function buildDecisionModel(input: DecisionInquiry): {
     ? targetRegions.join(', ')
     : 'Ontario Growth Corridors (GTA West & Golden Horseshoe Core)';
 
-  // Deterministic Break-Even Unit Volume
-  const monthlyProfitTarget = desiredAnnualIncome / 12;
+  const periodType: 'DAY' | 'MONTH' = profile.periodType ?? 'DAY';
+  const annualOperatingPeriods = profile.annualOperatingPeriods ?? (periodType === 'MONTH' ? 12 : 360);
+  const benchmarkDailyVolume = selectedScenario.benchmarkDailyVolume ?? (periodType === 'MONTH' ? 48 : 70);
+  const operationalDailyCapacity = selectedScenario.operationalDailyCapacity ?? profile.operationalDailyCapacity ?? (periodType === 'MONTH' ? 50 : 250);
+
+  // Deterministic Required Unit Volume to achieve desired income goal (distinct from market demand)
+  const periodProfitTarget = desiredAnnualIncome / annualOperatingPeriods;
   const variableMarginRatio = Math.max(0.05, 1 - profile.cogsRatio - profile.variableLaborRatio - profile.channelOrCommissionRatio);
   const contributionPerUnit = targetPricePointAov * variableMarginRatio;
-  const minDailyOrdersNeeded = contributionPerUnit > 0
-    ? Math.ceil((profile.fixedMonthlyOverhead + 4800 + monthlyProfitTarget) / (contributionPerUnit * 30))
+  const periodFixedOverhead = profile.fixedMonthlyOverhead * (12 / annualOperatingPeriods);
+  const periodRentEstimate = 4800 * (12 / annualOperatingPeriods);
+  const requiredDailyUnitsForGoal = contributionPerUnit > 0
+    ? Math.ceil((periodFixedOverhead + periodRentEstimate + periodProfitTarget) / contributionPerUnit)
     : 999;
+  const minDailyOrdersNeeded = requiredDailyUnitsForGoal;
 
   // Minimum Catchment Scale based on category archetype
-  const annualUnitsNeeded = minDailyOrdersNeeded * 365;
+  const annualUnitsNeeded = (benchmarkDailyVolume || minDailyOrdersNeeded) * annualOperatingPeriods;
   const isHeavyLogistics = categoryId === 'logistics_warehouse';
   const penetrationRate = isHeavyLogistics ? 0.08 : 0.04;
   const annualFrequency = isHeavyLogistics ? 18.0 : 4.5;
@@ -255,6 +269,11 @@ export function buildDecisionModel(input: DecisionInquiry): {
     targetTimelineMonths,
     desiredAnnualIncome,
     minDailyOrdersNeeded,
+    benchmarkDailyVolume,
+    operationalDailyCapacity,
+    periodType,
+    annualOperatingPeriods,
+    requiredDailyUnitsForGoal,
     minCatchmentHouseholds,
     maxGrossRentPctRevenue,
     unspecifiedPreferencesExplored: unspecifiedPreferences,
@@ -276,5 +295,7 @@ export const OPERATING_SCENARIOS: OperatingScenario[] = getCategoryProfile('pizz
   investmentCapital: s.investmentCapital,
   workingCapital: s.workingCapital,
   targetAov: s.targetUnitRevenue,
+  benchmarkDailyVolume: s.benchmarkDailyVolume,
+  operationalDailyCapacity: s.operationalDailyCapacity,
   rationale: s.rationale
 }));

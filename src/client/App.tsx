@@ -20,6 +20,10 @@ const MethodologySourcesView = lazy(() => import('./views/MethodologySourcesView
 const LaunchReadinessView = lazy(() => import('./views/LaunchReadinessView.js').then(m => ({ default: m.LaunchReadinessView })));
 const VentureCapitalView = lazy(() => import('./views/VentureCapitalView.js').then(m => ({ default: m.VentureCapitalView })));
 const DecisionEngineView = lazy(() => import('./views/DecisionEngineView.js').then(m => ({ default: m.DecisionEngineView })));
+const IntelligenceExplorerView = lazy(() => import('./views/IntelligenceExplorerView.js').then(m => ({ default: m.IntelligenceExplorerView })));
+const SourceOperationsView = lazy(() => import('./views/SourceOperationsView.js').then(m => ({ default: m.SourceOperationsView })));
+const MarketingCommandCenterView = lazy(() => import('./views/MarketingCommandCenterView.js').then(m => ({ default: m.MarketingCommandCenterView })));
+const VentureWorkspacesView = lazy(() => import('./views/VentureWorkspacesView.js').then(m => ({ default: m.VentureWorkspacesView })));
 import { 
   X, 
   Layers, 
@@ -60,6 +64,10 @@ const TAB_TO_SLUG: Record<ActiveTab, string> = {
   launch_readiness: 'launch-readiness',
   venture_capital: 'venture-capital',
   decision_engine: 'decision-engine',
+  intelligence_explorer: 'intelligence-explorer',
+  source_operations: 'source-operations',
+  marketing_command_center: 'marketing-center',
+  venture_workspaces: 'venture-workspaces',
   methodology_sources: 'sources'
 };
 
@@ -96,6 +104,12 @@ const SLUG_TO_TAB: Record<string, ActiveTab> = {
   'decision-engine': 'decision_engine',
   engine: 'decision_engine',
   decision: 'decision_engine',
+  'intelligence-explorer': 'intelligence_explorer',
+  explorer_biz: 'intelligence_explorer',
+  'source-operations': 'source_operations',
+  'marketing-center': 'marketing_command_center',
+  marketing: 'marketing_command_center',
+  'venture-workspaces': 'venture_workspaces',
   sources: 'methodology_sources',
   methodology: 'methodology_sources'
 };
@@ -194,8 +208,20 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const handleOpenLogin = () => setIsLoginOpen(true);
+    const handleOpenLaunchWorkspace = (e: Event) => {
+      const customEvent = e as CustomEvent<{ workspaceId: string }>;
+      if (customEvent.detail?.workspaceId) {
+        setLaunchWorkspaceId(customEvent.detail.workspaceId);
+        setActiveTab('launch_readiness');
+        window.history.pushState({}, '', `/launch_readiness/${customEvent.detail.workspaceId}`);
+      }
+    };
     window.addEventListener('open-login-modal', handleOpenLogin);
-    return () => window.removeEventListener('open-login-modal', handleOpenLogin);
+    window.addEventListener('open-launch-workspace', handleOpenLaunchWorkspace);
+    return () => {
+      window.removeEventListener('open-login-modal', handleOpenLogin);
+      window.removeEventListener('open-launch-workspace', handleOpenLaunchWorkspace);
+    };
   }, []);
 
   const handleSignOut = () => {
@@ -589,6 +615,18 @@ export const App: React.FC = () => {
             )}
             {activeTab === 'decision_engine' && (
               <DecisionEngineView />
+            )}
+            {activeTab === 'intelligence_explorer' && (
+              <IntelligenceExplorerView />
+            )}
+            {activeTab === 'source_operations' && (
+              <SourceOperationsView />
+            )}
+            {activeTab === 'marketing_command_center' && (
+              <MarketingCommandCenterView />
+            )}
+            {activeTab === 'venture_workspaces' && (
+              <VentureWorkspacesView />
             )}
             {activeTab === 'methodology_sources' && (
               <MethodologySourcesView />

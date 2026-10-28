@@ -23,6 +23,8 @@ export function runSensitivityAnalysis(
   const annualRent = economics.bands.baseCase.occupancyCostRent;
   const annualRev = economics.bands.baseCase.annualRevenue;
   const unitLabel = model.volumeUnit || profile.volumeUnit;
+  const periodType: 'DAY' | 'MONTH' = model.periodType || profile.periodType || 'DAY';
+  const periods = model.annualOperatingPeriods || profile.annualOperatingPeriods || (periodType === 'MONTH' ? 12 : 360);
   const isIndustrial = model.categoryId === 'logistics_warehouse';
 
   const isFranchise = model.ownership === 'FRANCHISE';
@@ -42,14 +44,14 @@ export function runSensitivityAnalysis(
   const netAfterRentShock = baseNet - shockedRentDelta;
   const shockedFixedCosts = fixedCosts + shockedRentDelta;
   const rentShockBreakEven = contributionPerUnit > 0
-    ? Math.ceil(shockedFixedCosts / (360 * contributionPerUnit))
+    ? Math.ceil(shockedFixedCosts / (periods * contributionPerUnit))
     : baseBreakEvenUnits;
   
   const rentShock: SensitivityShock = {
     parameter: isIndustrial ? 'Industrial Net Lease + TMI' : 'Commercial Retail Gross Lease Rate',
     shockApplied: '+20% increase in base rent or municipal property tax / CAM escalation',
-    baseMetric: `$${Math.round(annualRent).toLocaleString()}/yr (${baseBreakEvenUnits} ${unitLabel}/day break-even)`,
-    shockedMetric: `$${Math.round(annualRent * 1.2).toLocaleString()}/yr (${rentShockBreakEven} ${unitLabel}/day break-even, -$${Math.round(shockedRentDelta).toLocaleString()} net cash flow)`,
+    baseMetric: `$${Math.round(annualRent).toLocaleString()}/yr (${baseBreakEvenUnits} ${unitLabel}/${periodType.toLowerCase()} break-even)`,
+    shockedMetric: `$${Math.round(annualRent * 1.2).toLocaleString()}/yr (${rentShockBreakEven} ${unitLabel}/${periodType.toLowerCase()} break-even, -$${Math.round(shockedRentDelta).toLocaleString()} net cash flow)`,
     impactOnViability: netAfterRentShock > 35000 
       ? 'Remains financially viable; operator cash flow reduced but comfortably covers debt service and operations.' 
       : 'Erodes safety buffer; requires active lease cap negotiation before signing offer to lease.',
@@ -59,12 +61,12 @@ export function runSensitivityAnalysis(
   // 2. Volume Demand Ramp Shock: -25% Slower Initial Volume (unified with royalties & investor fees)
   const baseDailyOrders = economics.bands.baseCase.dailyUnitVolume;
   const shockedDailyOrders = Math.round(baseDailyOrders * 0.75);
-  const shockedSalesNet = (shockedDailyOrders * 360 * contributionPerUnit) - fixedCosts;
+  const shockedSalesNet = (shockedDailyOrders * periods * contributionPerUnit) - fixedCosts;
   const volumeShock: SensitivityShock = {
     parameter: 'First-Year Customer Ramp / Volume',
     shockApplied: `-25% lower transaction throughput than modelled base case`,
-    baseMetric: `${baseDailyOrders} ${unitLabel}/day ($${baseNet.toLocaleString()} net)`,
-    shockedMetric: `${shockedDailyOrders} ${unitLabel}/day ($${Math.round(shockedSalesNet).toLocaleString()} net)`,
+    baseMetric: `${baseDailyOrders} ${unitLabel}/${periodType.toLowerCase()} ($${baseNet.toLocaleString()} net)`,
+    shockedMetric: `${shockedDailyOrders} ${unitLabel}/${periodType.toLowerCase()} ($${Math.round(shockedSalesNet).toLocaleString()} net)`,
     impactOnViability: shockedSalesNet > 0 
       ? 'Survives initial ramp without cash call; working capital buffer covers early monthly cash flow deficit.' 
       : `Deficit requires drawing from working capital ($${model.workingCapital.toLocaleString()} reserves sustain approx ${Math.max(1, Math.round((model.workingCapital / Math.abs(shockedSalesNet || 1)) * 12))} months runway).`,
@@ -131,12 +133,12 @@ export function runSensitivityAnalysis(
     });
 
     // 2. Exact mathematical transaction volume switching threshold: Net_1(V*) = Net_2
-    const thresholdDailyVolume = Math.max(0, Math.round((fixedCosts + runnerBaseNet) / (360 * aov * variableMarginRatio)));
+    const thresholdDailyVolume = Math.max(0, Math.round((fixedCosts + runnerBaseNet) / (periods * aov * variableMarginRatio)));
 
     switchingConditions.push({
-      conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) ranks higher if ${topCandidate.name}'s daily transaction volume drops below ${thresholdDailyVolume} ${unitLabel}/day.`,
-      formulaTrigger: `Daily Volume < ${thresholdDailyVolume} ${unitLabel}/day (Net cash flow falls below ${runnerUpCandidate.name}'s baseline of $${Math.round(runnerBaseNet).toLocaleString()}/yr)`,
-      switchingThresholdValue: `${thresholdDailyVolume} ${unitLabel}/day`,
+      conditionStatement: `${runnerUpCandidate.name} (${runnerUpCandidate.city}) achieves net operating income parity if ${topCandidate.name}'s transaction volume drops below ${thresholdDailyVolume} ${unitLabel}/${periodType.toLowerCase()} (profit crossover). Note: Composite multi-factor ranking considers foot traffic and demographics in addition to pure cash flow.`,
+      formulaTrigger: `Operating Volume < ${thresholdDailyVolume} ${unitLabel}/${periodType.toLowerCase()} (Net cash flow falls below ${runnerUpCandidate.name}'s baseline of $${Math.round(runnerBaseNet).toLocaleString()}/yr)`,
+      switchingThresholdValue: `${thresholdDailyVolume} ${unitLabel}/${periodType.toLowerCase()}`,
       alternativeTarget: runnerUpCandidate.name
     });
   } else {
@@ -180,6 +182,7 @@ export function verifySwitchingThresholds(
   const annualRent = topEconomics.bands.baseCase.occupancyCostRent;
   const effectiveRentSqft = annualRent / Math.max(1, topSqft);
   const topFixedCosts = annualRent + (profile.fixedMonthlyOverhead * 12) + investorManagementFeeAnnual;
+  const periods = model.annualOperatingPeriods || profile.annualOperatingPeriods || ((model.periodType || profile.periodType) === 'MONTH' ? 12 : 360);
 
   const allowableRentDelta = (topBaseNet - runnerNet) / Math.max(1, topSqft);
   const thresholdRentSqft = effectiveRentSqft + allowableRentDelta;
@@ -194,9 +197,9 @@ export function verifySwitchingThresholds(
   const shockedRentEconomics = calculateFinancialEconomics(shockedRentCandidate, model);
   const topNetAtRentThreshold = shockedRentEconomics.bands.baseCase.netOperatingIncome;
 
-  const exactVolume = (topFixedCosts + runnerNet) / (360 * aov * contributionMarginRatio);
+  const exactVolume = (topFixedCosts + runnerNet) / (periods * aov * contributionMarginRatio);
   const thresholdDailyVolume = Math.round(exactVolume);
-  const topNetAtVolumeThreshold = Math.round((exactVolume * 360 * aov * contributionMarginRatio) - topFixedCosts);
+  const topNetAtVolumeThreshold = Math.round((exactVolume * periods * aov * contributionMarginRatio) - topFixedCosts);
 
   return {
     thresholdRentSqft,

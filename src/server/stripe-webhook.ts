@@ -35,8 +35,9 @@ export async function handleStripeWebhook(req: Request, res: Response) {
     const customerEmail = session.customer_details?.email || session.customer_email;
     const cityId = session.metadata?.cityId;
     const categoryId = session.metadata?.categoryId;
-    const amountTotal = session.amount_total || 19900;
-    const paymentStatus = session.payment_status || 'paid';
+    const amountTotal = session.amount_total;
+    const paymentStatus = session.payment_status;
+    const currency = (session.currency || 'cad').toLowerCase();
     const sessionId = session.id;
 
     if (!customerEmail || !cityId || !categoryId) {
@@ -49,8 +50,47 @@ export async function handleStripeWebhook(req: Request, res: Response) {
       return res.status(400).json({ error: 'Missing required metadata or customer email' });
     }
 
+    // 1. Strict Payment State, Currency, and Amount Verification
+    if (paymentStatus !== 'paid') {
+      console.warn(`[Stripe Webhook] Session ${sessionId} payment_status is '${paymentStatus}' (not 'paid'); deferring fulfillment`);
+      await sql`
+        INSERT INTO dossier_orders (
+          stripe_session_id, customer_email, email, city_id, category_id,
+          amount_total_cad, amount_cents, currency, payment_status, status, fulfilled_at
+        ) VALUES (
+          ${sessionId}, ${customerEmail}, ${customerEmail}, ${cityId}, ${categoryId},
+          ${amountTotal || 0}, ${amountTotal || 0}, ${currency}, ${paymentStatus || 'unpaid'}, 'UNPAID_PENDING', NULL
+        )
+        ON CONFLICT (stripe_session_id) DO UPDATE SET
+          payment_status = EXCLUDED.payment_status,
+          status = EXCLUDED.status,
+          updated_at = NOW();
+      `;
+      return res.json({ received: true, fulfilled: false, reason: `Payment status is ${paymentStatus}` });
+    }
+
+    if (currency !== 'cad') {
+      console.error(`[Stripe Webhook] Unsupported currency '${currency}'; only CAD is supported`);
+      return res.status(400).json({ error: `Unsupported currency: ${currency}` });
+    }
+
+    if (!amountTotal || amountTotal < 10000) {
+      console.error(`[Stripe Webhook] Invalid amount_total '${amountTotal}'; expected 19900 cents`);
+      return res.status(400).json({ error: 'Invalid order amount' });
+    }
+
     try {
-      // 1. Record order in database
+      // 2. Exactly-Once Delivery Check: Prevent duplicate deliveries on webhook retries
+      const existing = await sql<{ id: string; fulfilled_at: Date | null }[]>`
+        SELECT id, fulfilled_at FROM dossier_orders WHERE stripe_session_id = ${sessionId};
+      `;
+
+      if (existing.length > 0 && existing[0]?.fulfilled_at) {
+        console.log(`[Stripe Webhook] Session ${sessionId} already fulfilled at ${existing[0].fulfilled_at}; avoiding duplicate email dispatch`);
+        return res.json({ received: true, orderId: existing[0].id, alreadyFulfilled: true, fulfilled: true });
+      }
+
+      // 3. Record order in database
       const [order] = await sql<{ id: string }[]>`
         INSERT INTO dossier_orders (
           stripe_session_id,
@@ -74,28 +114,38 @@ export async function handleStripeWebhook(req: Request, res: Response) {
           ${amountTotal},
           'cad',
           ${paymentStatus},
-          ${paymentStatus},
+          'PROCESSING',
           NULL
         )
         ON CONFLICT (stripe_session_id)
         DO UPDATE SET
           payment_status = EXCLUDED.payment_status,
-          status = EXCLUDED.status,
+          status = 'PROCESSING',
           updated_at = NOW()
         RETURNING id;
       `;
 
-      // 2. Dispatch dossier fulfillment email
+      // 4. Dispatch dossier fulfillment email
       const emailSent = await sendDossierEmail(customerEmail, cityId, categoryId);
 
-      // 3. If email dispatched successfully, mark fulfilled_at
+      // 5. If email dispatched successfully, mark fulfilled_at atomically
       if (emailSent && order?.id) {
         await sql`
           UPDATE dossier_orders
-          SET fulfilled_at = NOW()
+          SET fulfilled_at = NOW(), status = 'FULFILLED', updated_at = NOW()
           WHERE id = ${order.id};
         `;
         console.log(`[Stripe Webhook] Order #${order.id} fulfilled and delivered to ${customerEmail}`);
+        return res.json({ received: true, orderId: order.id, fulfilled: true });
+      } else if (order?.id) {
+        // Persist failure for retry queue
+        await sql`
+          UPDATE dossier_orders
+          SET status = 'FAILED_RETRY_QUEUED', updated_at = NOW()
+          WHERE id = ${order.id};
+        `;
+        console.error(`[Stripe Webhook] Email delivery failed for order #${order.id}; queued for retry`);
+        return res.status(502).json({ error: 'Fulfillment email dispatch failed; queued for retry', orderId: order.id });
       }
 
       return res.json({ received: true, orderId: order?.id, fulfilled: emailSent });

@@ -1,11 +1,24 @@
 import { Resend } from 'resend';
 
 export const APP_BASE_URL = (process.env.APP_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+export const EMAIL_SENDER_DOMAIN = process.env.EMAIL_SENDER_DOMAIN || 'ontario-intelligence.ca';
 
 const resendApiKey = process.env.RESEND_API_KEY || 're_test_12345';
 const resend = new Resend(resendApiKey);
 
+export function validateProductionEmailConfig(): void {
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.startsWith('re_test_') || process.env.RESEND_API_KEY === 're_mock_key_for_development') {
+      throw new Error('[Production Security] RESEND_API_KEY must be a valid live production credential in production mode');
+    }
+    if (EMAIL_SENDER_DOMAIN.endsWith('.example.com') || EMAIL_SENDER_DOMAIN === 'example.com') {
+      throw new Error('[Production Security] EMAIL_SENDER_DOMAIN cannot use placeholder example.com in production mode');
+    }
+  }
+}
+
 function isMockEnvironment(): boolean {
+  validateProductionEmailConfig();
   return process.env.NODE_ENV !== 'production' && (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.startsWith('re_test_') || process.env.RESEND_API_KEY === 're_mock_key_for_development');
 }
 
@@ -48,7 +61,7 @@ export async function sendDossierEmail(
     `;
 
     const { data, error } = await resend.emails.send({
-      from: 'Ontario Intelligence <noreply@ontario-intelligence.example.com>',
+      from: `Ontario Intelligence <noreply@${EMAIL_SENDER_DOMAIN}>`,
       to: [toEmail],
       subject: 'Your Location Feasibility Dossier',
       html: htmlContent,
@@ -99,7 +112,7 @@ export async function sendMagicLinkEmail(toEmail: string, token: string): Promis
     `;
 
     const { data, error } = await resend.emails.send({
-      from: 'Ontario Intelligence Auth <noreply@ontario-intelligence.example.com>',
+      from: `Ontario Intelligence Auth <auth@${EMAIL_SENDER_DOMAIN}>`,
       to: [toEmail],
       subject: 'Your Login Link for Ontario Intelligence',
       html: htmlContent,
@@ -153,7 +166,7 @@ export async function sendAlertNotificationEmail(
     `;
 
     const { data, error } = await resend.emails.send({
-      from: 'Ontario Intelligence Alerts <alerts@ontario-intelligence.example.com>',
+      from: `Ontario Intelligence Alerts <alerts@${EMAIL_SENDER_DOMAIN}>`,
       to: [toEmail],
       subject: `Alert: ${eventTitle}`,
       html: htmlContent,

@@ -733,19 +733,20 @@ export async function ingestBusinessListingsAndBenchmarks(): Promise<void> {
 
   // Insert business listings
   for (const l of listings) {
+    const isDemo = Boolean(l.url && (l.url.includes('example.com') || l.uid.startsWith('LIST_')));
     const [inserted] = await sql`
       INSERT INTO business_listings (
         listing_uid, category_id, geography_id, title, business_name, address, phone, coordinates,
         asking_price, previous_asking_price, confirmed_sale_price, status, revenue_disclosed,
         ebitda_disclosed, sde_cashflow_disclosed, monthly_rent, square_footage,
         is_franchise, franchise_brand, broker_name, source_url,
-        first_listed_date, last_active_date, removed_date, match_confidence, notes
+        first_listed_date, last_active_date, removed_date, match_confidence, notes, is_demo_fixture
       ) VALUES (
         ${l.uid}, ${l.categoryId}, ${l.geoId}, ${l.title}, ${l.businessName}, ${l.address}, ${l.phone}, ${l.coordinates},
         ${l.askingPrice}, ${l.previousAskingPrice}, ${l.confirmedSalePrice}, ${l.status}, ${l.revenueDisclosed},
         ${l.ebitdaDisclosed}, ${l.sdeDisclosed}, ${l.monthlyRent}, ${l.sqft},
         ${l.isFranchise}, ${l.franchiseBrand}, ${l.broker}, ${l.url},
-        ${l.firstListed}, ${l.lastActive}, ${l.removedDate}, ${l.matchConfidence}, ${l.notes}
+        ${l.firstListed}, ${l.lastActive}, ${l.removedDate}, ${l.matchConfidence}, ${l.notes}, ${isDemo}
       )
       ON CONFLICT (listing_uid) DO UPDATE SET
         title = EXCLUDED.title,
@@ -756,7 +757,8 @@ export async function ingestBusinessListingsAndBenchmarks(): Promise<void> {
         last_active_date = EXCLUDED.last_active_date,
         removed_date = EXCLUDED.removed_date,
         match_confidence = EXCLUDED.match_confidence,
-        notes = EXCLUDED.notes
+        notes = EXCLUDED.notes,
+        is_demo_fixture = EXCLUDED.is_demo_fixture
       RETURNING id;
     `;
 
