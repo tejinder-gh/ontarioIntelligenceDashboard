@@ -243,7 +243,7 @@ export class MarketingOutreachModule implements VentureModuleContract {
         ) VALUES (
           ${messageId}, ${campaignId}, ${target.id}, ${channel}, ${recipientAddress},
           ${`Opportunity Research: ${target.name}`}, ${bodyText}, true,
-          'DELIVERED', ${`mock_prov_${messageId.slice(0, 16)}`},
+          'SIMULATED', ${`simulated_dry_run_${messageId.slice(0, 16)}`},
           ${JSON.stringify({
             basis: caslCheck.consentBasis,
             evidence: caslCheck.evidenceNotes,

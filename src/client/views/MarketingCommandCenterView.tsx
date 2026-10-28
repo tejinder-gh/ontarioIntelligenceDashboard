@@ -3,11 +3,29 @@ import {
   Sparkles, ShieldAlert, Play, Lock, CheckCircle2, AlertOctagon, PhoneCall, UserX, Mail, Send,
 } from 'lucide-react';
 
+interface CampaignRow {
+  id: string;
+  name: string;
+  execution_mode: string;
+  approval_status: string;
+  daily_send_cap: number;
+  delivered_messages?: number;
+  simulated_messages?: number;
+  kill_switch_active: boolean;
+}
+
+interface SimulationReportData {
+  evaluated?: number;
+  dispatchedDryRun?: number;
+  suppressed?: number;
+  eligibleRatePct?: number;
+}
+
 export const MarketingCommandCenterView: React.FC = () => {
-  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState(false);
-  const [simulationReport, setSimulationReport] = useState<any>(null);
+  const [simulationReport, setSimulationReport] = useState<SimulationReportData | null>(null);
   const [optOutValue, setOptOutValue] = useState('');
   const [optOutSuccess, setOptOutSuccess] = useState(false);
 
@@ -15,7 +33,9 @@ export const MarketingCommandCenterView: React.FC = () => {
     setLoading(true);
     fetch('/api/ventures/campaigns')
       .then((r) => r.json())
-      .then((res) => { if (res.success) setCampaigns(res.campaigns); })
+      .then((res: { success?: boolean; campaigns?: CampaignRow[] }) => {
+        if (res.success && res.campaigns) setCampaigns(res.campaigns);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -192,7 +212,7 @@ export const MarketingCommandCenterView: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4 font-mono">{camp.daily_send_cap}/day</td>
-                    <td className="py-3 px-4 font-mono text-indigo-400">{camp.delivered_messages || 0}</td>
+                    <td className="py-3 px-4 font-mono text-indigo-400">{camp.simulated_messages ?? camp.delivered_messages ?? 0}</td>
                     <td className="py-3 px-4">
                       <button
                         onClick={() => handleToggleKillSwitch(camp.id, camp.kill_switch_active)}

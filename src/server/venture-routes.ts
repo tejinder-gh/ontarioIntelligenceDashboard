@@ -93,13 +93,15 @@ ventureRouter.get('/campaigns', async (_req: Request, res: Response) => {
       SELECT 
         c.*,
         (SELECT count(*) FROM outreach_messages m WHERE m.campaign_id = c.id) as total_messages,
-        (SELECT count(*) FROM outreach_messages m WHERE m.campaign_id = c.id AND m.dispatch_status = 'DELIVERED') as delivered_messages
+        (SELECT count(*) FROM outreach_messages m WHERE m.campaign_id = c.id AND m.dispatch_status = 'DELIVERED') as delivered_messages,
+        (SELECT count(*) FROM outreach_messages m WHERE m.campaign_id = c.id AND m.dispatch_status = 'SIMULATED') as simulated_messages
       FROM outreach_campaigns c
       ORDER BY c.created_at DESC;
     `;
     res.json({ success: true, campaigns });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ success: false, error: errorMsg });
   }
 });
 

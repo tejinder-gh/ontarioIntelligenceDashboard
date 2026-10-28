@@ -30,7 +30,24 @@ interface CityRankingsViewProps {
 
 export type RankingTemplate = 'Financial' | 'Demographics' | 'Business' | 'Labour' | 'Housing' | 'Municipality' | 'All';
 
-interface MetricOption {
+export interface RankingRowData {
+  city_id?: string;
+  geography_id?: string;
+  city_name: string;
+  value_numeric: number | string;
+  percentile_rank?: number | string | null;
+  z_score?: number | string | null;
+  rank_position?: number | string | null;
+  ontario_rank?: number | string | null;
+  is_outlier?: boolean;
+  outlier_reason?: string | null;
+  population_2021?: number | string | null;
+  classification?: string;
+  source_id?: string;
+  dataset_id?: string;
+}
+
+export interface MetricOption {
   id: string;
   label: string;
   unit: string;
@@ -121,7 +138,7 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
   }, [activeTemplate]);
 
   // Clickable row inspector
-  const handleSelectRankingRow = (r: any) => {
+  const handleSelectRankingRow = (r: RankingRowData) => {
     const valFormatted = activeMetricObj.unit === '$' 
       ? `$${Number(r.value_numeric).toLocaleString()}`
       : `${Number(r.value_numeric).toLocaleString()} ${activeMetricObj.unit}`;
@@ -209,7 +226,7 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
         },
         {
           label: 'Gaussian Z-Score Divergence',
-          value: `z = ${r.z_score !== null ? (r.z_score > 0 ? `+${r.z_score}` : r.z_score) : '0.00'}`,
+          value: `z = ${zScore !== 0 ? (zScore > 0 ? `+${zScore.toFixed(2)}` : zScore.toFixed(2)) : '0.00'}`,
           description: 'Standard deviations away from the population-weighted provincial benchmark mean.'
         },
         {
@@ -232,7 +249,7 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
         {
           heading: 'Statistical Divergence Impact',
           insight: Math.abs(zScore) >= 2.0
-            ? `At z = ${zScore > 0 ? `+${zScore}` : zScore}, this municipality exhibits significant statistical divergence from the Ontario peer distribution, warranting localized operational modeling.`
+            ? `At z = ${zScore > 0 ? `+${zScore.toFixed(2)}` : zScore.toFixed(2)}, this municipality exhibits significant statistical divergence from the Ontario peer distribution, warranting localized operational modeling.`
             : `Metric distribution follows standard provincial gaussian trends within 1-2 standard deviations.`,
           impact: Math.abs(zScore) >= 2.0 ? 'warning' : 'positive'
         }
@@ -248,7 +265,8 @@ export const CityRankingsView: React.FC<CityRankingsViewProps> = ({ onSelectCity
       actionLink: {
         label: `Open ${r.city_name} Complete Intelligence Profile`,
         onClick: () => {
-          onSelectCity(r.geography_id);
+          const targetGeoId = r.geography_id || r.city_id;
+          if (targetGeoId) onSelectCity(targetGeoId);
           setContributingData(null);
         }
       },
