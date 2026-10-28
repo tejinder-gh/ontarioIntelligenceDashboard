@@ -16,6 +16,10 @@ export type ActiveTab =
   | 'data_explorer'
   | 'launch_readiness'
   | 'venture_capital'
+  | 'intelligence_explorer'
+  | 'source_operations'
+  | 'marketing_command_center'
+  | 'venture_workspaces'
   | 'methodology_sources';
 
 export type MunicipalTier = 'SINGLE_TIER' | 'UPPER_TIER' | 'LOWER_TIER' | 'UNORGANIZED' | null;
